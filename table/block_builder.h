@@ -2,6 +2,22 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
+/*
+ * table_builder.cc负责持久化SSTable，其大概的流程如下
+ * 1. TableBuilder::Add(): 向DataBlock插入一对键值对
+ *  a. 用BlockBuilder::Add()向DataBlock写入一对键值对
+ *  b. 用BlockBuilder::CurrentSizeEstimate()判断DataBlock是否满了
+ *  c. 调用TableBuilder::Flush()持久化DataBlock
+ *    Ⅰ.用BlockBuilder::empty()判断buffer_是否为空
+ *    Ⅱ.用TableBuilder::WriteBlock()持久化
+ *      x.调用BlockBuilder::Finish() 将restart pointer写到Entry后面
+ *      y.压缩DataBlock
+ *      z.调用TableBuilder::WriteRawBlock()持久化压缩后的DataBlock
+ *      m.调用BlockBuilder::Reset() 清除BlockBuilder的临时变量，以准备下一此Add
+ *
+ * Add()->CurrentSizeEstimate()->Finish()->Reset()
+ */
+
 #ifndef STORAGE_LEVELDB_TABLE_BLOCK_BUILDER_H_
 #define STORAGE_LEVELDB_TABLE_BLOCK_BUILDER_H_
 
@@ -22,22 +38,27 @@ class BlockBuilder {
   BlockBuilder& operator=(const BlockBuilder&) = delete;
 
   // Reset the contents as if the BlockBuilder was just constructed.
+  // 清除所有变量的内容，回到初始状态以重新生成一个Data Block
   void Reset();
 
   // REQUIRES: Finish() has not been called since the last call to Reset().
   // REQUIRES: key is larger than any previously added key
+  // 向Data Block的buffer_写入一对键值对并更新restart pointer
   void Add(const Slice& key, const Slice& value);
 
   // Finish building the block and return a slice that refers to the
   // block contents.  The returned slice will remain valid for the
   // lifetime of this builder or until Reset() is called.
+  // 向Data Block的buffer_写入restart pointer
   Slice Finish();
 
   // Returns an estimate of the current (uncompressed) size of the block
   // we are building.
+  // 根据buffer_的长度（Entry的总长度）、restart pointer的长度预估Data Block的长度，以便在适当的时候开启一个新的Data Block
   size_t CurrentSizeEstimate() const;
 
   // Return true iff no entries have been added since the last Reset()
+  // 在持久化一个data block前检查buffer_是否为空，避免持久化空数据
   bool empty() const { return buffer_.empty(); }
 
  private:

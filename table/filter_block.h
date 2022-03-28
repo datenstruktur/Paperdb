@@ -34,11 +34,30 @@ class FilterBlockBuilder {
   FilterBlockBuilder(const FilterBlockBuilder&) = delete;
   FilterBlockBuilder& operator=(const FilterBlockBuilder&) = delete;
 
+  /*
+   * 在table_builder::Flush()中被调用
+   * 在持久化一个DataBlock之后
+   */
   void StartBlock(uint64_t block_offset);
+
+  /*把key保存在keys_里，以<key_size, key_data>的形式
+   * keys_:
+   *  key_data1
+   *  key_data2
+   *  key_data3
+   *
+   * start_:
+   *  key_size1
+   *  key_size2
+   *  key_size3
+   */
   void AddKey(const Slice& key);
+
+
   Slice Finish();
 
  private:
+  // 把Add到key_的key转换为bitmap，作为Filter Data保存到result_
   void GenerateFilter();
 
   const FilterPolicy* policy_;
