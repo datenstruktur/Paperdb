@@ -178,7 +178,7 @@ class BlockConstructor : public Constructor {
   explicit BlockConstructor(const Comparator* cmp)
       : Constructor(cmp), comparator_(cmp), block_(nullptr) {}
   ~BlockConstructor() override { delete block_; }
-  Status FinishImpl(const Options& options, const KVMap& data) override {
+  Status FinishImpl(const Options& options, const  KVMap& data) override {
     delete block_;
     block_ = nullptr;
     BlockBuilder builder(&options);

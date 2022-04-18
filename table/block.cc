@@ -19,7 +19,7 @@ namespace leveldb {
 
 inline uint32_t Block::NumRestarts() const {
   assert(size_ >= sizeof(uint32_t));
-  return DecodeFixed32(data_ + size_ - sizeof(uint32_t));
+  return DecodeFixed32(data_ + size_ - sizeof(uint32_t)); //最后32bit保存Restart Point Length
 }
 
 Block::Block(const BlockContents& contents)
@@ -29,16 +29,20 @@ Block::Block(const BlockContents& contents)
   if (size_ < sizeof(uint32_t)) {
     size_ = 0;  // Error marker
   } else {
+    // DataBlock可以装下的最多restart point
     size_t max_restarts_allowed = (size_ - sizeof(uint32_t)) / sizeof(uint32_t);
+    //如果size_太小装不下那么多restart point
     if (NumRestarts() > max_restarts_allowed) {
       // The size is too small for NumRestarts()
       size_ = 0;
     } else {
+      // restart point开始的地方就是Entry的数据量，而Entry的数据量就是总数据量减去所以restart point和restart point length的数据量
       restart_offset_ = size_ - (1 + NumRestarts()) * sizeof(uint32_t);
     }
   }
 }
 
+// 析构函数，当结束时候被调用
 Block::~Block() {
   if (owned_) {
     delete[] data_;
@@ -52,28 +56,56 @@ Block::~Block() {
 //
 // If any errors are detected, returns nullptr.  Otherwise, returns a
 // pointer to the key delta (just past the three decoded values).
+
+/*
+ * 问: 为什么要设计这个函数？
+ * 答: 需要从一个Entry中读取(unshared key)key和value
+ *
+ * 问: Entry的格式是什么样的？
+ * 答: |shared key length|unshared key length|value length|unshared key content|value|
+ *
+ * 问: 如何读取Entry中的key和value？
+ * 答: Entry分为|length|key, value|, 先读取length，得到unshared key length和value length，再根据它们从|unshared key content, value|中读取key和value
+ *
+ * 问: 如何读取shared key length、unshared key length、value length？
+ * 答: 它们都采取varint32来存储，也就是说，每一个varint32变量所占的空间只有最大值(4Byte)，具体的长度由实际保存的数据决定，如果当前Byte的第一个bit为1
+ *     那说明它下一个Byte也会用来存储这个变量，如果第一个bit为0，则说明存储该变量的Byte到此处就停止了
+ *
+ */
 static inline const char* DecodeEntry(const char* p, const char* limit,
                                       uint32_t* shared, uint32_t* non_shared,
                                       uint32_t* value_length) {
-  if (limit - p < 3) return nullptr;
+  if (limit - p < 3) return nullptr; // 如果Entry的长度还不到3，说明三个长度肯定存不下
+
+  /*
+   * 从Entry中各取出三个Byte到三个长度变量，如果每个长度变量都只用了1Byte进行保存的话，
+   * 三个Byte本身就是三个长度变量的值，因为第一个bit是0，不会是1
+   */
   *shared = reinterpret_cast<const uint8_t*>(p)[0];
   *non_shared = reinterpret_cast<const uint8_t*>(p)[1];
   *value_length = reinterpret_cast<const uint8_t*>(p)[2];
+
+  /*
+   * 但凡三个变量有一个中，第一bit为1，那么与其它bit进行|（或）运算，
+   * 其结果的第一bit肯定是1，那么它肯定是1000, 0000
+   * 则最后的结果肯定大于等于1000,0000(128)
+   * 所以如果小于128，就说明三个值的第一bit全是0，说明一个长度只用了1Byte进行了保存
+   */
   if ((*shared | *non_shared | *value_length) < 128) {
     // Fast path: all three values are encoded in one byte each
-    p += 3;
-  } else {
+    p += 3; //直接移动3Byte到key
+  } else { //如果有变量占用了1Byte以上，则需要解析多个Byte合并读取，同时更新p也需要根据解析的情况进行更新，因为此时三个变量占用的实际空间我们是不知道的（虽然知道最大空间）
     if ((p = GetVarint32Ptr(p, limit, shared)) == nullptr) return nullptr;
     if ((p = GetVarint32Ptr(p, limit, non_shared)) == nullptr) return nullptr;
     if ((p = GetVarint32Ptr(p, limit, value_length)) == nullptr) return nullptr;
   }
 
+  // 如果剩下的空间都不足以存放非更新的key和value，说明解析出来的值肯定有问题
   if (static_cast<uint32_t>(limit - p) < (*non_shared + *value_length)) {
     return nullptr;
   }
-  return p;
+  return p; //返回key的指针
 }
-
 class Block::Iter : public Iterator {
  private:
   const Comparator* const comparator_;
@@ -82,10 +114,11 @@ class Block::Iter : public Iterator {
   uint32_t const num_restarts_;  // Number of uint32_t entries in restart array
 
   // current_ is offset in data_ of current entry.  >= restarts_ if !Valid
-  uint32_t current_;
-  uint32_t restart_index_;  // Index of restart block in which current_ falls
-  std::string key_;
-  Slice value_;
+  uint32_t current_; //Prev()、Next()到的Entry的位置
+  // Index of restart block in which current_ falls
+  uint32_t restart_index_;  // current 所在Entry的restart pointer
+  std::string key_; // 读取出来的key
+  Slice value_; // 读取出来的value
   Status status_;
 
   inline int Compare(const Slice& a, const Slice& b) const {
@@ -93,22 +126,43 @@ class Block::Iter : public Iterator {
   }
 
   // Return the offset in data_ just past the end of the current entry.
+  /*
+   * 问: 设计这个函数是为了什么？
+   * 答: 根据当前Entry的value_找到下一个Entry的开头在DataBlock中的相对偏移量
+   *
+   * 问: 如何找到？
+   * 答: value开头的偏移量加上value的长度，即是value的末尾，就是下一个Entry的开始，减去DataBlock的开头偏移量就是相对偏移量
+   */
   inline uint32_t NextEntryOffset() const {
     return (value_.data() + value_.size()) - data_;
   }
 
+  /*
+   * 问: 设计这个函数是为了什么？
+   * 答: 返回下标为index的（从0开始）的restart point所指向的组的偏移量，它指向下标为index的Entry组的第一个Entry的开头
+   */
   uint32_t GetRestartPoint(uint32_t index) {
     assert(index < num_restarts_);
+    /*
+     * index = 0时，读取data_ + restarts_位置处的restart point
+     * 每个restart point用uint32_t来保存，下标为index的restart point的前面一共有index个restart point
+     */
     return DecodeFixed32(data_ + restarts_ + index * sizeof(uint32_t));
   }
 
-  void SeekToRestartPoint(uint32_t index) {
+  /*
+   * 问: 为什么要设计这个函数？
+   * 答: 把value_设置为下标为index的组的最后一个Entry的value_的最后一个字节
+   */
+  void  SeekToRestartPoint(uint32_t index) {
     key_.clear();
     restart_index_ = index;
     // current_ will be fixed by ParseNextKey();
 
     // ParseNextKey() starts at the end of value_, so set value_ accordingly
+    // 获得下标为index的Entry组的第一个Entry的开头
     uint32_t offset = GetRestartPoint(index);
+    // 上一个组的最后一个Entry的value_的最后一个字节？
     value_ = Slice(data_ + offset, 0);
   }
 
@@ -120,7 +174,7 @@ class Block::Iter : public Iterator {
         restarts_(restarts),
         num_restarts_(num_restarts),
         current_(restarts_),
-        restart_index_(num_restarts_) {
+        restart_index_(num_restarts_) { //restart pointer最开始被指向了最后一个restart pointer
     assert(num_restarts_ > 0);
   }
 
@@ -140,34 +194,92 @@ class Block::Iter : public Iterator {
     ParseNextKey();
   }
 
+  /*
+   * 问: 设计这个函数的目的是什么？
+   * 答: 实现读取current_前面一个Entry的功能
+   *
+   * 问: 如何实现？
+   * 答: 首先你需要调整restart_index_达到current_所在组的第一个Entry开头
+   *     然后从第一个Entry开始调用ParseNextKey线性遍历
+   *     直到遍历到下一个Entry刚好是current_，说明当前已经遍历到current_的上一个Entry了
+   */
   void Prev() override {
     assert(Valid());
 
     // Scan backwards to a restart point before current_
-    const uint32_t original = current_;
+    const uint32_t original = current_; // 保存要读取的位置
+    // 跳出循环时 restart_index_刚好位于遍历节点所在组的开头
     while (GetRestartPoint(restart_index_) >= original) {
-      if (restart_index_ == 0) {
+      if (restart_index_ == 0) { //已经到了第一个组了，不能再往前退了
         // No more entries
-        current_ = restarts_;
+        current_ = restarts_; //重置到末尾
         restart_index_ = num_restarts_;
         return;
       }
+      //向前退组
       restart_index_--;
     }
 
+    // 更新value_，准备ParseNextKey
     SeekToRestartPoint(restart_index_);
     do {
       // Loop until end of current entry hits the start of original entry
+      /*
+       * 从本组的第一个Entry开始ParseNextKey()
+       * 只要ParseNextKey出来的Entry的下一个Entry的首地址还在要读取的前头，说明还没到最后一个
+       * [Entry][Entry][Entry][Entry]
+       *      ↑value_   ↑(current_)
+       *         ↑NEO
+       *
+       * 如果某次ParseNextKey刚好等于，说明刚好读到上一个Entry的value_，就可以退出while了
+       * [Entry][Entry][Entry][Entry]
+       *             ↑value_
+       *                ↑(current_)
+       *                ↑NEO
+       */
     } while (ParseNextKey() && NextEntryOffset() < original);
+
+    //此时key_、value_里装的就是key-value
   }
 
+  /*
+   * 问: 这个函数的目标是什么？
+   * 答: 找到在范围查找区间[target, end]内的第一个key，这样的key是key >= target的最小key
+   *
+   * 问: 怎么找到这个key所在的组？
+   * 答: 我们无法确定这个组的第一个Entry的key的特征，
+   *  因为它完全有可能小于target（Entry不是组内第一个Entry）
+   *  也有可能大于等于target（要找的Entry刚好是组内的第一个Entry）
+   *  但是我们可以确定一点：不管怎么样，这个组的左侧一组的第一个Entry的key肯定小于target
+   *  因为如果它大于等于target，则第一个key>=target的Entry就在这一组了，这和我们的假设矛盾
+   *
+   *  如果我们能确定最后一个key < target的组：
+   *  当我们想要查找的组的第一个key >=target时，从左侧这个组开始向后遍历也能找到这个Entry
+   *  当我们想要查找的组的第一个key < target时，那么我们就刚好找到了我们想要的组
+   *  这样就可以保证查找到我们想要的Entry了，只不过第一种情况需要多遍历一下，整体来说，我们最多只需要ParseNextKey一组数量+1，就可以找到Entry
+   */
   void Seek(const Slice& target) override {
     // Binary search in restart array to find the last restart point
     // with a key < target
+
     uint32_t left = 0;
+    /*
+     * 问: 当最后一个组刚好也是16个的话，最后一个restart point所指向的地方后面没有Entry了，还要把它纳入[left, right]吗“
+     * 答: 可以，反正也二分查找不到
+     */
     uint32_t right = num_restarts_ - 1;
     int current_key_compare = 0;
 
+    /*
+     * 问: 为什么要在二分查找之前就缩小查找的范围？
+     * 答: 因为上一次读取的restart point(restart_index_)所指向的key已经被读取到了key_中了，那么就可以借助它来缩小二分查找的范围，利用它把[0, num_restarts_ - 1]分割为两个区间，取key在的那一边
+     *
+     * 问: 怎么选择一边的区间？
+     * 答: restart point的key被读取到了key_中，
+     *    当key_比target小时，说明key = target所在的组所对应的restart pointer在restart_index_的右边，所以它肯定在(restart_index, num_restarts_ - 1]里而不在另外一边
+     *    当key_比target大时，说明key = target所在的组所对应的restart pointer在restart_index_的左边，所以它肯定在[0, restart_index)里而不在另外一边
+     *    当key_等于target时，说明key = target所在的组所对应的restart pointer就是restart_index_，那么key_就是要查找的target，同时value也被保存在了value_里，只要调用key()和value()就可以返回kv
+     */
     if (Valid()) {
       // If we're already scanning, use the current position as a starting
       // point. This is beneficial if the key we're seeking to is ahead of the
@@ -185,54 +297,95 @@ class Block::Iter : public Iterator {
     }
 
     while (left < right) {
-      uint32_t mid = (left + right + 1) / 2;
-      uint32_t region_offset = GetRestartPoint(mid);
+      uint32_t mid = (left + right + 1) / 2; // 取得区间的中间位置
+      uint32_t region_offset = GetRestartPoint(mid); // 取得下标为mid的Entry组的开头
+
       uint32_t shared, non_shared, value_length;
+
+      /*
+       * 从DataBlock中读取这个Entry，可以获得unshared key的指针、unshared key的长度non_shared
+       * 因为每个restart point指向的Entry是整个组的第一个Entry，保存有完整的Key，所以shared = 0, key的长度就是unshared key
+       */
       const char* key_ptr =
           DecodeEntry(data_ + region_offset, data_ + restarts_, &shared,
                       &non_shared, &value_length);
+
       if (key_ptr == nullptr || (shared != 0)) {
         CorruptionError();
         return;
       }
+
+      // 从指针中读取出key
       Slice mid_key(key_ptr, non_shared);
+
+      /*
+       * 想要ParseNextKey()到某一个Entry上，就必须移动到这个Entry所在的组上，就必须移动到这个组的第一个Entry上
+       * 那么想要定位的这个Entry，肯定是大于等于组内第一个Entry，也就是说我们要找的Entry，肯定是小于等于target
+       */
       if (Compare(mid_key, target) < 0) {
         // Key at "mid" is smaller than "target".  Therefore all
         // blocks before "mid" are uninteresting.
+        /*
+         * mid < target, 说明[left, mid]中所有的key < target, 但是[left, mid - 1]都比mid小，不满足第二个条件，所以舍弃
+         * [left, right] - [left, mid - 1] = [mid, right]
+         */
         left = mid;
       } else {
         // Key at "mid" is >= "target".  Therefore all blocks at or
         // after "mid" are uninteresting.
+        /*
+         * mid >= target, 说明[mid, right]中所有的key >= target, 我们要找的是< target的key，所以[mid, right]抛弃
+         * [left, right] - [mid, right] = [left, mid - 1]
+         */
         right = mid - 1;
       }
     }
 
+
     // We might be able to use our current position within the restart block.
     // This is true if we determined the key we desire is in the current block
     // and is after than the current key.
-    assert(current_key_compare == 0 || Valid());
+    assert(current_key_compare == 0 || Valid()); // current_key_compare == 0 说明!Vaild()，如果Vaild(), 则current_key_compare == 0时会提前退出函数
+    /*
+     * 如果上一次二分查找到的restart point: restart_index_刚好是本次查询到的位置，
+     * 说明在同一组。上次定位到的组的最小key比target小，
+     * 说明在本组且上次ParseNextKey还没到target，则不用调整
+     *
+     * 如果最后二分查找到的位置不是restart_index，则说明不在同一组，得先移动到同一组之后才能在组内进行ParseNextKey
+     * 如果最后二分查找到的位置是restart_index，则说明在同一组，
+     *    如果current_key_compare == 0，则之前就会退出，key-value已经就在key_和value_里了，那是上一次ParseNextKey得到的
+     *    如果current_key_compare >  0，则说明key_ > target, 说明ParseNextKey已经遍历到了target的后面，也需要重新调整
+     */
     bool skip_seek = left == restart_index_ && current_key_compare < 0;
+
+    /*
+     * 如果不满足“与上次ParseNextKey的结果在同一组且还没有ParseNextKey到target”
+     * 则移动restart_index到本次二分查找到的这一组，同时把ParseNextKey的初始值设置为上一组的末尾，开始从头ParseNextKey
+     */
     if (!skip_seek) {
-      SeekToRestartPoint(left);
+      SeekToRestartPoint(left); // 定位key = target的Entry所在组的开头第一个Entry的开始
     }
+
     // Linear search (within restart block) for first key >= target
     while (true) {
-      if (!ParseNextKey()) {
+      if (!ParseNextKey()) { //取出DataBlock中该组的每一个Entry，把key放入key_,把value放入value_
         return;
       }
-      if (Compare(key_, target) >= 0) {
+      // ParseNextKey()完成之后， 弹出的key被保存到key_
+      if (Compare(key_, target) >= 0) { //如果发现第一个大于等于target的key就返回
         return;
       }
     }
   }
 
   void SeekToFirst() override {
-    SeekToRestartPoint(0);
-    ParseNextKey();
+    SeekToRestartPoint(0); //定位到第一组
+    ParseNextKey(); //弹出第一个value_
   }
 
   void SeekToLast() override {
-    SeekToRestartPoint(num_restarts_ - 1);
+    SeekToRestartPoint(num_restarts_ - 1); //定位到最后一组
+    // 当遍历到下一个Entry就是整个Entry的末尾时，说明到了最后一个Entry了
     while (ParseNextKey() && NextEntryOffset() < restarts_) {
       // Keep skipping
     }
@@ -247,11 +400,19 @@ class Block::Iter : public Iterator {
     value_.clear();
   }
 
+  /*
+   * 问: 为什么要设计这个函数？
+   * 答: 对一组Entry进行线性遍历，每执行一次就弹出一对KV，把key保存在key_，把value保存在value_
+   *
+   * 问: 每一次ParseNextKey从什么地方开始？
+   * 答: 从value_开始，上一个的value_的末地址就是下一个Entry的开始
+   */
   bool ParseNextKey() {
-    current_ = NextEntryOffset();
-    const char* p = data_ + current_;
-    const char* limit = data_ + restarts_;  // Restarts come right after data
-    if (p >= limit) {
+    current_ = NextEntryOffset(); // 获得上一次ParseNextKey到的Entry的value变量的末尾，就是下一个Entry的开始
+    const char* p = data_ + current_; // 求出要Parse的Entry的绝对偏移量
+    const char* limit = data_ + restarts_;  // Restarts come right after data 求出restart的开始偏移量
+
+    if (p >= limit) { // 没有entry，把current_、restart_index_设置为最右侧
       // No more entries to return.  Mark as invalid.
       current_ = restarts_;
       restart_index_ = num_restarts_;
@@ -260,18 +421,28 @@ class Block::Iter : public Iterator {
 
     // Decode next entry
     uint32_t shared, non_shared, value_length;
+
+    // 取出这个Entry的shared、non_shared、value_length，以及key的指针
     p = DecodeEntry(p, limit, &shared, &non_shared, &value_length);
     if (p == nullptr || key_.size() < shared) {
       CorruptionError();
       return false;
     } else {
-      key_.resize(shared);
-      key_.append(p, non_shared);
+      key_.resize(shared); // key_保存有上一个的Entry的key，舍弃去非共享的部分，剩下的就是与当前Entry的key共享的部分
+      key_.append(p, non_shared); // 加上当前Entry保存的非共享的key，就是完整的key
+      // 从[p, p + non_shared + value_length]中读取value
       value_ = Slice(p + non_shared, value_length);
+
+      // 如果target恰好等于某一组的第一个key，Seek就会将restart_index移动到它前面一组，然后不断ParseNextKey，这样会ParseNextKey到
+      // restart_index_ + 1 组去，需要调整restart_index_
       while (restart_index_ + 1 < num_restarts_ &&
              GetRestartPoint(restart_index_ + 1) < current_) {
         ++restart_index_;
       }
+
+      /*
+       * 组restart_index是最后一组 || current_在组restart_index_内)
+       */
       return true;
     }
   }

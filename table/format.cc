@@ -61,6 +61,10 @@ Status Footer::DecodeFrom(Slice* input) {
   return result;
 }
 
+/*
+ * handle:
+ * result:
+ */
 Status ReadBlock(RandomAccessFile* file, const ReadOptions& options,
                  const BlockHandle& handle, BlockContents* result) {
   result->data = Slice();
@@ -69,9 +73,10 @@ Status ReadBlock(RandomAccessFile* file, const ReadOptions& options,
 
   // Read the block contents as well as the type/crc footer.
   // See table_builder.cc for the code that built this structure.
-  size_t n = static_cast<size_t>(handle.size());
-  char* buf = new char[n + kBlockTrailerSize];
+  size_t n = static_cast<size_t>(handle.size()); // Block长度
+  char* buf = new char[n + kBlockTrailerSize]; // 加上type(什么类型的压缩)和crc校验码的长度
   Slice contents;
+  // 从handle的offset处读取一个Block长度的数据到contents中
   Status s = file->Read(handle.offset(), n + kBlockTrailerSize, &contents, buf);
   if (!s.ok()) {
     delete[] buf;
@@ -85,23 +90,25 @@ Status ReadBlock(RandomAccessFile* file, const ReadOptions& options,
   // Check the crc of the type and the block contents
   const char* data = contents.data();  // Pointer to where Read put the data
   if (options.verify_checksums) {
+    // 从type后面开始读出crc
     const uint32_t crc = crc32c::Unmask(DecodeFixed32(data + n + 1));
-    const uint32_t actual = crc32c::Value(data, n + 1);
-    if (actual != crc) {
+    const uint32_t actual = crc32c::Value(data, n + 1); //计算Block中[0, n + 1]的crc
+    if (actual != crc) { // 如果校验失败
       delete[] buf;
       s = Status::Corruption("block checksum mismatch");
       return s;
     }
   }
 
+  // 读取type
   switch (data[n]) {
-    case kNoCompression:
-      if (data != buf) {
+    case kNoCompression: //如果不需要压缩
+      if (data != buf) { //使用mmap把磁盘的数据映射到data中
         // File implementation gave us pointer to some other data.
         // Use it directly under the assumption that it will be live
         // while the file is open.
         delete[] buf;
-        result->data = Slice(data, n);
+        result->data = Slice(data, n); //读取data到result
         result->heap_allocated = false;
         result->cachable = false;  // Do not double-cache
       } else {
@@ -113,21 +120,21 @@ Status ReadBlock(RandomAccessFile* file, const ReadOptions& options,
       // Ok
       break;
     case kSnappyCompression: {
-      size_t ulength = 0;
-      if (!port::Snappy_GetUncompressedLength(data, n, &ulength)) {
+      size_t ulength = 0; // 解压缩后的长度
+      if (!port::Snappy_GetUncompressedLength(data, n, &ulength)) { // 获得解压缩后的长度
         delete[] buf;
         return Status::Corruption("corrupted compressed block contents");
       }
       char* ubuf = new char[ulength];
-      if (!port::Snappy_Uncompress(data, n, ubuf)) {
+      if (!port::Snappy_Uncompress(data, n, ubuf)) { // 解压缩到ubuf
         delete[] buf;
         delete[] ubuf;
         return Status::Corruption("corrupted compressed block contents");
       }
       delete[] buf;
-      result->data = Slice(ubuf, ulength);
+      result->data = Slice(ubuf, ulength); // 把解压缩后的数据赋值到result内
       result->heap_allocated = true;
-      result->cachable = true;
+      result->cachable = true; //可以被插入到LRUCache
       break;
     }
     default:

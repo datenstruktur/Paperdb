@@ -87,10 +87,12 @@ const char* GetVarint32PtrFallback(const char* p, const char* limit,
                                    uint32_t* value) {
   uint32_t result = 0;
   for (uint32_t shift = 0; shift <= 28 && p < limit; shift += 7) {
-    uint32_t byte = *(reinterpret_cast<const uint8_t*>(p));
-    p++;
+    uint32_t byte = *(reinterpret_cast<const uint8_t*>(p)); //取第一个Byte
+    p++;//到下一个Byte
     if (byte & 128) {
       // More bytes are present
+      //byte & 127: 取出后7位
+      // << shift:
       result |= ((byte & 127) << shift);
     } else {
       result |= (byte << shift);

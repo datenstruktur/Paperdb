@@ -33,6 +33,7 @@
 
 #include "leveldb/comparator.h"
 #include "leveldb/options.h"
+
 #include "util/coding.h"
 
 namespace leveldb {
@@ -46,7 +47,7 @@ namespace leveldb {
 BlockBuilder::BlockBuilder(const Options* options)
     : options_(options), restarts_(), counter_(0), finished_(false) {
   assert(options->block_restart_interval >= 1); //检查block_restart_interval，也就是restart内entry的数量必须大于等于1，不然怎么写入entry？
-  restarts_.push_back(0);  // First restart point is at offset 0
+  restarts_.push_back(0);  // First restart point is at offset 0 第一个restarts_从0开始
 }
 
 /*
@@ -188,6 +189,10 @@ void BlockBuilder::Add(const Slice& key, const Slice& value) {
   } else { //当前共享Key的Entry已满，当前Entry作为新的开始，key作为接下来key的公共key
     // Restart compression
     //把当前的以保存的Entry的末尾地址（就是要加入的新Entry的头地址）作为新restart的offset
+    /*
+     * 问: 为什么要把一组的末地址作为它的restart point的offset，而不是第一个Entry的首地址？
+     * 答: 因为ParseNextKey()就是根据上一次Parse的Entry的value_地址来确定下一个Entry的首地址的，所以为了兼容它，找一组的第一个Entry的首地址时，需要找到上一组的最后一个Entry的value_的末地址
+     */
     restarts_.push_back(buffer_.size());
     counter_ = 0; //清空当前restart所对应的Entry数量，重新开始
     // 本来还需要把当前key作为last_key_的

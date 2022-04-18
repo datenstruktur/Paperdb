@@ -278,21 +278,30 @@ static bool NewestFirst(FileMetaData* a, FileMetaData* b) {
   return a->number > b->number;
 }
 
+/*
+ *
+ */
 void Version::ForEachOverlapping(Slice user_key, Slice internal_key, void* arg,
                                  bool (*func)(void*, int, FileMetaData*)) {
   const Comparator* ucmp = vset_->icmp_.user_comparator();
 
   // Search level-0 in order from newest to oldest.
+  // 暂时保存查询到的L0层SSTable元数据的数组
   std::vector<FileMetaData*> tmp;
+  // 最极端的可能是，L0层的所有SSTable的范围都包括了user_key
   tmp.reserve(files_[0].size());
+  // 遍历L0层的每一个SSTable
   for (uint32_t i = 0; i < files_[0].size(); i++) {
-    FileMetaData* f = files_[0][i];
+    FileMetaData* f = files_[0][i]; //取出一个SSTable的元数据
+    // 如果要查询的key在这个SSTable的范围内，那么就保存它供待会查找
     if (ucmp->Compare(user_key, f->smallest.user_key()) >= 0 &&
         ucmp->Compare(user_key, f->largest.user_key()) <= 0) {
-      tmp.push_back(f);
+      tmp.push_back(f); // 放入临时数组
     }
   }
+  // 开始查询tmp中保存的SSTable
   if (!tmp.empty()) {
+    // 从tmp.begin()开始，按照时间number排序到tmp.end()，NewestFirst：返回两者之间大的一个，降序
     std::sort(tmp.begin(), tmp.end(), NewestFirst);
     for (uint32_t i = 0; i < tmp.size(); i++) {
       if (!(*func)(arg, 0, tmp[i])) {

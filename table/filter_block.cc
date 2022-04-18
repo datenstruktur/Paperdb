@@ -232,17 +232,21 @@ void FilterBlockBuilder::GenerateFilter() {
   start_.clear();
 }
 
+/*
+ * 过滤器读取的初始化
+ * contents: filter data block
+ */
 FilterBlockReader::FilterBlockReader(const FilterPolicy* policy,
                                      const Slice& contents)
     : policy_(policy), data_(nullptr), offset_(nullptr), num_(0), base_lg_(0) {
   size_t n = contents.size();
   if (n < 5) return;  // 1 byte for base_lg_ and 4 for start of offset array
-  base_lg_ = contents[n - 1];
-        uint32_t last_word = DecodeFixed32(contents.data() + n - 5);
+  base_lg_ = contents[n - 1]; //最后一个bit是base lg
+        uint32_t last_word = DecodeFixed32(contents.data() + n - 5); //filter offset's offset + base_lg_
   if (last_word > n - 5) return;
   data_ = contents.data();
-  offset_ = data_ + last_word;
-  num_ = (n - 5 - last_word) / 4;
+  offset_ = data_ + last_word; //定位到filter 1 offset
+  num_ = (n - 5 - last_word) / 4; //
 }
 
 bool FilterBlockReader::KeyMayMatch(uint64_t block_offset, const Slice& key) {
