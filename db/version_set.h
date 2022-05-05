@@ -120,9 +120,10 @@ class Version {
 
   class LevelFileNumIterator;
 
+  // 构造函数，把在一个VersionSet中创建一个Version
   explicit Version(VersionSet* vset)
-      : vset_(vset),
-        next_(this),
+      : vset_(vset), // 设置VersionSet
+        next_(this), //
         prev_(this),
         refs_(0),
         file_to_compact_(nullptr),
@@ -151,17 +152,18 @@ class Version {
   int refs_;          // Number of live refs to this version
 
   // List of files per level
+  // 每一层的SSTable的FileMetaData
   std::vector<FileMetaData*> files_[config::kNumLevels];
 
   // Next file to compact based on seek stats.
-  FileMetaData* file_to_compact_;
-  int file_to_compact_level_;
+  FileMetaData* file_to_compact_; //需要发生seek compaction的SSTable
+  int file_to_compact_level_; //需要发生seek compaction的level
 
   // Level that should be compacted next and its compaction score.
   // Score < 1 means compaction is not strictly needed.  These fields
   // are initialized by Finalize().
-  double compaction_score_;
-  int compaction_level_;
+  double compaction_score_; // size Compaction计算出来的应该Compaction的level的score？
+  int compaction_level_; //需要发生size compaction的level
 };
 
 class VersionSet {

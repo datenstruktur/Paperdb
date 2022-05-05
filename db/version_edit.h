@@ -15,10 +15,11 @@ namespace leveldb {
 
 class VersionSet;
 
+// SSTable文件的元信息
 struct FileMetaData {
   FileMetaData() : refs(0), allowed_seeks(1 << 30), file_size(0) {}
 
-  int refs;
+  int refs;           // 当前有多少个version引用了这个文件
   int allowed_seeks;  // Seeks allowed until compaction
   uint64_t number;
   uint64_t file_size;    // File size in bytes
@@ -97,7 +98,9 @@ class VersionEdit {
   bool has_last_sequence_;
 
   std::vector<std::pair<int, InternalKey>> compact_pointers_;
+  // 删除的sstable<所在的level，文件编号>
   DeletedFileSet deleted_files_;
+  // 新增加的文件
   std::vector<std::pair<int, FileMetaData>> new_files_;
 };
 

@@ -47,9 +47,9 @@ FilterBlockBuilder::FilterBlockBuilder(const FilterPolicy* policy)
  */
 void FilterBlockBuilder::StartBlock(uint64_t block_offset) {
   //
-  uint64_t filter_index = (block_offset / kFilterBase);
-  assert(filter_index >= filter_offsets_.size());
-  while (filter_index > filter_offsets_.size()) {
+  uint64_t filter_index = (block_offset / kFilterBase); //0
+  assert(filter_index >= filter_offsets_.size()); //√
+  while (filter_index > filter_offsets_.size()) { // 0 > 0
     GenerateFilter();
   }
 }
@@ -138,7 +138,7 @@ Slice FilterBlockBuilder::Finish() {
  *     Filter Offset1
  *     Filter Offset2
  *     ......
- *     Filter Datan
+ *     Filter offsetn
  *
  * 问: 这个函数是要把数据组织成上面的格式吗？
  * 答: 不是，它只是生成一个Filter Data1到一块叫result_的内存中，在把filter offset保存在一个数组中，之后再合成到一个大内存中

@@ -34,7 +34,7 @@ class Block {
   uint32_t NumRestarts() const;
 
   const char* data_;
-  size_t size_;
+  size_t size_; //size_要参与和sizeof()的计算，同时它并不会为了持久化被编码，所以声明为size_t，其它的变量都是uint32_t
   uint32_t restart_offset_;  // Offset in data_ of restart array
   bool owned_;               // Block owns data_[]
 };

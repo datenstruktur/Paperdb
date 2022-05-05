@@ -513,6 +513,7 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
   Log(options_.info_log, "Level-0 table #%llu: started",
       (unsigned long long)meta.number);
 
+  // 把memtable的数据构建成一个SSTable到meta中
   Status s;
   {
     mutex_.Unlock();
@@ -533,6 +534,7 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
     const Slice min_user_key = meta.smallest.user_key();
     const Slice max_user_key = meta.largest.user_key();
     if (base != nullptr) {
+      // 传入SSTable的范围，选择添加入的层
       level = base->PickLevelForMemTableOutput(min_user_key, max_user_key);
     }
     edit->AddFile(level, meta.number, meta.file_size, meta.smallest,
@@ -546,6 +548,7 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
   return s;
 }
 
+// Minor Compaction
 void DBImpl::CompactMemTable() {
   mutex_.AssertHeld();
   assert(imm_ != nullptr);
@@ -663,23 +666,35 @@ void DBImpl::MaybeScheduleCompaction() {
   mutex_.AssertHeld();
   if (background_compaction_scheduled_) {
     // Already scheduled
+    // 实际的Compaction完成了才会重新变回false
+    // 不能重复调用MaybeScheduleCompaction
+    // 调用一次就设置为了true，直到调用BackgroundCall才会设置为false
   } else if (shutting_down_.load(std::memory_order_acquire)) {
     // DB is being deleted; no more background compactions
+    // DB退出了
   } else if (!bg_error_.ok()) {
     // Already got an error; no more changes
+    // 有报错
   } else if (imm_ == nullptr && manual_compaction_ == nullptr &&
              !versions_->NeedsCompaction()) {
     // No work to be done
+    // 没有新生成的immetable
+    // 没有触发manual compaction
+    // 不需要再进行compaction
   } else {
+    // 已经实际调用了，不到BackgroundCall不能重新调用
     background_compaction_scheduled_ = true;
+    // 用一个后台线程调用BGWork函数
     env_->Schedule(&DBImpl::BGWork, this);
   }
 }
 
+// 调用BackgroundCall函数
 void DBImpl::BGWork(void* db) {
   reinterpret_cast<DBImpl*>(db)->BackgroundCall();
 }
 
+// Compaction线程的真正的函数调用
 void DBImpl::BackgroundCall() {
   MutexLock l(&mutex_);
   assert(background_compaction_scheduled_);
@@ -688,20 +703,26 @@ void DBImpl::BackgroundCall() {
   } else if (!bg_error_.ok()) {
     // No more background work after a background error.
   } else {
+    // 实际的Compaction函数
     BackgroundCompaction();
   }
 
+  // 一次Compaction结束，可以进行下一回Compaction
   background_compaction_scheduled_ = false;
 
   // Previous compaction may have produced too many files in a level,
   // so reschedule another compaction if needed.
   MaybeScheduleCompaction();
+
+  // 跳出Compaction循环
+  // 不用再Compaction了，唤醒因为Write Stall挂起的写入线程继续写入
   background_work_finished_signal_.SignalAll();
 }
 
 void DBImpl::BackgroundCompaction() {
   mutex_.AssertHeld();
 
+  // Minor Compaction
   if (imm_ != nullptr) {
     CompactMemTable();
     return;
@@ -710,11 +731,14 @@ void DBImpl::BackgroundCompaction() {
   Compaction* c;
   bool is_manual = (manual_compaction_ != nullptr);
   InternalKey manual_end;
-  if (is_manual) {
+  if (is_manual) { // Manual Compaction
     ManualCompaction* m = manual_compaction_;
+    // 根据[begin, end]获取到应该Compaction的两层SSTable到inputs_[0]和inputs_[1]
     c = versions_->CompactRange(m->level, m->begin, m->end);
     m->done = (c == nullptr);
     if (c != nullptr) {
+      // inputs_[0][inputs_[0].size() - 1]
+      // Compaction的上一层的最后一个SSTable的最大key
       manual_end = c->input(0, c->num_input_files(0) - 1)->largest;
     }
     Log(options_.info_log,
@@ -722,7 +746,7 @@ void DBImpl::BackgroundCompaction() {
         m->level, (m->begin ? m->begin->DebugString().c_str() : "(begin)"),
         (m->end ? m->end->DebugString().c_str() : "(end)"),
         (m->done ? "(end)" : manual_end.DebugString().c_str()));
-  } else {
+  } else { //Seek Compaction
     c = versions_->PickCompaction();
   }
 
@@ -746,6 +770,7 @@ void DBImpl::BackgroundCompaction() {
         static_cast<unsigned long long>(f->file_size),
         status.ToString().c_str(), versions_->LevelSummary(&tmp));
   } else {
+
     CompactionState* compact = new CompactionState(c);
     status = DoCompactionWork(compact);
     if (!status.ok()) {
@@ -1213,7 +1238,11 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
   }
 
   // May temporarily unlock and wait.
+  // 如果本次什么也没写入，则当memtable尚未达到阈值时，也将其转换为immemtable
+  // 由于存在Write Stall现象，所以本写入线程可能会延时甚至是停止
   Status status = MakeRoomForWrite(updates == nullptr);
+
+  // 如果有Write Stall的发生，等Compaction完成后才能继续执行去写
   uint64_t last_sequence = versions_->LastSequence();
   Writer* last_writer = &w;
   if (status.ok() && updates != nullptr) {  // nullptr batch is for compactions
@@ -1322,9 +1351,13 @@ WriteBatch* DBImpl::BuildBatchGroup(Writer** last_writer) {
 
 // REQUIRES: mutex_ is held
 // REQUIRES: this thread is currently at the front of the writer queue
+// force: 表示是否当memtable还没满的时候就生成immetable
 Status DBImpl::MakeRoomForWrite(bool force) {
   mutex_.AssertHeld();
   assert(!writers_.empty());
+  // 如果不允许metable还没满就转换为immemtable，就允许延时
+  // 如果允许memtable还没满就转换为immemtable，就不允许延时
+  // 所谓允许延时，是指当Write Stall发生时，允许延时1毫秒来阻塞写线程，给Compaction腾出时间
   bool allow_delay = !force;
   Status s;
   while (true) {
@@ -1332,6 +1365,7 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       // Yield previous error
       s = bg_error_;
       break;
+      // 如果允许延迟以及第0层的SSTable的个数大于等于8，发生了Write Stall
     } else if (allow_delay && versions_->NumLevelFiles(0) >=
                                   config::kL0_SlowdownWritesTrigger) {
       // We are getting close to hitting a hard limit on the number of
@@ -1342,43 +1376,61 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       // case it is sharing the same core as the writer.
       mutex_.Unlock();
       env_->SleepForMicroseconds(1000);
+      // 延时一次就够了，如果allow_delay不重新设置为false，再次写入时就会一直到这个else if来
       allow_delay = false;  // Do not delay a single write more than once
       mutex_.Lock();
-    } else if (!force &&
+    } else if (!force && // 如果当memtable还没满不能生成immetable、memtable的实际空间没有超过阈值时
                (mem_->ApproximateMemoryUsage() <= options_.write_buffer_size)) {
       // There is room in current memtable
+      // 没必要处理，直接跳出
       break;
-    } else if (imm_ != nullptr) {
+    } else if (imm_ != nullptr) { // 如果有immetable产生
       // We have filled up the current memtable, but the previous
       // one is still being compacted, so we wait.
       Log(options_.info_log, "Current memtable full; waiting...\n");
-      background_work_finished_signal_.Wait();
+      background_work_finished_signal_.Wait(); // 挂起写入线程，需要先Compaction后才能写入
+      // 如果L0的SSTable太多超过12，产生了严重的Write Stall，则直接停止写入而不是延时
     } else if (versions_->NumLevelFiles(0) >= config::kL0_StopWritesTrigger) {
       // There are too many level-0 files.
       Log(options_.info_log, "Too many L0 files; waiting...\n");
-      background_work_finished_signal_.Wait();
-    } else {
+      background_work_finished_signal_.Wait(); // 挂起写入线程，需要先处理好L0层的SSTable再写入
+    } else { //正常情况
       // Attempt to switch to a new memtable and trigger compaction of old
       assert(versions_->PrevLogNumber() == 0);
+
+      // 拿到一个log号，作为一个新的的log文件
       uint64_t new_log_number = versions_->NewFileNumber();
+
+      // 创建一个写入的文件
       WritableFile* lfile = nullptr;
+      // 根据给定的log号码和db的名字生成一个文件到lfile
       s = env_->NewWritableFile(LogFileName(dbname_, new_log_number), &lfile);
-      if (!s.ok()) {
+
+      if (!s.ok()) { // 如果创建文件失败
         // Avoid chewing through file number space in a tight loop.
         versions_->ReuseFileNumber(new_log_number);
         break;
       }
+
+      // memtable满了，生成了immetable了，要持久化了，原来的WAL文件就不需要了
+      // 删除原来的log和logfile_
       delete log_;
       delete logfile_;
-      logfile_ = lfile;
-      logfile_number_ = new_log_number;
-      log_ = new log::Writer(lfile);
-      imm_ = mem_;
+
+      // 要产生新的memtable，所以为其生成新的log相关的变量
+      logfile_ = lfile; // 赋值新的WAL的文件
+      logfile_number_ = new_log_number; // 赋值新的WAL文件号码
+      log_ = new log::Writer(lfile); //为WAL创建新的log
+
+      // 把memtable转换为immetable
+      imm_ = mem_; //原memtable已经满了，转换为immetable
       has_imm_.store(true, std::memory_order_release);
-      mem_ = new MemTable(internal_comparator_);
+      mem_ = new MemTable(internal_comparator_); // 生成一个新memtable供用户写入
       mem_->Ref();
-      force = false;  // Do not force another compaction if have room
-      MaybeScheduleCompaction();
+
+      force = false;  // Do not force another compaction if have room（恢复默认）
+
+      MaybeScheduleCompaction(); //在写线程中尝试启动Compaction线程
     }
   }
   return s;

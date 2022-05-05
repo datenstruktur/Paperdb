@@ -13,7 +13,6 @@
 namespace leveldb {
 
 void BlockHandle::EncodeTo(std::string* dst) const {
-  // Sanity check that all fields have been set
   assert(offset_ != ~static_cast<uint64_t>(0));
   assert(size_ != ~static_cast<uint64_t>(0));
   PutVarint64(dst, offset_);
@@ -32,13 +31,23 @@ void Footer::EncodeTo(std::string* dst) const {
   const size_t original_size = dst->size();
   metaindex_handle_.EncodeTo(dst);
   index_handle_.EncodeTo(dst);
+
+  //sizeof(metaindex_handle_ + index_handle_) <= 2 * BlockHandle::kMaxEncodedLength
+  // resize() 扩充成2 * BlockHandle::kMaxEncodedLength，就完成了Padding
   dst->resize(2 * BlockHandle::kMaxEncodedLength);  // Padding
+
+  //PutFixed32只能编码32比特的数据，而kTableMagicNumber有64位，8Byte
+  //0xffff,ffff为8个十六进制f，一个f为4比特，总共8*4 = 32比特
+  // kTableMagicNumber & 0xffff,ffff为取前32比特
   PutFixed32(dst, static_cast<uint32_t>(kTableMagicNumber & 0xffffffffu));
+  //取后32比特写入
   PutFixed32(dst, static_cast<uint32_t>(kTableMagicNumber >> 32));
+
   assert(dst->size() == original_size + kEncodedLength);
   (void)original_size;  // Disable unused variable warning.
 }
 
+//
 Status Footer::DecodeFrom(Slice* input) {
   const char* magic_ptr = input->data() + kEncodedLength - 8;
   const uint32_t magic_lo = DecodeFixed32(magic_ptr);
@@ -103,14 +112,16 @@ Status ReadBlock(RandomAccessFile* file, const ReadOptions& options,
   // 读取type
   switch (data[n]) {
     case kNoCompression: //如果不需要压缩
-      if (data != buf) { //使用mmap把磁盘的数据映射到data中
+      // PosixMmapReadableFile中的Read函数不会将data里的数据读取到buf
+      // data 指向一块内存区域，这块内存是磁盘文件在内存中的映射，由OS管理，所以我们就不需要buf了
+      if (data != buf) {
         // File implementation gave us pointer to some other data.
         // Use it directly under the assumption that it will be live
         // while the file is open.
         delete[] buf;
         result->data = Slice(data, n); //读取data到result
-        result->heap_allocated = false;
-        result->cachable = false;  // Do not double-cache
+        result->heap_allocated = false; // 不需要Block管理Block数据，由OS管理，Block对象删除了也不会删除它
+        result->cachable = false;  // Do not double-cache，已经在内存中了，没必要用LRUCache中缓存它
       } else {
         result->data = Slice(buf, n);
         result->heap_allocated = true;

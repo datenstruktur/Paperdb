@@ -38,6 +38,7 @@ class BlockHandle {
   void EncodeTo(std::string* dst) const;
   Status DecodeFrom(Slice* input);
 
+  // 8 + 8
  private:
   uint64_t offset_;
   uint64_t size_;
@@ -46,6 +47,11 @@ class BlockHandle {
 // Footer encapsulates the fixed information stored at the tail
 // end of every table file.
 class Footer {
+  /*
+   * index_handle
+   * padding
+   * magic
+   */
  public:
   // Encoded length of a Footer.  Note that the serialization of a
   // Footer will always occupy exactly this many bytes.  It consists
