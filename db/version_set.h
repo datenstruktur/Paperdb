@@ -300,15 +300,18 @@ class VersionSet {
   const Options* const options_;
   TableCache* const table_cache_;
   const InternalKeyComparator icmp_;
-  uint64_t next_file_number_;
-  uint64_t manifest_file_number_;
-  uint64_t last_sequence_;
-  uint64_t log_number_;
+  uint64_t next_file_number_; //
+  uint64_t manifest_file_number_; // 保存VersionEdit的文件编号
+  uint64_t last_sequence_; //
+  uint64_t log_number_; // 保存memtable数据的log文件的编号（文件名）
   uint64_t prev_log_number_;  // 0 or backing store for memtable being compacted
 
   // Opened lazily
+  // dbname_ + manifest_file_number_ ->descriptor_file_
   WritableFile* descriptor_file_;
+  // descriptor_file_ -> descriptor_log_
   log::Writer* descriptor_log_;
+
   Version dummy_versions_;  // Head of circular doubly-linked list of versions.
   Version* current_;        // == dummy_versions_.prev_
 
@@ -318,6 +321,7 @@ class VersionSet {
 };
 
 // A Compaction encapsulates information about a compaction.
+// Compaction之前的
 class Compaction {
  public:
   ~Compaction();
@@ -368,7 +372,7 @@ class Compaction {
   int level_;
   uint64_t max_output_file_size_;
   Version* input_version_;
-  VersionEdit edit_;
+  VersionEdit edit_; //这个VersionEdit好像是没有log_number的
 
   // Each compaction reads inputs from "level_" and "level_+1"
   std::vector<FileMetaData*> inputs_[2];  // The two sets of inputs

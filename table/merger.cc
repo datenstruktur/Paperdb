@@ -176,6 +176,7 @@ void MergingIterator::FindLargest() {
 }
 }  // namespace
 
+//
 Iterator* NewMergingIterator(const Comparator* comparator, Iterator** children,
                              int n) {
   assert(n >= 0);

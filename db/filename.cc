@@ -20,8 +20,10 @@ Status WriteStringToFileSync(Env* env, const Slice& data,
 static std::string MakeFileName(const std::string& dbname, uint64_t number,
                                 const char* suffix) {
   char buf[100];
+  // 6位number.dbtmp
   std::snprintf(buf, sizeof(buf), "/%06llu.%s",
                 static_cast<unsigned long long>(number), suffix);
+  //dbname6位number.dbtmp
   return dbname + buf;
 }
 
@@ -40,6 +42,7 @@ std::string SSTTableFileName(const std::string& dbname, uint64_t number) {
   return MakeFileName(dbname, number, "sst");
 }
 
+//dbname/MANIFEST-6位number
 std::string DescriptorFileName(const std::string& dbname, uint64_t number) {
   assert(number > 0);
   char buf[100];
@@ -120,16 +123,26 @@ bool ParseFileName(const std::string& filename, uint64_t* number,
   return true;
 }
 
+
+// 在dbname/CURRENT中写入一行MANIFEST-descriptor_number
 Status SetCurrentFile(Env* env, const std::string& dbname,
                       uint64_t descriptor_number) {
   // Remove leading "dbname/" and add newline to manifest file name
+  // 编码为dbname/MANIFEST-6位number
   std::string manifest = DescriptorFileName(dbname, descriptor_number);
   Slice contents = manifest;
+  // 路径名称一定是以dbname/开头的
   assert(contents.starts_with(dbname + "/"));
+  // 去除dbname/前缀
+  // 只留下MANIFEST-6位number
   contents.remove_prefix(dbname.size() + 1);
+  //dbname6位number.dbtmp
+  //dbname211212.dbtmp
   std::string tmp = TempFileName(dbname, descriptor_number);
+  // 把MANIFEST-211212写入dbname211212.dbtmp中的一行
   Status s = WriteStringToFileSync(env, contents.ToString() + "\n", tmp);
   if (s.ok()) {
+      //文件名称修改为dbname/CURRENT
     s = env->RenameFile(tmp, CurrentFileName(dbname));
   }
   if (!s.ok()) {

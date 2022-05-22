@@ -308,6 +308,7 @@ void Version::ForEachOverlapping(Slice user_key, Slice internal_key, void* arg,
 
     // Binary search to find earliest index whose largest key >= internal_key.
     uint32_t index = FindFile(vset_->icmp_, files_[level], internal_key);
+
     if (index < num_files) {
       FileMetaData* f = files_[level][index];
       if (ucmp->Compare(user_key, f->smallest.user_key()) < 0) {
@@ -358,6 +359,7 @@ Status Version::Get(const ReadOptions& options, const LookupKey& k,
         state->found = true;
         return false;
       }
+
       switch (state->saver.state) {
         case kNotFound:
           return true;  // Keep searching in other files
@@ -399,6 +401,7 @@ Status Version::Get(const ReadOptions& options, const LookupKey& k,
   return state.found ? state.s : Status::NotFound(Slice());
 }
 
+// 把要进行seek compaction的level和sstable加入version
 bool Version::UpdateStats(const GetStats& stats) {
   FileMetaData* f = stats.seek_file;
   if (f != nullptr) {
@@ -569,10 +572,13 @@ std::string Version::DebugString() const {
 class VersionSet::Builder {
  private:
   // Helper to sort by v->files_[file_number].smallest
+  // 它是干嘛用的
   struct BySmallestKey {
     const InternalKeyComparator* internal_comparator;
 
+    // 排序函数，传入两个FileMetaData
     bool operator()(FileMetaData* f1, FileMetaData* f2) const {
+        // 比较两个f的smallest
       int r = internal_comparator->Compare(f1->smallest, f2->smallest);
       if (r != 0) {
         return (r < 0);
@@ -583,14 +589,18 @@ class VersionSet::Builder {
     }
   };
 
+  // FileMetaData为啥要包装一个BySmallestKey
   typedef std::set<FileMetaData*, BySmallestKey> FileSet;
   struct LevelState {
     std::set<uint64_t> deleted_files;
     FileSet* added_files;
   };
 
+  // 要进行合并的VersionSet
   VersionSet* vset_;
+  // VersionSet的current_
   Version* base_;
+  // 每一层要进行的更改
   LevelState levels_[config::kNumLevels];
 
  public:
@@ -599,7 +609,9 @@ class VersionSet::Builder {
     base_->Ref();
     BySmallestKey cmp;
     cmp.internal_comparator = &vset_->icmp_;
+    // 遍历每一层
     for (int level = 0; level < config::kNumLevels; level++) {
+        // 根据cmp进行排序到added_files
       levels_[level].added_files = new FileSet(cmp);
     }
   }
@@ -635,15 +647,21 @@ class VersionSet::Builder {
     }
 
     // Delete files
+    // 遍历删除的SSTable列表
     for (const auto& deleted_file_set_kvp : edit->deleted_files_) {
+        // 取出level
       const int level = deleted_file_set_kvp.first;
+      // 取出number
       const uint64_t number = deleted_file_set_kvp.second;
+      // 添加到level层的改动列表中的删除列表
       levels_[level].deleted_files.insert(number);
     }
 
     // Add new files
+    // 遍历增加队列
     for (size_t i = 0; i < edit->new_files_.size(); i++) {
-      const int level = edit->new_files_[i].first;
+      const int level = edit->new_files_[i].first; //取出所在的level
+      // 取出FileMetaData
       FileMetaData* f = new FileMetaData(edit->new_files_[i].second);
       f->refs = 1;
 
@@ -663,27 +681,37 @@ class VersionSet::Builder {
       f->allowed_seeks = static_cast<int>((f->file_size / 16384U));
       if (f->allowed_seeks < 100) f->allowed_seeks = 100;
 
+      // 如果要增加的sstable在删除列表中存在，则不用删除了
       levels_[level].deleted_files.erase(f->number);
+      // 添加到增加文件列表
       levels_[level].added_files->insert(f);
     }
   }
 
   // Save the current state in *v.
+  // 把改动加上versionset的最新的current生成新的Version
   void SaveTo(Version* v) {
     BySmallestKey cmp;
     cmp.internal_comparator = &vset_->icmp_;
+    // 遍历每一层
     for (int level = 0; level < config::kNumLevels; level++) {
       // Merge the set of added files with the set of pre-existing files.
       // Drop any deleted files.  Store the result in *v.
+      // 取出当前层的sstable列表
       const std::vector<FileMetaData*>& base_files = base_->files_[level];
       std::vector<FileMetaData*>::const_iterator base_iter = base_files.begin();
       std::vector<FileMetaData*>::const_iterator base_end = base_files.end();
+      // 取出本层要增加的sstable
       const FileSet* added_files = levels_[level].added_files;
+      // 扩充version的files_
       v->files_[level].reserve(base_files.size() + added_files->size());
+      // 遍历要增加的sstable
       for (const auto& added_file : *added_files) {
         // Add all smaller files listed in base_
+        // 从base_files中找到第一个大于add_file的FileMetaData
         for (std::vector<FileMetaData*>::const_iterator bpos =
             std::upper_bound(base_iter, base_end, added_file, cmp);
+            // 不是第一个
              base_iter != bpos; ++base_iter) {
           MaybeAddFile(v, level, *base_iter);
         }
@@ -698,11 +726,22 @@ class VersionSet::Builder {
 
 #ifndef NDEBUG
       // Make sure there is no overlap in levels > 0
+      // 正常新增的sstable是不会和原来的重叠的，插入时候保证了这一点
+      // 但是还需要进行一些检查
+      // [smallest2, largest2]
+      // [smallest3, largest3]
       if (level > 0) {
+        // 遍历本层的所有的sstable
         for (uint32_t i = 1; i < v->files_[level].size(); i++) {
+          // 从0个sstable开始，拿到sstable的最大值
+          // prev_end = largest2
           const InternalKey& prev_end = v->files_[level][i - 1]->largest;
+          // 下一个sstable的最小值
+          // this_begin = smallest3
           const InternalKey& this_begin = v->files_[level][i]->smallest;
+          // 前面的largest比后面的smallest还大，说明发生了重叠
           if (vset_->icmp_.Compare(prev_end, this_begin) >= 0) {
+              // 报错
             std::fprintf(stderr, "overlapping ranges in same level %s vs. %s\n",
                          prev_end.DebugString().c_str(),
                          this_begin.DebugString().c_str());
@@ -714,17 +753,20 @@ class VersionSet::Builder {
     }
   }
 
+  // 把f添加到v中的level层
   void MaybeAddFile(Version* v, int level, FileMetaData* f) {
+      // 如果f在本层的删除列表中，则不添加
     if (levels_[level].deleted_files.count(f->number) > 0) {
       // File is deleted: do nothing
-    } else {
-      std::vector<FileMetaData*>* files = &v->files_[level];
+    } else { // 如果不在，说明不用删除
+      std::vector<FileMetaData*>* files = &v->files_[level]; //当前到本层的SSTable集合
       if (level > 0 && !files->empty()) {
         // Must not overlap
         assert(vset_->icmp_.Compare((*files)[files->size() - 1]->largest,
                                     f->smallest) < 0);
       }
       f->refs++;
+      // 把f添加到本层中
       files->push_back(f);
     }
   }
@@ -757,6 +799,7 @@ VersionSet::~VersionSet() {
   delete descriptor_file_;
 }
 
+// 把一个Version添加到VersionSet
 void VersionSet::AppendVersion(Version* v) {
   // Make "v" current
   assert(v->refs_ == 0);
@@ -774,21 +817,29 @@ void VersionSet::AppendVersion(Version* v) {
   v->next_->prev_ = v;
 }
 
+// 把VersionEdit应用到VersionSet中
+// 并且持久化VersionEdit
+// VersionEdit是MANIFEST
 Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
-  if (edit->has_log_number_) {
-    assert(edit->log_number_ >= log_number_);
+  if (edit->has_log_number_) { //VersionEdit是由Minor Compaction产生的
+    assert(edit->log_number_ >= log_number_); //
     assert(edit->log_number_ < next_file_number_);
-  } else {
-    edit->SetLogNumber(log_number_);
+  } else { //除开Minor Compaction外，都没有log_number_如果没有log_number
+    edit->SetLogNumber(log_number_); //设置VersionSet的log_number_（上一个edit的log number）
   }
 
+  // 如果没有之前的log number
   if (!edit->has_prev_log_number_) {
+      // 设置一下VersionSet的log_number
     edit->SetPrevLogNumber(prev_log_number_);
   }
 
+
   edit->SetNextFile(next_file_number_);
+  // 设置kv对的最后一个sequence_ number
   edit->SetLastSequence(last_sequence_);
 
+  // 构建出一个新的Version
   Version* v = new Version(this);
   {
     Builder builder(this, current_);
@@ -801,11 +852,16 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
   // a temporary file that contains a snapshot of the current version.
   std::string new_manifest_file;
   Status s;
+  // 如果持久化VersionEdit的Writer为空
+  // 创建一个新的Writer
   if (descriptor_log_ == nullptr) {
     // No reason to unlock *mu here since we only hit this path in the
     // first call to LogAndApply (when opening the database).
     assert(descriptor_file_ == nullptr);
+
+    //根据db的文件名和manifest的number创建需要文件名称
     new_manifest_file = DescriptorFileName(dbname_, manifest_file_number_);
+    // 根据文件名称创建writer
     s = env_->NewWritableFile(new_manifest_file, &descriptor_file_);
     if (s.ok()) {
       descriptor_log_ = new log::Writer(descriptor_file_);
@@ -814,15 +870,19 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
   }
 
   // Unlock during expensive MANIFEST log write
+  // 持久化VersionEdit
   {
     mu->Unlock();
 
     // Write new record to MANIFEST log
     if (s.ok()) {
+        // 把edit编码成string
       std::string record;
       edit->EncodeTo(&record);
+      // 加入log中
       s = descriptor_log_->AddRecord(record);
       if (s.ok()) {
+          // 持久化edit log
         s = descriptor_file_->Sync();
       }
       if (!s.ok()) {
@@ -833,6 +893,7 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
     // If we just created a new descriptor file, install it by writing a
     // new CURRENT file that points to it.
     if (s.ok() && !new_manifest_file.empty()) {
+        // 在dbname/CURRENT中写入一行MANIFEST-manifest_file_number_（6位）
       s = SetCurrentFile(env_, dbname_, manifest_file_number_);
     }
 
@@ -841,16 +902,21 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
 
   // Install the new version
   if (s.ok()) {
+    //将构建好的version
+    // 持久化完了versionEdit的verison
+    //写入Version
     AppendVersion(v);
+    // 将最新的log_number和pre_log_number赋值到versionset
     log_number_ = edit->log_number_;
     prev_log_number_ = edit->prev_log_number_;
-  } else {
-    delete v;
+  } else { //持久化失败
+    delete v; //删除version
     if (!new_manifest_file.empty()) {
-      delete descriptor_log_;
-      delete descriptor_file_;
+      delete descriptor_log_; //删除manifest的writer
+      delete descriptor_file_; //删除manifest的文件
       descriptor_log_ = nullptr;
       descriptor_file_ = nullptr;
+      // 删除manifest文件名
       env_->RemoveFile(new_manifest_file);
     }
   }
@@ -858,6 +924,11 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
   return s;
 }
 
+// 大概的过程是从current读取到最新的manifest
+// 再从最新的manifest中读取到所有的edit
+// 每读取一个edit，就把edit应用在set中最新version上，形成新的version，并设置为最新的version
+// 本versionset的数据就是最后一个edit的数据
+// 把version应用到version set
 Status VersionSet::Recover(bool* save_manifest) {
   struct LogReporter : public log::Reader::Reporter {
     Status* status;
@@ -868,6 +939,8 @@ Status VersionSet::Recover(bool* save_manifest) {
 
   // Read "CURRENT" file, which contains a pointer to the current manifest file
   std::string current;
+  //从dbname/CURRENT文件中读取一行到current
+  // 它就是最新的manifest的地址
   Status s = ReadFileToString(env_, CurrentFileName(dbname_), &current);
   if (!s.ok()) {
     return s;
@@ -875,8 +948,11 @@ Status VersionSet::Recover(bool* save_manifest) {
   if (current.empty() || current[current.size() - 1] != '\n') {
     return Status::Corruption("CURRENT file does not end with newline");
   }
+  // 去除掉"\n"
   current.resize(current.size() - 1);
 
+  //dbname/MANIFEST-manifest_file_number_（6位）
+  // 获得manifest的地址
   std::string dscname = dbname_ + "/" + current;
   SequentialFile* file;
   s = env_->NewSequentialFile(dscname, &file);
@@ -896,18 +972,22 @@ Status VersionSet::Recover(bool* save_manifest) {
   uint64_t last_sequence = 0;
   uint64_t log_number = 0;
   uint64_t prev_log_number = 0;
+  //初始化VersionSet Builder
   Builder builder(this, current_);
   int read_records = 0;
 
   {
     LogReporter reporter;
     reporter.status = &s;
+    //初始化manifest的reader
     log::Reader reader(file, &reporter, true /*checksum*/,
                        0 /*initial_offset*/);
     Slice record;
     std::string scratch;
+    //读取record，manifest中保存的是一个个edit
     while (reader.ReadRecord(&record, &scratch) && s.ok()) {
       ++read_records;
+      // 解析一个VersionEdit
       VersionEdit edit;
       s = edit.DecodeFrom(record);
       if (s.ok()) {
@@ -920,9 +1000,12 @@ Status VersionSet::Recover(bool* save_manifest) {
       }
 
       if (s.ok()) {
+          // 把VersionEdit的sstable的增加和删除放在一个缓冲区中
         builder.Apply(&edit);
       }
 
+      // 取出每个edit的参数
+      // 最终的参数将会是最后一个edit的参数
       if (edit.has_log_number_) {
         log_number = edit.log_number_;
         have_log_number = true;
@@ -948,6 +1031,7 @@ Status VersionSet::Recover(bool* save_manifest) {
   file = nullptr;
 
   if (s.ok()) {
+    // 如果没找到必要的参数就报错
     if (!have_next_file) {
       s = Status::Corruption("no meta-nextfile entry in descriptor");
     } else if (!have_log_number) {
@@ -966,21 +1050,28 @@ Status VersionSet::Recover(bool* save_manifest) {
 
   if (s.ok()) {
     Version* v = new Version(this);
-    builder.SaveTo(v);
+    builder.SaveTo(v); //把改动和versionset的curent生成新的current
     // Install recovered version
+    // 为size compaction、seek compaction计算条件
     Finalize(v);
+    //将Version加入VersionSet链表
     AppendVersion(v);
-    manifest_file_number_ = next_file;
+    manifest_file_number_ = next_file; // 新建一个manifest文件
     next_file_number_ = next_file + 1;
     last_sequence_ = last_sequence;
     log_number_ = log_number;
     prev_log_number_ = prev_log_number;
 
     // See if we can reuse the existing MANIFEST file.
+    // 复用的意思是manifest_file_number_还是用原来的？
+    // 可复用有两个前提：
+    // 1.文件不是很大
+    // 2.可以append
+    // 如果可以复用，manifest file number就会被改回来
     if (ReuseManifest(dscname, current)) {
       // No need to save new manifest
     } else {
-      *save_manifest = true;
+      *save_manifest = true; // manifest file number是新的
     }
   } else {
     std::string error = s.ToString();
@@ -1018,11 +1109,12 @@ bool VersionSet::ReuseManifest(const std::string& dscname,
 
   Log(options_->info_log, "Reusing MANIFEST %s\n", dscname.c_str());
   descriptor_log_ = new log::Writer(descriptor_file_, manifest_size);
-  manifest_file_number_ = manifest_number;
+  manifest_file_number_ = manifest_number; //把新创建的manifest file number改回来
   return true;
 }
 
 void VersionSet::MarkFileNumberUsed(uint64_t number) {
+  // 跳过[next_file_number_ + 1, number]
   if (next_file_number_ <= number) {
     next_file_number_ = number + 1;
   }
@@ -1146,9 +1238,10 @@ uint64_t VersionSet::ApproximateOffsetOf(Version* v, const InternalKey& ikey) {
   return result;
 }
 
+// 读取versionset中每一个version
 void VersionSet::AddLiveFiles(std::set<uint64_t>* live) {
   for (Version* v = dummy_versions_.next_; v != &dummy_versions_;
-       v = v->next_) {
+       v = v->next_) {// 遍历每一层
     for (int level = 0; level < config::kNumLevels; level++) {
       const std::vector<FileMetaData*>& files = v->files_[level];
       for (size_t i = 0; i < files.size(); i++) {
@@ -1305,17 +1398,20 @@ Compaction* VersionSet::PickCompaction() {
 
 // Finds the largest key in a vector of files. Returns true if files is not
 // empty.
+// 找到files数组中的sstable的最大的key
+// [1, 23] [21,122] [122,124]
+// largest_key = 124
 bool FindLargestKey(const InternalKeyComparator& icmp,
                     const std::vector<FileMetaData*>& files,
                     InternalKey* largest_key) {
   if (files.empty()) {
     return false;
   }
-  *largest_key = files[0]->largest;
-  for (size_t i = 1; i < files.size(); ++i) {
-    FileMetaData* f = files[i];
-    if (icmp.Compare(f->largest, *largest_key) > 0) {
-      *largest_key = f->largest;
+  *largest_key = files[0]->largest; //第一个sstable的最大的key
+  for (size_t i = 1; i < files.size(); ++i) { // 遍历每一个sstable
+    FileMetaData* f = files[i]; //取到一个sstable
+    if (icmp.Compare(f->largest, *largest_key) > 0) { //如果这个sstable的largest key比原来还大
+      *largest_key = f->largest; //就替换它
     }
   }
   return true;
@@ -1323,20 +1419,29 @@ bool FindLargestKey(const InternalKeyComparator& icmp,
 
 // Finds minimum file b2=(l2, u2) in level file for which l2 > u1 and
 // user_key(l2) = user_key(u1)
+// 找到level_files中，smallest和largest_key有相同的key，且序列号更大的，最小key的sstable
+// [<key1, sn1>, <key99, sn121>][<key12, sn2>, <key299, sn212>][<key12, sn1>, <key12121, sn2>], largest_key = 12
+// [<key12, sn2>, <key299, sn212>][<key12, sn1>, <key12121, sn2>]
+// [<key12, sn1>, <key12121, sn2>]
 FileMetaData* FindSmallestBoundaryFile(
     const InternalKeyComparator& icmp,
     const std::vector<FileMetaData*>& level_files,
     const InternalKey& largest_key) {
+
   const Comparator* user_cmp = icmp.user_comparator();
   FileMetaData* smallest_boundary_file = nullptr;
+
+  // 遍历每一个sstable
   for (size_t i = 0; i < level_files.size(); ++i) {
-    FileMetaData* f = level_files[i];
-    if (icmp.Compare(f->smallest, largest_key) > 0 &&
-        user_cmp->Compare(f->smallest.user_key(), largest_key.user_key()) ==
+    FileMetaData* f = level_files[i]; //取到一个sstable
+    // 如果遇到key一样，但是序列号比largest_key更大的key时
+    if (icmp.Compare(f->smallest, largest_key) > 0 && //当前sstable的最小key大于最大key（包括sn），可能存在key相等的情况
+        user_cmp->Compare(f->smallest.user_key(), largest_key.user_key()) == //且当前sstable的最小key等于最大的key
         0) {
-      if (smallest_boundary_file == nullptr ||
+      // 找更小的
+      if (smallest_boundary_file == nullptr || //如果没有最小的key
           icmp.Compare(f->smallest, smallest_boundary_file->smallest) < 0) {
-        smallest_boundary_file = f;
+        smallest_boundary_file = f; //更新最小值
       }
     }
   }
@@ -1357,40 +1462,58 @@ FileMetaData* FindSmallestBoundaryFile(
 // parameters:
 //   in     level_files:      List of files to search for boundary files.
 //   in/out compaction_files: List of files to extend by adding boundary files.
+
+// largest_key是compaction_files中largest最大的key
+// 把level_files中凡是smallest的key和largest_key一样的，sn比它大的，都写入compaction_files
+// 按照smallest的顺序从小到大排列
 void AddBoundaryInputs(const InternalKeyComparator& icmp,
                        const std::vector<FileMetaData*>& level_files,
                        std::vector<FileMetaData*>* compaction_files) {
   InternalKey largest_key;
 
   // Quick return if compaction_files is empty.
+  // 找到要参与compaction的sstable列表compaction_files中sstable的最大key
   if (!FindLargestKey(icmp, *compaction_files, &largest_key)) {
     return;
   }
 
   bool continue_searching = true;
+  // 找到compaction_files中，第一个和largest_key一样的，但是序列号更大的key
+  // 加入到compaction_files中
   while (continue_searching) {
+    // 找到level_files中key = largest_key, 序号最小的sstable
     FileMetaData* smallest_boundary_file =
         FindSmallestBoundaryFile(icmp, level_files, largest_key);
 
     // If a boundary file was found advance largest_key, otherwise we're done.
-    if (smallest_boundary_file != NULL) {
-      compaction_files->push_back(smallest_boundary_file);
-      largest_key = smallest_boundary_file->largest;
+    // 把所有smallest的key为largest_key一样的sstable按照sn从小到大的顺序写入compaction_files
+    if (smallest_boundary_file != NULL) { // 如果找到了
+      compaction_files->push_back(smallest_boundary_file); //加入要compaction的sstable
+      largest_key = smallest_boundary_file->largest; //
     } else {
       continue_searching = false;
     }
   }
 }
 
+
 void VersionSet::SetupOtherInputs(Compaction* c) {
   const int level = c->level();
   InternalKey smallest, largest;
 
+  //
   AddBoundaryInputs(icmp_, current_->files_[level], &c->inputs_[0]);
+
+  // 更新c->inputs_[0]的范围到[smallest, largest]
   GetRange(c->inputs_[0], &smallest, &largest);
 
+  // inputs_[0]增加了新的sstable
+  // 下一层的与[smallest, largest]重叠的sstable发生了变化
+  // 把新的sstable加入到c->inputs_[1]
   current_->GetOverlappingInputs(level + 1, &smallest, &largest,
                                  &c->inputs_[1]);
+
+  // 把level + 1的与inputs_[1]中的有key
   AddBoundaryInputs(icmp_, current_->files_[level + 1], &c->inputs_[1]);
 
   // Get entire range covered by compaction
@@ -1445,39 +1568,54 @@ void VersionSet::SetupOtherInputs(Compaction* c) {
   c->edit_.SetCompactPointer(level, largest);
 }
 
+// 到level层选取与[begin, end]重叠的sstable
+// 如果太多，去除掉一部分以减少开销
+// 产生一个Compaction对象
 Compaction* VersionSet::CompactRange(int level, const InternalKey* begin,
                                      const InternalKey* end) {
   std::vector<FileMetaData*> inputs;
+  // 从level中挑选与[begin, end]重叠的sstable到inputs
   current_->GetOverlappingInputs(level, begin, end, &inputs);
   if (inputs.empty()) {
     return nullptr;
   }
 
+  // 去除多余的sstable以减少压力
   // Avoid compacting too much in one shot in case the range is large.
   // But we cannot do this for level-0 since level-0 files can overlap
   // and we must not pick one file and drop another older file if the
   // two files overlap.
   if (level > 0) {
+    // 获得每层的大小阈值
     const uint64_t limit = MaxFileSizeForLevel(options_, level);
     uint64_t total = 0;
+    // 遍历每一个sstable
     for (size_t i = 0; i < inputs.size(); i++) {
+      // 统计sstable大小
       uint64_t s = inputs[i]->file_size;
       total += s;
       if (total >= limit) {
+        // 只保存limit的sstable
         inputs.resize(i + 1);
         break;
       }
     }
   }
 
+  // 新建对象
   Compaction* c = new Compaction(options_, level);
+  // 初始化version
   c->input_version_ = current_;
   c->input_version_->Ref();
+  // 初始化第一层
   c->inputs_[0] = inputs;
+  // 产生第二层
   SetupOtherInputs(c);
+
   return c;
 }
 
+//
 Compaction::Compaction(const Options* options, int level)
     : level_(level),
       max_output_file_size_(MaxFileSizeForLevel(options, level)),
@@ -1514,20 +1652,28 @@ void Compaction::AddInputDeletions(VersionEdit* edit) {
   }
 }
 
+// 遍历参与Compaction的两层下的sstable
+// 找到一个范围包含user_key的sstable就返回false
+// 找不到就返回true
+// level_ptrs_是最后一个[small, largest][user_key]的sstable
 bool Compaction::IsBaseLevelForKey(const Slice& user_key) {
   // Maybe use binary search to find right entry instead of linear search?
   const Comparator* user_cmp = input_version_->vset_->icmp_.user_comparator();
+  // 遍历不涉及Compaction的每一层（下）
   for (int lvl = level_ + 2; lvl < config::kNumLevels; lvl++) {
-    const std::vector<FileMetaData*>& files = input_version_->files_[lvl];
-    while (level_ptrs_[lvl] < files.size()) {
-      FileMetaData* f = files[level_ptrs_[lvl]];
+    const std::vector<FileMetaData*>& files = input_version_->files_[lvl]; // 读取一层
+    while (level_ptrs_[lvl] < files.size()) { // 遍历所有sstable
+      FileMetaData* f = files[level_ptrs_[lvl]]; // 取到一个sstable
+      // user_key < 本sstable的最大key
       if (user_cmp->Compare(user_key, f->largest.user_key()) <= 0) {
         // We've advanced far enough
+        // 如果user_key大于本sstable的最小key
+        // 则说明user_key在本sstable中
         if (user_cmp->Compare(user_key, f->smallest.user_key()) >= 0) {
           // Key falls in this file's range, so definitely not base level
           return false;
         }
-        break;
+        break; //
       }
       level_ptrs_[lvl]++;
     }

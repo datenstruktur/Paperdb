@@ -154,7 +154,10 @@ class Repairer {
     };
 
     // Open the log file
+    // 打开db的log文件
     std::string logname = LogFileName(dbname_, log);
+
+    // 为它创建一个SequentialFile
     SequentialFile* lfile;
     Status status = env_->NewSequentialFile(logname, &lfile);
     if (!status.ok()) {
@@ -180,13 +183,15 @@ class Repairer {
     MemTable* mem = new MemTable(icmp_);
     mem->Ref();
     int counter = 0;
-    while (reader.ReadRecord(&record, &scratch)) {
+    while (reader.ReadRecord(&record, &scratch)) { // 读取一条record
       if (record.size() < 12) {
         reporter.Corruption(record.size(),
                             Status::Corruption("log record too small"));
         continue;
       }
+      // 加入batch
       WriteBatchInternal::SetContents(&batch, record);
+      // 写入memtable
       status = WriteBatchInternal::InsertInto(&batch, mem);
       if (status.ok()) {
         counter += WriteBatchInternal::Count(&batch);
