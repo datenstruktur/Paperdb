@@ -180,7 +180,7 @@ DBImpl::~DBImpl() {
   }
 }
 
-// 新建一个DB，主要是准备好CURRENT，Manifest，相当于创建必要的文件，不然没地方写入
+// @wisckey 新建一个DB，主要是准备好CURRENT，Manifest，相当于创建必要的文件，不然没地方写入
 // 每产生一个VersionEdit都会用WAL保证持久性，VersionEdit的WAL文件就叫manifest
 // 读取manifest就可以知道LevelDB的所有改动，但是如果恢复的时候恢复所有的历史，任务未免太重了
 // 所以LevelDB会选择当manifest的文件太大时，创建一个新的空manifest，舍弃掉之前的VersionEdit
@@ -244,7 +244,7 @@ void DBImpl::MaybeIgnoreError(Status* s) const {
   }
 }
 
-// 删除一些文件，主要是用于保证memtable持久性的log文件、VersionSet持久性的manifest文件以及sstable文件
+// @wisckey 删除一些文件，主要是用于保证memtable持久性的log文件、VersionSet持久性的manifest文件以及sstable文件
 void DBImpl::RemoveObsoleteFiles() {
   mutex_.AssertHeld();
 
@@ -318,7 +318,7 @@ void DBImpl::RemoveObsoleteFiles() {
   mutex_.Lock();
 }
 
-// 恢复主要分两步：
+// @wisckey 恢复主要分两步：
 // 1)从manifest中恢复VersionSet，因为VersionSet是保存在内存中的
 // 2)从WAL中恢复memtable，因为memtable也是保存在内存中的
 // WAL的log number是保存在VersionEdit中的，所以必须先恢复VersionSet
@@ -438,7 +438,7 @@ Status DBImpl::Recover(VersionEdit* edit, bool* save_manifest) {
   return Status::OK();
 }
 
-// 恢复log数据到memtable，造成Minor Compaction，save_manifest为true
+// @wisckey 恢复log数据到memtable，造成Minor Compaction，save_manifest为true
 // last_log为true，说明是最后一个log，说明是崩溃前正在写的活跃log
 // 可以选择复用这个log/产生新的log
 Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
@@ -574,7 +574,7 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
   return status;
 }
 
-// 传入一个待持久化的Memtable
+// @wisckey 传入一个待持久化的Memtable
 // 返回一个VersionEdit
 // Version没必要，刚开始不考虑写入不同层的情况
 Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
@@ -633,9 +633,7 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
   return s;
 }
 
-// Minor Compaction
-// @todo 光有Minor Compaction，值得开多版本吗
-// MVCC又是如何解决的
+// @wisckey Minor Compaction
 void DBImpl::CompactMemTable() {
   mutex_.AssertHeld();
   assert(imm_ != nullptr);
@@ -754,6 +752,7 @@ void DBImpl::RecordBackgroundError(const Status& s) {
   }
 }
 
+// @wisckey 
 void DBImpl::MaybeScheduleCompaction() {
   mutex_.AssertHeld();
   if (background_compaction_scheduled_) {
@@ -786,7 +785,7 @@ void DBImpl::BGWork(void* db) {
   reinterpret_cast<DBImpl*>(db)->BackgroundCall();
 }
 
-// Compaction线程的真正的函数调用
+// @wisckey Compaction线程的真正的函数调用
 void DBImpl::BackgroundCall() {
   MutexLock l(&mutex_);
   assert(background_compaction_scheduled_);
@@ -943,7 +942,7 @@ Status DBImpl::OpenCompactionOutputFile(CompactionState* compact) {
   return s;
 }
 
-//
+
 Status DBImpl::FinishCompactionOutputFile(CompactionState* compact,
                                           Iterator* input) {
   assert(compact != nullptr);
@@ -1267,6 +1266,7 @@ int64_t DBImpl::TEST_MaxNextLevelOverlappingBytes() {
   return versions_->MaxNextLevelOverlappingBytes();
 }
 
+// @wisckey Get还是很简单的，memtable查不到到immutable查，查不到到SSTable中查（通过VersionSet中查）
 Status DBImpl::Get(const ReadOptions& options, const Slice& key,
                    std::string* value) {
   Status s;
@@ -1311,7 +1311,6 @@ Status DBImpl::Get(const ReadOptions& options, const Slice& key,
   mem->Unref();
   if (imm != nullptr) imm->Unref();
   current->Unref();
-  //s = vlogWisckey_->Read(addr, value);
 
   return s;
 }
@@ -1354,7 +1353,7 @@ Status DBImpl::Delete(const WriteOptions& options, const Slice& key) {
   return DB::Delete(options, key);
 }
 
-// Write演进过程
+// @wisckey Write演进过程
 // 1. key-value直接写入memtable
 // 2. 在数据库崩溃时，1会造成数据丢失，所以key-value写入memtable的时候会先写入WAL
 // 3. 每次写入key-value就会产生一次磁盘写IO，为了降低磁盘写IO，把key-value封装为WriteBatch
@@ -1541,7 +1540,7 @@ WriteBatch* DBImpl::BuildBatchGroup(Writer** last_writer) {
   return result;
 }
 
-// 写之前memtable可能已经满了，所以我们需要把memtable转换为imutable，并生成一个新的空memtable为写提供空间
+// @wisckey 写之前memtable可能已经满了，所以我们需要把memtable转换为imutable，并生成一个新的空memtable为写提供空间
 // 当写入的write batch为空时，force为true，那么就意味着不管memtable此时的数据量有没有达到阈值，都要生成imutable
 // REQUIRES: mutex_ is held
 // REQUIRES: this thread is currently at the front of the writer queue
@@ -1721,14 +1720,14 @@ void DBImpl::GetApproximateSizes(const Range* range, int n, uint64_t* sizes) {
 
 // Default implementations of convenience methods that subclasses of DB
 // can call if they wish
-// 把写入LSM的KV对封装为Batch供Write调度
+// @wisckey 把写入LSM的KV对封装为Batch供Write调度
 Status DB::Put(const WriteOptions& opt, const Slice& key, const Slice& value) {
   WriteBatch batch;
   batch.Put(key, value);
   return Write(opt, &batch);
 }
 
-// LSM Tree中删除也是写入，只不过写入的是一个标志位
+// @wisckey LSM Tree中删除也是写入，只不过写入的是一个标志位
 Status DB::Delete(const WriteOptions& opt, const Slice& key) {
   WriteBatch batch;
   batch.Delete(key);
@@ -1737,7 +1736,7 @@ Status DB::Delete(const WriteOptions& opt, const Slice& key) {
 
 DB::~DB() = default;
 
-// 和NewDB()不同，Open需要对DB进行恢复，这个是主要的工作
+// @wisckey 和NewDB()不同，Open需要对DB进行恢复，这个是主要的工作
 Status DB::Open(const Options& options, const std::string& dbname, DB** dbptr) {
   *dbptr = nullptr;
 
