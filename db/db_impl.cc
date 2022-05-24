@@ -180,14 +180,25 @@ DBImpl::~DBImpl() {
   }
 }
 
+// 新建一个DB，主要是准备好CURRENT，Manifest，相当于创建必要的文件，不然没地方写入
+// 每产生一个VersionEdit都会用WAL保证持久性，VersionEdit的WAL文件就叫manifest
+// 读取manifest就可以知道LevelDB的所有改动，但是如果恢复的时候恢复所有的历史，任务未免太重了
+// 所以LevelDB会选择当manifest的文件太大时，创建一个新的空manifest，舍弃掉之前的VersionEdit
+// 所以会有多个manifest，但是我们只需要最新的，所以我们把最新的manifest的名字保存在CURRENT上
+// 这样读取CURRENT文件就可以读到manifest，就可以读到VersionEdit恢复出整个VersionSet
 Status DBImpl::NewDB() {
-  VersionEdit new_db; // 第一个edit
+  // 这是为了保存配置信息，所以没有SSTable的FileMateData加入
+  VersionEdit new_db;
+
   new_db.SetComparatorName(user_comparator()->Name());// 输入比较器的名字
-  new_db.SetLogNumber(0); //设置log number为0
+  // 没有VersionSet，New不出File Number，只能手动分配
+  // 设置log number为0，这是第一个file number
+  new_db.SetLogNumber(0);
+  // manifest文件是1，所以下一个可以用的file number是2
   new_db.SetNextFile(2);
   new_db.SetLastSequence(0); //没有kv，所以最后一个sn是0
 
-  // 创建manifest文件的地址
+  // 创建manifest文件的地址，1的文件编号给了manifest
   const std::string manifest = DescriptorFileName(dbname_, 1);
 
   // manifest文件写入的句柄
@@ -200,7 +211,7 @@ Status DBImpl::NewDB() {
     // 创建WAL的writer
     log::Writer log(file);
 
-    // 把edit解码
+    // 把VersionEdit持久化到manifest
     std::string record;
     new_db.EncodeTo(&record);
     s = log.AddRecord(record); // 持久化edit
@@ -212,10 +223,11 @@ Status DBImpl::NewDB() {
     }
   }
   delete file;
+
+  // 把manifest文件名称写入CURRENT文件
   if (s.ok()) {
     // Make "CURRENT" file that points to the new manifest file.
     // 把MANIFEST-000001的文件编号写入到current文件中
-    // 每执行一次就代替原来的
     s = SetCurrentFile(env_, dbname_, 1);
   } else {
     env_->RemoveFile(manifest);
@@ -232,9 +244,14 @@ void DBImpl::MaybeIgnoreError(Status* s) const {
   }
 }
 
+// 删除一些文件，主要是用于保证memtable持久性的log文件、VersionSet持久性的manifest文件以及sstable文件
 void DBImpl::RemoveObsoleteFiles() {
   mutex_.AssertHeld();
 
+  // log文件：比当前VersionSet中保存的log number小的都不需要，因为它们已经被转换为sstable持久化到磁盘了
+  // manifest文件：manifest太大会舍弃，同时会生成新的manifest号保存在VersionSet中，比这个小的也都不需要了
+  // sstable文件：VersionSet中每一个版本中的每一层的sstable是活跃的，其它的都需要删除
+  // tmp文件：这个是向CURRENT写入一行数据时产生的临时的，还没有被改为CURRENT的文件（不直接写是为了避免读写冲突）
   if (!bg_error_.ok()) {
     // After a background error, we don't know whether a new version may
     // or may not have been committed, so we cannot safely garbage collect.
@@ -242,15 +259,15 @@ void DBImpl::RemoveObsoleteFiles() {
   }
 
   // Make a set of all of the live files
-  std::set<uint64_t> live = pending_outputs_;
-  versions_->AddLiveFiles(&live);
+  std::set<uint64_t> live = pending_outputs_;// 原本保存的活跃文件
+  versions_->AddLiveFiles(&live); // 获取VersionSet中所有指向的sstable的编号
 
   std::vector<std::string> filenames;
   env_->GetChildren(dbname_, &filenames);  // Ignoring errors on purpose
   uint64_t number;
   FileType type;
-  std::vector<std::string> files_to_delete;
-  for (std::string& filename : filenames) {
+  std::vector<std::string> files_to_delete; // 准备要删除的文件编号
+  for (std::string& filename : filenames) { //遍历每一个扫描到的文件
     if (ParseFileName(filename, &number, &type)) {
       bool keep = true;
       switch (type) {
@@ -259,7 +276,7 @@ void DBImpl::RemoveObsoleteFiles() {
           keep = ((number >= versions_->LogNumber()) ||
                   (number == versions_->PrevLogNumber()));
           break;
-        case kDescriptorFile:
+        case kDescriptorFile: // 因为数据量大而被抛弃的manifest就删除
           // Keep my manifest file, and any newer incarnations'
           // (in case there is a race that allows other incarnations)
           keep = (number >= versions_->ManifestFileNumber());
@@ -279,9 +296,10 @@ void DBImpl::RemoveObsoleteFiles() {
           break;
       }
 
-      if (!keep) {
+      if (!keep) { // 如果不用保存，那么就删除
+        // 加入枪毙（不是）删除名单
         files_to_delete.push_back(std::move(filename));
-        if (type == kTableFile) {
+        if (type == kTableFile) { // 如果是sstable的话还得从lrucache中删除
           table_cache_->Evict(number);
         }
         Log(options_.info_log, "Delete type=%d #%lld\n", static_cast<int>(type),
@@ -294,26 +312,35 @@ void DBImpl::RemoveObsoleteFiles() {
   // have unique names which will not collide with newly created files and
   // are therefore safe to delete while allowing other threads to proceed.
   mutex_.Unlock();
-  for (const std::string& filename : files_to_delete) {
+  for (const std::string& filename : files_to_delete) { //遍历删除名单，删除这些文件
     env_->RemoveFile(dbname_ + "/" + filename);
   }
   mutex_.Lock();
 }
 
+// 恢复主要分两步：
+// 1)从manifest中恢复VersionSet，因为VersionSet是保存在内存中的
+// 2)从WAL中恢复memtable，因为memtable也是保存在内存中的
+// WAL的log number是保存在VersionEdit中的，所以必须先恢复VersionSet
 Status DBImpl::Recover(VersionEdit* edit, bool* save_manifest) {
   mutex_.AssertHeld();
 
   // Ignore error from CreateDir since the creation of the DB is
   // committed only when the descriptor is created, and this directory
   // may already exist from a previous failed creation attempt.
-  env_->CreateDir(dbname_); // 新建数据库文件夹，所有的文件都是放在在里面的
+
+  // 新建数据库文件夹，所有的文件都是放在在里面的，因为有文件不存在的情况，我们就需要创建一个DB
+  // 但是创建DB（也就是NewDB函数）只会朝dbname文件夹下写文件，不会创造文件夹
+  env_->CreateDir(dbname_);
   assert(db_lock_ == nullptr);
+
+  // 上上文件锁
   Status s = env_->LockFile(LockFileName(dbname_), &db_lock_);
   if (!s.ok()) {
     return s;
   }
 
-  // 如果CURRENT文件不存在
+  // 如果CURRENT文件不存在，说明DB不存在，创建一个新DB完事
   if (!env_->FileExists(CurrentFileName(dbname_))) {
     if (options_.create_if_missing) { //
       Log(options_.info_log, "Creating DB %s since it was missing.",
@@ -333,11 +360,15 @@ Status DBImpl::Recover(VersionEdit* edit, bool* save_manifest) {
     }
   }
 
-  // 从current读取manifest并从中恢复
+  // 从current读取manifest并从中恢复VersionSet
+  // 恢复过程中可能会复用manifest文件，如果manifest文件不是很大且可以继续写入的话
+  // 不复用，save_manifest就为true
   s = versions_->Recover(save_manifest);
   if (!s.ok()) {
     return s;
   }
+
+  // 读取log文件中的sequence number
   SequenceNumber max_sequence(0);
 
   // Recover from all newer log files than the ones named in the
@@ -347,6 +378,10 @@ Status DBImpl::Recover(VersionEdit* edit, bool* save_manifest) {
   // Note that PrevLogNumber() is no longer used, but we pay
   // attention to it in case we are recovering a database
   // produced by an older version of leveldb.
+  // 取得最新的log file number，可能在Minor Compaction的过程中，新的log number已经现成，文件也已经创建
+  // 但是旧的log number并没有来得及加入VersionEdit
+  // 或者加入VersionEdit了但是没有来得及持久化到manifest
+  // 从manifest恢复成VersionSet时，读到的实际上是更旧的log number，那么实际上要恢复的log不止一个
   const uint64_t min_log = versions_->LogNumber();
   const uint64_t prev_log = versions_->PrevLogNumber();
   std::vector<std::string> filenames;
@@ -363,11 +398,14 @@ Status DBImpl::Recover(VersionEdit* edit, bool* save_manifest) {
   std::vector<uint64_t> logs;
   for (size_t i = 0; i < filenames.size(); i++) {
     if (ParseFileName(filenames[i], &number, &type)) {
-      expected.erase(number);
+      expected.erase(number); //是活跃的文件
+      // 更旧的log就不要了
       if (type == kLogFile && ((number >= min_log) || (number == prev_log)))
         logs.push_back(number);
     }
   }
+
+  // 如果去除扫描到文件之后活跃文件还有，那就说明有活跃的文件根本不存在，文件丢失了
   if (!expected.empty()) {
     char buf[50];
     std::snprintf(buf, sizeof(buf), "%d missing files; e.g.",
@@ -378,7 +416,8 @@ Status DBImpl::Recover(VersionEdit* edit, bool* save_manifest) {
   // Recover in the order in which the logs were generated
   std::sort(logs.begin(), logs.end());
   for (size_t i = 0; i < logs.size(); i++) {
-    // 恢复每一个log文件
+    // 恢复每一个log文件，重新赋值sequence number
+    // 如果恢复造成了Minor Compaction，save_manifest就会为true
     s = RecoverLogFile(logs[i], (i == logs.size() - 1), save_manifest, edit,
                        &max_sequence);
     if (!s.ok()) {
@@ -399,12 +438,9 @@ Status DBImpl::Recover(VersionEdit* edit, bool* save_manifest) {
   return Status::OK();
 }
 
-// 把一个log的文件读取出来，重新插入memtable
-// 能不能直接把wal当成vlog呢？
-// 答案是不可以，因为每次从memtable中刷新到磁盘中之后，原来的wal的文件就被新的文件替代了
-// 当然没有被删除，只是作为旧version的一部分被写入manifest了
-// 那么如果把wal当成vlog，磁盘中的value就丢失了
-// 有一个办法是记录下这些log number，想办法把他们拼凑出所有的数据
+// 恢复log数据到memtable，造成Minor Compaction，save_manifest为true
+// last_log为true，说明是最后一个log，说明是崩溃前正在写的活跃log
+// 可以选择复用这个log/产生新的log
 Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
                               bool* save_manifest, VersionEdit* edit,
                               SequenceNumber* max_sequence) {
@@ -433,6 +469,7 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
   }
 
   // Create the log reader.
+  // @todo 这个reporter还是需要研究
   LogReporter reporter;
   reporter.env = env_;
   reporter.info_log = options_.info_log;
@@ -476,14 +513,14 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
     // 重新计算max sequence
     const SequenceNumber last_seq = WriteBatchInternal::Sequence(&batch) +
                                     WriteBatchInternal::Count(&batch) - 1;
-    if (last_seq > *max_sequence) {
+    if (last_seq > *max_sequence) { // 比原来大，就更新SN
       *max_sequence = last_seq;
     }
 
     // 如果mem满了
     if (mem->ApproximateMemoryUsage() > options_.write_buffer_size) {
-      compactions++;
-      *save_manifest = true;
+      compactions++; // 计算Minor Compaction的次数
+      *save_manifest = true;// 记录已经进行了Minor Compaction
       // 触发Minor Compaction，直接刷新mem
       status = WriteLevel0Table(mem, edit, nullptr);
       mem->Unref();
@@ -499,13 +536,16 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
   delete file;
 
   // See if we should keep reusing the last log file.
+  // compactions == 0：不能进行过Minor Compaction，进行过Minor Compaction的WAL必须删除，不然数据就会重复
   if (status.ok() && options_.reuse_logs && last_log && compactions == 0) {
     assert(logfile_ == nullptr);
     assert(log_ == nullptr);
     assert(mem_ == nullptr);
     uint64_t lfile_size;
     if (env_->GetFileSize(fname, &lfile_size).ok() &&
-        env_->NewAppendableFile(fname, &logfile_).ok()) {
+        env_->NewAppendableFile(fname, &logfile_).ok()) { //文件可写
+
+      // 复用log number
       Log(options_.info_log, "Reusing old log %s \n", fname.c_str());
       log_ = new log::Writer(logfile_, lfile_size);
       logfile_number_ = log_number;
@@ -520,6 +560,8 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
     }
   }
 
+  // @todo 不复用，logfile_number怎么初始化？
+  // 即使memtable，也清理掉memtable
   if (mem != nullptr) {
     // mem did not get reused; compact it.
     if (status.ok()) {
@@ -537,13 +579,15 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
 // Version没必要，刚开始不考虑写入不同层的情况
 Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
                                 Version* base) {
-  // @todo 这个是干嘛用的
   mutex_.AssertHeld();
+  // 这个可能是benchmark用的？
   const uint64_t start_micros = env_->NowMicros();
+
+  // 准备好SSTable的FileMetaData，并为其分配一个log number
   FileMetaData meta;
   meta.number = versions_->NewFileNumber();
 
-  // @todo pending_outputs_是干嘛用的
+  // 添加到活跃文件列表，防止RemoveObsoleteFile()函数删除它
   pending_outputs_.insert(meta.number);
 
   Iterator* iter = mem->NewIterator();
@@ -563,6 +607,8 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
       (unsigned long long)meta.number, (unsigned long long)meta.file_size,
       s.ToString().c_str());
   delete iter;
+
+  // @todo 我觉得LogAndApply到VersionSet才能移除啊
   pending_outputs_.erase(meta.number);
 
   // Note that if file_size is zero, the file has been deleted and
@@ -575,7 +621,7 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
       // 传入SSTable的范围，选择添加入的层
       level = base->PickLevelForMemTableOutput(min_user_key, max_user_key);
     }
-    // 这个改成push_back
+    // 加入VersionEdit
     edit->AddFile(level, meta.number, meta.file_size, meta.smallest,
                   meta.largest);
   }
@@ -606,6 +652,7 @@ void DBImpl::CompactMemTable() {
     s = Status::IOError("Deleting DB during memtable compaction");
   }
 
+  // @todo 这里可能会崩溃
   // Replace immutable memtable with the generated Table
   if (s.ok()) {
     edit.SetPrevLogNumber(0); // 听说是原来兼容老版本的
@@ -1307,37 +1354,69 @@ Status DBImpl::Delete(const WriteOptions& options, const Slice& key) {
   return DB::Delete(options, key);
 }
 
+// Write演进过程
+// 1. key-value直接写入memtable
+// 2. 在数据库崩溃时，1会造成数据丢失，所以key-value写入memtable的时候会先写入WAL
+// 3. 每次写入key-value就会产生一次磁盘写IO，为了降低磁盘写IO，把key-value封装为WriteBatch
+// 4. Put、Delete接口会把一个key-value封装为一个WriteBatch，那么会有很多WriteBatch只有少量的key-value，导致写磁盘IO次数依然很高
+// 5. 把多个线程写入的WriteBatch合并成一个WriteBatch，再把这个WriteBatch写入WAL
 Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
-  Writer w(&mutex_); // 为write batch定义一个writer
-  w.batch = updates; // 把write batch加入到writer中
-  w.sync = options.sync; // sync为true就是同步刷新
-  w.done = false; // 还没有被写入memtable
+  // 把一个batch封装成一个Writer，供LevelDB在队列中调度
+  Writer w(&mutex_);
+  w.batch = updates;
+  w.sync = options.sync; //同步/异步刷新，同步的话用Sync，异步的话用Flush
+  w.done = false;  // 是否已经写入WAL
 
+  // LevelDB设计了一个队列来容纳多线程放入的“写请求“，为什么要看这个呢？因为Wisckey有类似的操作
+  // 为什么不用堆呢？因为writer的写入顺序要和传入顺序一致
+  // 每来一个线程调用Write，都会把writer放入队列等待被调度（因为只有一个writer是队首）
+  // 没有调度完成的非队首writer会始终在这里等待着
+  // Stage1: Begin
   MutexLock l(&mutex_);
-  // 不出意外的话，它应该有一个容量？
-  writers_.push_back(&w); // 加入writer队列
-  // 如果writer还没有完成，线程就会一直在这个while循环中等待
+  writers_.push_back(&w);
   while (!w.done && &w != writers_.front()) {
-    w.cv.Wait(); //等着
+    w.cv.Wait();
   }
+  // End
 
-  // 如果是已经完成了才跳出，则会结束整个Write过程
-  if (w.done) { // 如果writer已经完成了
-    return w.status; //就返回
-  }// 如果是因为w已经到了队列前面，那么我们会把它插入memtable
+  // 能到这一步说明两种情况：
+  // 1.这个writer已经被调度且写入LSM了 或
+  // 2.这个writer是队首，承担着调度其它writer的责任，相当于消费者
+  // Stage2: Begin
+  if (w.done) { // 如果是完成了的状态
+    // 就结束写入
+    return w.status;
+  }
+  // End
 
-  // May temporarily unlock and wait.
-  // 如果本次什么也没写入，则当memtable尚未达到阈值时，也将其转换为immemtable
-  // 由于存在Write Stall现象，所以本写入线程可能会延时甚至是停止
+
+  // 能到这里的都是未被调度完成的队首writer
+  // 这里front的writer需要做一些全局性的工作，所以要上锁
+  // 主要包括以下几点：
+  // 1.对多线程共同操作的全局资源memtable/immutable进行操作，在适当的时机清理已经满的memtable，为接下来的写入腾出空间（MakeRoomForWrite）
+  // 2.扫描全局资源：writer队列，合并多个WriteBatch（BuildBatchGroup）
+  // 3.为WriteBatch赋值上Sequence Number并更新Last Sequence Number（这个也是全局变量）
+  // Stage3
   Status status = MakeRoomForWrite(updates == nullptr);
 
-  // 如果有Write Stall的发生，等Compaction完成后才能继续执行去写
   uint64_t last_sequence = versions_->LastSequence();
   Writer* last_writer = &w;
   if (status.ok() && updates != nullptr) {  // nullptr batch is for compactions
+    // LevelDB并不会合并队列中的全部writer，因为有些无法合并
+    // 比如说前3个都要求异步刷新，第四个要求同步刷新，那么只能合并前三个
+    // last_writer是合并的最后一个writer
     WriteBatch* write_batch = BuildBatchGroup(&last_writer);
     WriteBatchInternal::SetSequence(write_batch, last_sequence + 1);
     last_sequence += WriteBatchInternal::Count(write_batch);
+
+    // End
+
+    // 处理全局资源的过程结束了，所以接下来会放开锁，不涉及队列、Last Sequence Number
+    // @todo LevelDB的memtable的跳表支持并发写入？
+    // 按照writer的sync要求选择Flush还是Sync
+    // AddRecord中已经有Flush了
+    // 然后再插入memtable
+    // Stage4
 
     // Add to log and apply to memtable.  We can release the lock
     // during this phase since &w is currently responsible for logging
@@ -1345,29 +1424,30 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
     // into mem_.
     {
       mutex_.Unlock();
-      status = log_->AddRecord(WriteBatchInternal::Contents(write_batch));
-      //WriteBatch *update = new WriteBatch();
 
-      // update会代替write_batch插入memtable，所以sequence number一定要一样
-      //SequenceNumber sn = WriteBatchInternal::Sequence(write_batch);
-      //WriteBatchInternal::SetSequence(update, sn);
-      // 向vLog插入Write Batch，得到一个key-meta的batch
-      // 它将代替write_batch插入memtable
-      //status = vlogWisckey_->AddBatch(write_batch, update);
+      status = log_->AddRecord(WriteBatchInternal::Contents(write_batch));
 
       bool sync_error = false;
       if (status.ok() && options.sync) {
         status = logfile_->Sync();
-        //status = vlogWisckey_->Sync();
         if (!status.ok()) {
           sync_error = true;
         }
       }
+
+      // 写入memtable
       if (status.ok()) {
         status = WriteBatchInternal::InsertInto(write_batch, mem_);
-        // 插入到mem_，也就是LSM Tree中
-        //status = WriteBatchInternal::InsertInto(update, mem_);
+
       }
+      // End
+
+      // 接下来又要对Last Sequence Number、队列进行操作了，所以要上锁
+      // 要进行的主要操作是：
+      // 1. 更新Last Sequence Number
+      // 2. 之前只是读取了队列中一些writer的数据并写入它们，它们所在的线程还在等待，所以要把它们的状态设置为done，而且要唤醒它们，这样它们就可以运行到Stage2了
+      // 3. 如果队列中还有writer，那么它们也需要调度，之后传入队列的writer都不会是队首writer，而只有队首的队列可以调度其它writer，所以我们必须主动唤醒队首队列
+      // Stage5
       mutex_.Lock();
       if (sync_error) {
         // The state of the log file is indeterminate: the log record we
@@ -1376,35 +1456,34 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
         RecordBackgroundError(status);
       }
     }
+    //这个tm_batch_是BuildBatchGroup里的，我们先不去管他
     if (write_batch == tmp_batch_) tmp_batch_->Clear();
 
     versions_->SetLastSequence(last_sequence);
   }
 
-  // 把所有合并写入的writer的状态设置为已完成
-  // 把它们的线程都唤醒，结束它们的write过程
+
+  // 遍历取出整个队列的[front, last_writer]，设置为以完成调度并唤醒它们结束写入
   while (true) {
-    // 取出队列中的一个人writer
+    // 弹出队列的队首writer
     Writer* ready = writers_.front();
     writers_.pop_front();
-    // 此时队列应该是满了，那么触发写入的writer应该是在最后一个位置
-    // BuildBatchGroup会把[front, last_writer]的writer合并写入
-    // ready 从front开始
+
+    // 这里要考虑到队首writer的情况（也就是执行这段代码的writer），它不需要被唤醒，因为它就是唤醒其它线程的线程
     if (ready != &w) {
       ready->status = status;
+      // 把它们都设置为已完成写入
       ready->done = true;
+      // 重新启动它们，就会跳出Stage1的while循环进入Stage2，然后跳出写流程
       ready->cv.Signal();
     }
-    // 到last_writer结束
+    // 到last_writer为止，因为并不是所以队列中的writer都会被合并，之后的之后再合并
     if (ready == last_writer) break;
   }
 
   // Notify new head of write queue
-  // 如果还有未合并的writer
+  // 主动唤醒新的队首writer作为消费者来合并其它writer
   if (!writers_.empty()) {
-    // 调用起最前面的front，它可以继续启动BuildBatchGroup函数继续合并
-    // 未调用的话，就有可能出现队列最后几个writer比前几个新插入的writer之后刷新的情况
-    // 所以我们必须把一个队列中所有的writer都刷新了，才能进一步迎接新的writer写入
     writers_.front()->cv.Signal();
   }
 
@@ -1462,23 +1541,27 @@ WriteBatch* DBImpl::BuildBatchGroup(Writer** last_writer) {
   return result;
 }
 
+// 写之前memtable可能已经满了，所以我们需要把memtable转换为imutable，并生成一个新的空memtable为写提供空间
+// 当写入的write batch为空时，force为true，那么就意味着不管memtable此时的数据量有没有达到阈值，都要生成imutable
 // REQUIRES: mutex_ is held
 // REQUIRES: this thread is currently at the front of the writer queue
-// force: 表示是否当memtable还没满的时候就生成immetable
 Status DBImpl::MakeRoomForWrite(bool force) {
+  // 需要换memtable，这是一个全局性的工作，需要获得锁，如果没有获得锁就执行了这个函数，就会报错，相当于一个锁断言
   mutex_.AssertHeld();
   assert(!writers_.empty());
-  // 如果不允许metable还没满就转换为immemtable，就允许延时
-  // 如果允许memtable还没满就转换为immemtable，就不允许延时
-  // 所谓允许延时，是指当Write Stall发生时，允许延时1毫秒来阻塞写线程，给Compaction腾出时间
+
+  // 这个变量是决定是否在出现Write Stall的时候暂时拒绝用户写入数据的
+  // 如果用户都要强制刷新memtable到磁盘了，那么就没必要管Write Stall
   bool allow_delay = !force;
+
+  // 分几种情况处理
   Status s;
   while (true) {
-    if (!bg_error_.ok()) {
+    if (!bg_error_.ok()) { //有问题当然得停止，得去报告
       // Yield previous error
       s = bg_error_;
       break;
-      // 如果允许延迟以及第0层的SSTable的个数大于等于8，发生了Write Stall
+      // 如果允许延迟以及第0层的SSTable的个数大于等于8，发生了Write Stall，但是不严重，所以我们决定休眠写入线程1ms，等待Major Compaction清理L0的SSTable
     } else if (allow_delay && versions_->NumLevelFiles(0) >=
                                   config::kL0_SlowdownWritesTrigger) {
       // We are getting close to hitting a hard limit on the number of
@@ -1495,9 +1578,9 @@ Status DBImpl::MakeRoomForWrite(bool force) {
     } else if (!force && // 如果当memtable还没满不能生成immetable、memtable的实际空间没有超过阈值时
                (mem_->ApproximateMemoryUsage() <= options_.write_buffer_size)) {
       // There is room in current memtable
-      // 没必要处理，直接跳出
+      // 没必要处理，memtable有数据，直接跳出，用户还得写入数据呢
       break;
-    } else if (imm_ != nullptr) { // 如果有immetable产生
+    } else if (imm_ != nullptr) { // 如果有immetable产生，说明需要进行Minor Compaction
       // We have filled up the current memtable, but the previous
       // one is still being compacted, so we wait.
       Log(options_.info_log, "Current memtable full; waiting...\n");
@@ -1509,19 +1592,22 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       background_work_finished_signal_.Wait(); // 挂起写入线程，需要先处理好L0层的SSTable再写入
     } else { //正常情况，也就是一个memtable满了的情况
       // Attempt to switch to a new memtable and trigger compaction of old
-      assert(versions_->PrevLogNumber() == 0);
+      assert(versions_->PrevLogNumber() == 0); // 这个不用管，兼容旧版本的LevelDB
 
-      // 拿到一个log号，作为一个新的的log文件
+      // 会生成一个新的memtable，需要为它配一个WAL文件，所以需要申请一个log number
       uint64_t new_log_number = versions_->NewFileNumber();
 
-      // 创建一个写入的文件
+      // 创建一个写句柄，本质上是调用文件IO的open函数
       WritableFile* lfile = nullptr;
-      // 根据给定的log号码和db的名字生成一个文件到lfile
       s = env_->NewWritableFile(LogFileName(dbname_, new_log_number), &lfile);
 
-      if (!s.ok()) { // 如果创建文件失败
+      // 如果创建文件失败
+      if (!s.ok()) {
         // Avoid chewing through file number space in a tight loop.
-        // 回收这个编号
+        // file number可以理解为一个时间戳，永远递增，不可能递减
+        // 回收这个编号，如果在这个期间没人调用NewFileNumber获取新的文件编号的话，放回去就行
+        // 但是如果有人获取了的话就不行，比如说获取的log number是10，
+        // 然后有人获取了新的文件编号11，那么你如果把10放进去，下次别人获得的新的文件编号就是10，更后的文件编号反而更小
         versions_->ReuseFileNumber(new_log_number);
         break;
       }
@@ -1534,18 +1620,20 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       // 要产生新的memtable，所以为其生成新的log相关的变量
       logfile_ = lfile; // 赋值新的WAL的文件
       logfile_number_ = new_log_number; // 赋值新的WAL文件号码
-      // Compact Memtable的时候，会把这个logfile_number添加到VersionEdit中
       log_ = new log::Writer(lfile); //为WAL创建新的log
 
       // 把memtable转换为immetable
       imm_ = mem_; //原memtable已经满了，转换为immetable
+      // 不知道这个has_imm_是干嘛的，但是和我们的复现无关
       has_imm_.store(true, std::memory_order_release);
       mem_ = new MemTable(internal_comparator_); // 生成一个新memtable供用户写入
       mem_->Ref();
 
-      force = false;  // Do not force another compaction if have room（恢复默认）
+      // 不然就跳不出了
+      force = false;  // Do not force another compaction if have room
 
-      MaybeScheduleCompaction(); //在写线程中尝试启动Compaction线程
+      // 在写线程中尝试启动Compaction线程，Compaction线程是一个单独的线程
+      MaybeScheduleCompaction();
     }
   }
   return s;
@@ -1633,12 +1721,14 @@ void DBImpl::GetApproximateSizes(const Range* range, int n, uint64_t* sizes) {
 
 // Default implementations of convenience methods that subclasses of DB
 // can call if they wish
+// 把写入LSM的KV对封装为Batch供Write调度
 Status DB::Put(const WriteOptions& opt, const Slice& key, const Slice& value) {
   WriteBatch batch;
   batch.Put(key, value);
   return Write(opt, &batch);
 }
 
+// LSM Tree中删除也是写入，只不过写入的是一个标志位
 Status DB::Delete(const WriteOptions& opt, const Slice& key) {
   WriteBatch batch;
   batch.Delete(key);
@@ -1647,48 +1737,68 @@ Status DB::Delete(const WriteOptions& opt, const Slice& key) {
 
 DB::~DB() = default;
 
+// 和NewDB()不同，Open需要对DB进行恢复，这个是主要的工作
 Status DB::Open(const Options& options, const std::string& dbname, DB** dbptr) {
   *dbptr = nullptr;
 
-  // 新建一个数据库，但是此时状态还是默认的，还没恢复
+  // 新建一个数据库，但是此时状态还是空的，还没恢复
   DBImpl* impl = new DBImpl(options, dbname);
   impl->mutex_.Lock();
+
+  // 恢复WAL的时候会把数据重新放回memtable，所以可能会引发Minor Compaction，那么就会产生SSTable，就会修改磁盘中的状态，就会生成一个VersionEdit
   VersionEdit edit;
   // Recover handles create_if_missing, error_if_exists
+  // 这个是用来标识有没有进行Minor Compaction，也就是有没有产生VersionEdit的
   bool save_manifest = false;
-  // 从磁盘中恢复最新的edit
+
+  // 恢复VersionSet和Memtable
+  // 恢复Memtable的时候可能会引发Minor Compaction，那么Edit会有意义，且save_manifest为true
   Status s = impl->Recover(&edit, &save_manifest);
-  // 如果memtable里有东西
-  if (s.ok() && impl->mem_ == nullptr) { // 如果memtable没有被插入数据
+
+  // 正常的恢复是要清理完memtable的数据的，但是有可能存在未创建一个空的memtable供用户写入
+  // @todo 我不知道为什么，但是这里影响不大
+  // 注意mem_ == nullptr和memtable是空的是有区别的，memtable为空，但是还是可以写入的
+  if (s.ok() && impl->mem_ == nullptr) {
     // Create new log and a corresponding memtable.
-    // 新创建一个log number
+
+    // 那就要生成一个空memtable并为它产生一个新的WAL文件了
     uint64_t new_log_number = impl->versions_->NewFileNumber(); //新建一个log number
     WritableFile* lfile;
-    // 创建一个写文件
     s = options.env->NewWritableFile(LogFileName(dbname, new_log_number),
                                      &lfile);
-    if (s.ok()) { //读取出来的edit是上一个版本的，我们要把他改为下一个版本
+
+    if (s.ok()) {
       edit.SetLogNumber(new_log_number); // 设置新的number
-      impl->logfile_ = lfile; // 恢复writablefile
-      impl->logfile_number_ = new_log_number; //恢复log number
-      impl->log_ = new log::Writer(lfile); // 恢复writer
-      impl->mem_ = new MemTable(impl->internal_comparator_); //新生成一个memtable
+      impl->logfile_ = lfile;
+      impl->logfile_number_ = new_log_number;
+      impl->log_ = new log::Writer(lfile);
+
+      // WAL文件已经生成好了，产生空的memtable
+      impl->mem_ = new MemTable(impl->internal_comparator_);
       impl->mem_->Ref();
     }
   }
-  // 没有进行minor compaction，所以versionedit中没有数据，不需要被应用到manifest里（不需要）
-  // 原来的manifest文件太大或者不能写入（不能）
-  // 都不会应用edit
+
+  // 如果在恢复的过程中进行了Minor Compaction，生成了VersionEdit，那就需要应用到恢复的VersionSet上并持久化到manifest文件上
   if (s.ok() && save_manifest) {
     edit.SetPrevLogNumber(0);  // No older logs needed after recovery.
+    // 问：这个和上面的if中的第1行有什么区别？
+    // 答：这个if不在上面的if内，可能memtable不为空，所以edit.SetLogNumber(new_log_number);不会被执行
     edit.SetLogNumber(impl->logfile_number_);
+
+    // 应用到VersionSet并持久化到manifest文件中
     s = impl->versions_->LogAndApply(&edit, &impl->mutex_);
   }
+
+  // 因为最新的log number/VersionSet发生了变化（LevelDB不会保存所有的VersionSet），所以需要清理一些log、sstable文件
+  // 开启Compaction线程，这样就回到了一个正常状态下的DB
   if (s.ok()) {
     impl->RemoveObsoleteFiles();
     impl->MaybeScheduleCompaction();
   }
   impl->mutex_.Unlock();
+
+  // 返回impl（DB的操作接口，有Put/Delete/Write之类的接口）供用户调用
   if (s.ok()) {
     assert(impl->mem_ != nullptr);
     *dbptr = impl;

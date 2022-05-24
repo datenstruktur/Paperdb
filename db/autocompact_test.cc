@@ -72,7 +72,7 @@ void AutoCompactTest::DoReads(int n) {
   }
   ASSERT_LEVELDB_OK(dbi->TEST_CompactMemTable());
 
-  // Get initial measurement of the space we will be reading.
+  // GetFromSSTable initial measurement of the space we will be reading.
   const int64_t initial_size = Size(Key(0), Key(n));
   const int64_t initial_other_size = Size(Key(n), Key(kCount));
 

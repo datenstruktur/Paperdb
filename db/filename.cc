@@ -125,6 +125,9 @@ bool ParseFileName(const std::string& filename, uint64_t* number,
 
 
 // 在dbname/CURRENT中写入一行MANIFEST-descriptor_number
+// 把descriptor_number转换为manifest名字
+// 写入一个以descriptor_number为编号的临时文件
+// 把临时文件命名为CURRENT，是为了读写冲突？
 Status SetCurrentFile(Env* env, const std::string& dbname,
                       uint64_t descriptor_number) {
   // Remove leading "dbname/" and add newline to manifest file name
