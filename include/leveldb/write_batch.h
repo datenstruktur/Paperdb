@@ -25,6 +25,7 @@
 
 #include "leveldb/export.h"
 #include "leveldb/status.h"
+#include "db/dbformat.h"
 
 namespace leveldb {
 
@@ -72,7 +73,9 @@ class LEVELDB_EXPORT WriteBatch {
   // Support for iterating over the contents of a batch.
   Status Iterate(Handler* handler) const;
 
- private:
+  Status ParseBatch(uint64_t *pos, Slice *key, Slice *value, ValueType *type);
+
+private:
   friend class WriteBatchInternal;
 
   std::string rep_;  // See comment in write_batch.cc for the format of rep_

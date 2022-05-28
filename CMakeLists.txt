@@ -116,10 +116,11 @@ endif(BUILD_SHARED_LIBS)
 # Must be included before CMAKE_INSTALL_INCLUDEDIR is used.
 include(GNUInstallDirs)
 
-add_library(leveldb "")
+add_library(leveldb "" db/vlog_writer.cc db/vlog_writer.h db/vlog_reader.cc db/vlog_reader.h db/vlog_test.cc)
 target_sources(leveldb
   PRIVATE
     "${PROJECT_BINARY_DIR}/${LEVELDB_PORT_CONFIG_DIR}/port_config.h"
+    "db/vlog_test.cc"
     "db/builder.cc"
     "db/builder.h"
     "db/c.cc"
@@ -339,6 +340,7 @@ if(LEVELDB_BUILD_TESTS)
         "table/table_test.cc"
         "util/arena_test.cc"
         "util/bloom_test.cc"
+        "db/vlog_test.cc"
         "util/cache_test.cc"
         "util/coding_test.cc"
         "util/crc32c_test.cc"
@@ -396,6 +398,7 @@ if(LEVELDB_BUILD_TESTS)
       leveldb_test("util/env_windows_test.cc")
     else (WIN32)
       leveldb_test("util/env_posix_test.cc")
+      leveldb_test("db/vlog_test.cc")
     endif (WIN32)
   endif(NOT BUILD_SHARED_LIBS)
 endif(LEVELDB_BUILD_TESTS)

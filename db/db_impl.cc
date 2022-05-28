@@ -11,6 +11,7 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <iostream>
 
 #include "db/builder.h"
 #include "db/db_iter.h"
@@ -34,6 +35,7 @@
 #include "util/coding.h"
 #include "util/logging.h"
 #include "util/mutexlock.h"
+#include "db/vlog_reader.h"
 
 namespace leveldb {
 
@@ -141,7 +143,7 @@ DBImpl::DBImpl(const Options& raw_options, const std::string& dbname)
       has_imm_(false),
       logfile_(nullptr),
       logfile_number_(0),
-      log_(nullptr),
+      vlog_(nullptr),
       seed_(0),
       tmp_batch_(new WriteBatch),
       background_compaction_scheduled_(false),
@@ -166,7 +168,7 @@ DBImpl::~DBImpl() {
   if (mem_ != nullptr) mem_->Unref();
   if (imm_ != nullptr) imm_->Unref();
   delete tmp_batch_;
-  delete log_;
+  delete vlog_;
   delete logfile_;
   delete table_cache_;
 
@@ -245,8 +247,9 @@ void DBImpl::RemoveObsoleteFiles() {
       bool keep = true;
       switch (type) {
         case kLogFile:
-          keep = ((number >= versions_->LogNumber()) ||
+          /*keep = ((number >= versions_->LogNumber()) ||
                   (number == versions_->PrevLogNumber()));
+                  */
           break;
         case kDescriptorFile:
           // Keep my manifest file, and any newer incarnations'
@@ -471,13 +474,14 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
   // See if we should keep reusing the last log file.
   if (status.ok() && options_.reuse_logs && last_log && compactions == 0) {
     assert(logfile_ == nullptr);
-    assert(log_ == nullptr);
+    assert(vlog_ == nullptr);
     assert(mem_ == nullptr);
     uint64_t lfile_size;
     if (env_->GetFileSize(fname, &lfile_size).ok() &&
         env_->NewAppendableFile(fname, &logfile_).ok()) {
       Log(options_.info_log, "Reusing old log %s \n", fname.c_str());
-      log_ = new log::Writer(logfile_, lfile_size);
+      //log_ = new log::Writer(logfile_, lfile_size);
+      vlog_ = new vlog::VlogWriter(logfile_, lfile_size);
       logfile_number_ = log_number;
       if (mem != nullptr) {
         mem_ = mem;
@@ -1117,9 +1121,9 @@ Status DBImpl::Get(const ReadOptions& options, const Slice& key,
   Status s;
   MutexLock l(&mutex_);
   SequenceNumber snapshot;
+  std::string addr;
   if (options.snapshot != nullptr) {
-    snapshot =
-        static_cast<const SnapshotImpl*>(options.snapshot)->sequence_number();
+   snapshot = static_cast<const SnapshotImpl*>(options.snapshot)->sequence_number();
   } else {
     snapshot = versions_->LastSequence();
   }
@@ -1139,12 +1143,12 @@ Status DBImpl::Get(const ReadOptions& options, const Slice& key,
     mutex_.Unlock();
     // First look in the memtable, then in the immutable memtable (if any).
     LookupKey lkey(key, snapshot);
-    if (mem->Get(lkey, value, &s)) {
+    if (mem->Get(lkey, &addr, &s)) {
       // Done
-    } else if (imm != nullptr && imm->Get(lkey, value, &s)) {
+    } else if (imm != nullptr && imm->Get(lkey, &addr, &s)) {
       // Done
     } else {
-      s = current->Get(options, lkey, value, &stats);
+      s = current->Get(options, lkey, &addr, &stats);
       have_stat_update = true;
     }
     mutex_.Lock();
@@ -1156,7 +1160,44 @@ Status DBImpl::Get(const ReadOptions& options, const Slice& key,
   mem->Unref();
   if (imm != nullptr) imm->Unref();
   current->Unref();
-  return s;
+  return Fetch(true, key.ToString(), addr, value);
+}
+
+Status DBImpl::Fetch(bool checkKey, const std::string& key, std::string addr, std::string *value) {
+    uint64_t log_number, offset, size;
+    Status status = vlog::VlogWriter::DecodeMeta(addr, &log_number, &offset, &size);
+    if(!status.ok()) return status;
+    vlog::VlogReader *reader = new vlog::VlogReader(dbname_, log_number);
+
+    Slice record;
+    status = reader->Read(offset, size, &record);
+    if(!status.ok()) return status;
+
+    Slice kv;
+    status = vlog::VlogReader::DecodeRecord(record, &kv);
+    if(!status.ok()) return status;
+
+    std::string pkey, pvalue;
+    ValueType type;
+
+    status = vlog::VlogReader::DecodeKV(kv, &pkey, &pvalue, &type);
+
+    if(!status.ok() ){
+        return Status::NotFound("Decode KV failed");
+    } else if(checkKey && key != pkey){
+        return Status::NotFound("key not match");
+    }
+
+    if(type == kTypeValue) {
+        *value = pvalue;
+        return Status::OK();
+    } else{
+        return Status::NotFound("this is a deleted kv");
+    }
+}
+
+Status DBImpl::Fetch(std::string addr, std::string *value) {
+    return Fetch(false, "", addr, value);
 }
 
 Iterator* DBImpl::NewIterator(const ReadOptions& options) {
@@ -1227,7 +1268,9 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
     // into mem_.
     {
       mutex_.Unlock();
-      status = log_->AddRecord(WriteBatchInternal::Contents(write_batch));
+      //status = log_->AddRecord(WriteBatchInternal::Contents(write_batch));
+      WriteBatch meta_batch;
+      status = vlog_->AddRecord(logfile_number_, write_batch, &meta_batch);
       bool sync_error = false;
       if (status.ok() && options.sync) {
         status = logfile_->Sync();
@@ -1236,7 +1279,7 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
         }
       }
       if (status.ok()) {
-        status = WriteBatchInternal::InsertInto(write_batch, mem_);
+        status = WriteBatchInternal::InsertInto(&meta_batch, mem_);
       }
       mutex_.Lock();
       if (sync_error) {
@@ -1368,11 +1411,11 @@ Status DBImpl::MakeRoomForWrite(bool force) {
         versions_->ReuseFileNumber(new_log_number);
         break;
       }
-      delete log_;
+      delete vlog_;
       delete logfile_;
       logfile_ = lfile;
       logfile_number_ = new_log_number;
-      log_ = new log::Writer(lfile);
+      vlog_ = new vlog::VlogWriter(lfile);
       imm_ = mem_;
       has_imm_.store(true, std::memory_order_release);
       mem_ = new MemTable(internal_comparator_);
@@ -1499,7 +1542,7 @@ Status DB::Open(const Options& options, const std::string& dbname, DB** dbptr) {
       edit.SetLogNumber(new_log_number);
       impl->logfile_ = lfile;
       impl->logfile_number_ = new_log_number;
-      impl->log_ = new log::Writer(lfile);
+      impl->vlog_ = new vlog::VlogWriter(lfile);
       impl->mem_ = new MemTable(impl->internal_comparator_);
       impl->mem_->Ref();
     }

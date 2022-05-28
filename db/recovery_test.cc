@@ -12,6 +12,7 @@
 #include "leveldb/write_batch.h"
 #include "util/logging.h"
 #include "util/testutil.h"
+#include "log_writer.h"
 
 namespace leveldb {
 

@@ -163,6 +163,13 @@ class PosixSequentialFile final : public SequentialFile {
     return Status::OK();
   }
 
+  Status Jump(uint64_t n) override {
+    if (::lseek(fd_, n, SEEK_SET) == static_cast<off_t>(-1)) {
+        return PosixError(filename_, errno);
+    }
+    return Status::OK();
+}
+
  private:
   const int fd_;
   const std::string filename_;

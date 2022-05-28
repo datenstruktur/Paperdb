@@ -176,7 +176,7 @@ class SequentialFileImpl : public SequentialFile {
     pos_ += n;
     return Status::OK();
   }
-
+  
  private:
   FileState* file_;
   uint64_t pos_;

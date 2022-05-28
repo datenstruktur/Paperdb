@@ -112,6 +112,39 @@ void WriteBatch::Append(const WriteBatch& source) {
   WriteBatchInternal::Append(this, &source);
 }
 
+Status WriteBatch::ParseBatch(uint64_t *pos, Slice *key, Slice *value, ValueType *type) {
+    Slice input(rep_);
+    if(*pos >= input.size()) return Status::Corruption("write batch is end");
+
+    if(*pos < kHeader) *pos = kHeader;
+
+    input.remove_prefix(*pos);
+    const char *start_pos = input.data();
+
+    *type = static_cast<ValueType>(input[0]);
+    input.remove_prefix(1);
+    switch (*type) {
+        case kTypeValue:{
+            if(!(GetLengthPrefixedSlice(&input, key) && GetLengthPrefixedSlice(&input, value))){
+                return Status::Corruption("bad put entry in write batch");
+            }
+            break;
+        }
+        case kTypeDeletion:{
+            if (!GetLengthPrefixedSlice(&input, key)){
+                return Status::Corruption("bad delete entry in write batch");
+            }
+            break;
+        }
+        default:{
+            return Status::Corruption("unknow what type");
+        }
+    }
+
+    const char *end_pos = input.data();
+    *pos += (end_pos - start_pos);
+    return Status::OK();
+}
 namespace {
 class MemTableInserter : public WriteBatch::Handler {
  public:

@@ -11,7 +11,7 @@
 #include <string>
 
 #include "db/dbformat.h"
-#include "db/log_writer.h"
+#include "db/vlog_writer.h"
 #include "db/snapshot.h"
 #include "leveldb/db.h"
 #include "leveldb/env.h"
@@ -71,7 +71,11 @@ class DBImpl : public DB {
   // bytes.
   void RecordReadSample(Slice key);
 
- private:
+  Status Fetch(bool checkKey, const std::string& key, std::string addr, std::string *value);
+
+  Status Fetch(std::string addr, std::string *value);
+
+private:
   friend class DB;
   struct CompactionState;
   struct Writer;
@@ -135,7 +139,7 @@ class DBImpl : public DB {
   WriteBatch* BuildBatchGroup(Writer** last_writer)
       EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
-  void RecordBackgroundError(const Status& s);
+    void RecordBackgroundError(const Status& s);
 
   void MaybeScheduleCompaction() EXCLUSIVE_LOCKS_REQUIRED(mutex_);
   static void BGWork(void* db);
@@ -179,7 +183,8 @@ class DBImpl : public DB {
   std::atomic<bool> has_imm_;         // So bg thread can detect non-null imm_
   WritableFile* logfile_;
   uint64_t logfile_number_ GUARDED_BY(mutex_);
-  log::Writer* log_;
+  //log::Writer* log_;
+  vlog::VlogWriter *vlog_;
   uint32_t seed_ GUARDED_BY(mutex_);  // For sampling.
 
   // Queue of writers.

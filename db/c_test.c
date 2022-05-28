@@ -312,6 +312,7 @@ int main(int argc, char** argv) {
     leveldb_release_snapshot(db, snap);
   }
 
+  /*
   StartPhase("repair");
   {
     leveldb_close(db);
@@ -326,7 +327,7 @@ int main(int argc, char** argv) {
     CheckGet(db, roptions, "box", "c");
     leveldb_options_set_create_if_missing(options, 1);
     leveldb_options_set_error_if_exists(options, 1);
-  }
+  }*/
 
   StartPhase("filter");
   for (run = 0; run < 2; run++) {
