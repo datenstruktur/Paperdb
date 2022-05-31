@@ -1,8 +1,20 @@
-//
-// Created by 14037 on 2022/5/27.
-//
+/*
+ * 本文件是基于google test编写的vlog读写功能的单元测试，测试的文件有:
+ * db/vlog_reader.cc
+ * db/vlog_reader.h
+ * db/vlog_writer.cc
+ * db/vlog_writer.h
+ * 测试的过程主要分为以下几步：
+ * 1. 初始化（VlogTest()）: 主要是初始化writebatch和writer，reader用到的时候初始化
+ * 2. 准备数据（Put/Delete）: 向src_batch中写入一条数据
+ * 3. 写入数据（SyncBatch）: 把装满数据的sr_batch写入磁盘文件并把key-kv的地址写入临时的temp_batch
+ * 4. 读取数据
+ *      a. 随机读取: 根据保存有key-kv地址的write batch从文件中读取kv对到dst_batch
+ *      b. 顺序读取: 遍历磁盘文件，读取kv对到iter_batch
+ * 5. 检查读取准确性
+ *      a. 随机读取:
+*/
 
-#include <atomic>
 #include <iostream>
 #include "leveldb/env.h"
 #include "db/filename.h"
@@ -24,14 +36,14 @@ namespace leveldb {
                       src_batch_(new WriteBatch()),
                       tmp_batch_(new WriteBatch()),
                       dst_batch_(new WriteBatch()),
+                      iter_batch_(new WriteBatch()),
                       reader_(nullptr) {
                 WritableFile *dest;
                 env_->NewWritableFile(LogFileName(dbname, log_number), &dest);
                 writer_ = new vlog::VlogWriter(dest);
             }
 
-            VlogTest()
-                    : log_number_(1),
+            VlogTest(): log_number_(1),
                       dbname_("dbname"),
                       env_(Env::Default()),
                       src_batch_(new WriteBatch()),
@@ -44,10 +56,12 @@ namespace leveldb {
                 writer_ = new vlog::VlogWriter(dest);
             }
 
+            // 向src batch追加一条put记录
             void Put(const Slice &key, const Slice &value) {
                 src_batch_->Put(key, value);
             }
 
+            // 向src batch追加一条delete记录
             void Delete(const Slice &key) {
                 src_batch_->Delete(key);
             }
@@ -61,8 +75,6 @@ namespace leveldb {
 
                 status = writer_->Sync();
                 if (!status.ok()) return status;
-
-                //PrintMetaBatch(tmp_batch_);
 
                 return Status::OK();
             }

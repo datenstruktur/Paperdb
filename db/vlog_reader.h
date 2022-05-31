@@ -15,8 +15,14 @@ namespace leveldb {
         class VlogReader {
             public:
                 explicit VlogReader(std::string dbname, uint64_t log_number);
-                Status Read(uint64_t offset, uint64_t size,Slice *value);
+
+                // 从文件中读取[offset, size]到value中
+                Status Read(uint64_t offset, uint64_t size, Slice *value);
+
+                //
                 bool ReadRecord(Slice* record, std::string* scratch);
+
+                // 跳转到offfset处，offset必须大于等0
                 Status Jump(uint64_t offset);
 
             private:
