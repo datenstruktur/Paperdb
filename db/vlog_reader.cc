@@ -7,11 +7,13 @@
 #include "db/filename.h"
 #include "vlog_writer.h"
 #include "util/crc32c.h"
+#include "util/vlog_coding.h"
 
 namespace leveldb {
     namespace vlog{
 
-        VlogReader::VlogReader(std::string dbname, uint64_t log_number) {
+        VlogReader::VlogReader(std::string dbname, uint64_t log_number) :checksum_(true), backing_store_(new char[kBlockSize]), buffer_(), eof_(
+                false){
             std::string path = LogFileName(dbname, log_number);
             Env *env = Env::Default();
             env->NewSequentialFile(path, &file_);
@@ -38,41 +40,110 @@ namespace leveldb {
             return true;
         }
 
-        Status VlogReader::DecodeKV(Slice src, std::string* key, std::string* value, ValueType *type) {
-            if(src.size() < 1 + 4) return Status::Corruption("src is too short!");
+        bool VlogReader::ReadRecord(Slice* record, std::string* scratch) {
+            scratch->clear();
+            record->clear();
 
-            Slice input(src);
-            Slice tmp_key, tmp_value;
-            *type = static_cast<ValueType>(input[0]);
-            assert(*type == kTypeValue);
-            input.remove_prefix(1);
-            if(!(GetLengthPrefixedSlice(&input, &tmp_key) &&GetLengthPrefixedSlice(&input, &tmp_value))){
-                return Status::Corruption("key or value did not parse well");
-            } else{
-                *key = tmp_key.ToString();
-                *value = tmp_value.ToString();
-                return Status::OK();
+            if (buffer_.size() < kVHeaderMaxSize) {  //遇到buffer_剩的空间不够解析头部时
+                if (!eof_) {
+                    size_t left_head_size = buffer_.size();
+                    if (left_head_size > 0)  //如果读缓冲还剩内容，拷贝到读缓冲区头
+                        memcpy(backing_store_, buffer_.data(), left_head_size);
+                    buffer_.clear();
+                    Status status = file_->Read(kBlockSize - left_head_size, &buffer_,
+                                                backing_store_ + left_head_size);
+
+                    buffer_ = Slice(backing_store_, buffer_.size() + left_head_size);
+
+                    if (!status.ok()) {
+                        buffer_.clear();
+                        eof_ = true;
+                        return false;
+                    } else if (buffer_.size() < kBlockSize) {
+                        eof_ = true;
+                        if (buffer_.size() < kVHeaderMaxSize) return false;
+                    }
+                } else {
+                    if (buffer_.size() < kVHeaderMaxSize) {
+                        buffer_.clear();
+                        return false;
+                    }
+                }
+            }
+            //解析头部
+            uint64_t length = 0;
+            uint32_t expected_crc = crc32c::Unmask(DecodeFixed32(
+                    buffer_.data()));  //早一点解析出crc,因为后面可能buffer_.data内容会变
+            buffer_.remove_prefix(4);
+            length = DecodeFixed64(buffer_.data());
+            buffer_.remove_prefix(8);
+            if (length <= buffer_.size()) {
+                //逻辑记录完整的在buffer中(在block中)
+                if (checksum_) {
+                    uint32_t actual_crc = crc32c::Value(buffer_.data(), length);
+                    if (actual_crc != expected_crc) {
+                        return false;
+                    }
+                }
+                *record = Slice(buffer_.data(), length);
+                buffer_.remove_prefix(length);
+                return true;
+            } else {
+                if (eof_) {
+                    return false;  //日志最后一条记录不完整的情况，直接忽略
+                }
+                //逻辑记录不能在buffer中全部容纳，需要将读取结果写入到scratch
+                scratch->reserve(length);
+                size_t buffer_size = buffer_.size();
+                scratch->assign(buffer_.data(), buffer_size);
+                buffer_.clear();
+                const uint64_t left_length = length - buffer_size;
+                //如果剩余待读的记录超过block块的一半大小，则直接读到scratch中
+                if (left_length > kBlockSize / 2) {
+                    Slice buffer;
+                    scratch->resize(length);
+                    Status status =
+                            file_->Read(left_length, &buffer,
+                                        const_cast<char*>(scratch->data()) + buffer_size);
+                    if (!status.ok()) {
+                        return false;
+                    }
+                    if (buffer.size() < left_length) {
+                        eof_ = true;
+                        scratch->clear();
+                        return false;
+                    }
+                } else {  //否则读一整块到buffer中
+                    Status status = file_->Read(kBlockSize, &buffer_, backing_store_);
+
+                    if (!status.ok()) {
+                        return false;
+                    } else if (buffer_.size() < kBlockSize) {
+                        if (buffer_.size() < left_length) {
+                            eof_ = true;
+                            scratch->clear();
+                            return false;
+                        }
+                        //这个判断不要也可以，加的话算是优化，提早知道到头了，省的read一次才知道
+                        eof_ = true;
+                    }
+                    scratch->append(buffer_.data(), left_length);
+                    buffer_.remove_prefix(left_length);
+                }
+                if (checksum_) {
+                    uint32_t actual_crc = crc32c::Value(scratch->data(), length);
+                    if (actual_crc != expected_crc) {
+                        return false;
+                    }
+                }
+                *record = Slice(*scratch);
+                return true;
             }
         }
 
-        Status VlogReader::DecodeRecord(Slice src, Slice *kv) {
-            // check crc
-            // get length
-            // read kv
-
-            const char *buf = src.data();
-            uint32_t expected_crc = crc32c::Unmask(DecodeFixed32(buf));
-            src.remove_prefix(4);
-            uint64_t length = DecodeFixed64(src.data());
-            src.remove_prefix(8);
-
-            *kv = Slice(src.data(), length);
-            uint32_t actual_crc = crc32c::Extend(0, kv->data(), length);
-            if(actual_crc == expected_crc) return Status::OK();
-            else {
-                std::cout << src.data() << std::endl;
-                return Status::Corruption("crc check failed");
-            }
+        Status VlogReader::Jump(uint64_t offset) {
+            if(offset < 0) return Status::Corruption("offset smaller than 0");
+            return file_->Jump(offset);
         }
     }
 } // leveldb

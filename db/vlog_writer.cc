@@ -8,22 +8,10 @@
 #include "dbformat.h"
 #include "util/crc32c.h"
 #include "write_batch_internal.h"
+#include "util/vlog_coding.h"
 
 namespace leveldb {
     namespace vlog{
-
-        Status VlogWriter::DecodeMeta(std::string addr, uint64_t *log_number, uint64_t *offset, uint64_t *size) {
-            if(addr.size() < 24) return Status::NotFound("addr is too short");
-            Slice input(addr);
-            *log_number = DecodeFixed64(input.data());
-            input.remove_prefix(8);
-            *offset = DecodeFixed64(input.data());
-            input.remove_prefix(8);
-            *size = DecodeFixed64(input.data());
-
-            return Status::OK();
-        }
-
         Status VlogWriter::AddRecord(uint64_t log_number, WriteBatch *src_batch, WriteBatch *meta_batch) {
             Slice key, value;
             ValueType type;
@@ -65,43 +53,13 @@ namespace leveldb {
         }
 
         Status VlogWriter::Write(Slice data) {
-            const char* ptr = data.data();
-            size_t left = data.size();
-
-            // 4 + 8
-            char buf[kVHeaderMaxSize];
-
-            // 放入4Byte的crc
-            uint32_t crc = crc32c::Extend(0, ptr, left);
-            crc = crc32c::Mask(crc);                 // Adjust for storage
-            EncodeFixed32(buf, crc);
-            EncodeFixed64(&buf[4], left);
-            Status s = dest_->Append(Slice(buf, kVHeaderMaxSize));
+            Slice output;
+            EncodeRecord(&output, data);
+            Status s = dest_->Append(output);//写一条物理记录就刷一次
             if (s.ok()) {
-                s = dest_->Append(Slice(ptr, left));//写一条物理记录就刷一次
-                if (s.ok()) {
-                    s = dest_->Flush();
-                }
+                s = dest_->Flush();
             }
             return s;
-        }
-
-        std::string VlogWriter::EncodeMeta(uint64_t log_number, uint64_t offset, uint64_t size) {
-            std::string dst;
-            PutFixed64(&dst, log_number);
-            PutFixed64(&dst, offset);
-            PutFixed64(&dst, size);
-
-            return dst;
-        }
-
-        std::string VlogWriter::EncodeKV(Slice key, Slice value) {
-            std::string dst;
-            dst.push_back(kTypeValue);
-            PutLengthPrefixedSlice(&dst, key);
-            PutLengthPrefixedSlice(&dst, value);
-
-            return dst;
         }
 
         Status VlogWriter::Sync() {

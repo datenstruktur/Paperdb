@@ -36,6 +36,7 @@
 #include "util/logging.h"
 #include "util/mutexlock.h"
 #include "db/vlog_reader.h"
+#include "util/vlog_coding.h"
 
 namespace leveldb {
 
@@ -1160,12 +1161,16 @@ Status DBImpl::Get(const ReadOptions& options, const Slice& key,
   mem->Unref();
   if (imm != nullptr) imm->Unref();
   current->Unref();
-  return Fetch(true, key.ToString(), addr, value);
+  if(s.ok()) return Fetch(true, key.ToString(), addr, value);
+  else {
+      std::cout << s.ToString() << std::endl;
+      return s;
+  }
 }
 
 Status DBImpl::Fetch(bool checkKey, const std::string& key, std::string addr, std::string *value) {
     uint64_t log_number, offset, size;
-    Status status = vlog::VlogWriter::DecodeMeta(addr, &log_number, &offset, &size);
+    Status status = vlog::DecodeMeta(addr, &log_number, &offset, &size);
     if(!status.ok()) return status;
     vlog::VlogReader *reader = new vlog::VlogReader(dbname_, log_number);
 
@@ -1174,13 +1179,13 @@ Status DBImpl::Fetch(bool checkKey, const std::string& key, std::string addr, st
     if(!status.ok()) return status;
 
     Slice kv;
-    status = vlog::VlogReader::DecodeRecord(record, &kv);
+    status = vlog::DecodeRecord(record, &kv);
     if(!status.ok()) return status;
 
     std::string pkey, pvalue;
     ValueType type;
 
-    status = vlog::VlogReader::DecodeKV(kv, &pkey, &pvalue, &type);
+    status = vlog::DecodeKV(&kv, &pkey, &pvalue, &type);
 
     if(!status.ok() ){
         return Status::NotFound("Decode KV failed");

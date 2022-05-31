@@ -802,6 +802,7 @@ class Benchmark {
     Status s;
     int64_t bytes = 0;
     KeyBuffer key;
+    bool isprint = false;
     for (int i = 0; i < num_; i += entries_per_batch_) {
       batch.Clear();
       for (int j = 0; j < entries_per_batch_; j++) {
