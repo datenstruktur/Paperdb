@@ -116,7 +116,7 @@ endif(BUILD_SHARED_LIBS)
 # Must be included before CMAKE_INSTALL_INCLUDEDIR is used.
 include(GNUInstallDirs)
 
-add_library(leveldb "" db/vlog_writer.cc db/vlog_writer.h db/vlog_reader.cc db/vlog_reader.h db/vlog_test.cc util/vlog_coding.cc util/vlog_coding.h)
+add_library(leveldb "" db/vlog_writer.cc db/vlog_writer.h db/vlog_reader.cc db/vlog_reader.h db/vlog_test.cc util/vlog_coding.cc util/vlog_coding.h issues/kvs-issue3.cc)
 target_sources(leveldb
   PRIVATE
     "${PROJECT_BINARY_DIR}/${LEVELDB_PORT_CONFIG_DIR}/port_config.h"
@@ -400,6 +400,7 @@ if(LEVELDB_BUILD_TESTS)
       leveldb_test("util/env_posix_test.cc")
       leveldb_test("db/vlog_test.cc")
       leveldb_test("util/vlog_coding_test.cc")
+      leveldb_test("issues/kvs-issue3.cc")
 
     endif (WIN32)
   endif(NOT BUILD_SHARED_LIBS)

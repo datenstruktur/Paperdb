@@ -14,12 +14,11 @@ using namespace vlog;
 Status CheckKVCode(Slice key, Slice value){
     // 把key-value编码为字符串
     std::string kv = EncodeKV(key, value);
-    Slice kvs(kv);
 
     // 把字符串解码回key-value
     std::string real_key, real_value;
     ValueType real_type;
-    Status status = DecodeKV(&kvs, &real_key, &real_value, &real_type);
+    Status status = DecodeKV(kv, &real_key, &real_value, &real_type);
     if(!status.ok() || real_type != kTypeValue) return status;
 
     // 把key-value再编码为字符串
@@ -34,20 +33,19 @@ Status CheckKVCode(Slice key, Slice value){
 // 检查record的编解码功能
 Status CheckRecordCode(Slice data){
     // 把data编码为record，把数据存到input
-    Slice input;
-    EncodeRecord(&input, data);
+
+    std::string record = EncodeRecord(data);
 
     // 把保存有record数据的input解码为数据到kv
-    Slice kv;
-    Status status = DecodeRecord(input, &kv);
+    std::string kv;
+    Status status = DecodeRecord(record, &kv);
     if(!status.ok()) return status;
 
     // 把数据kv再编码为record数据到temp
-    Slice temp;
-    EncodeRecord(&temp, kv);
+    std::string temp = EncodeRecord(kv);
 
     // 如果把解码到的数据再编码，和刚开始编码data的数据不一样的话，就是报错了
-    if(input.compare(temp) != 0) return Status::Corruption("Result Not Match");
+    if(record != temp) return Status::Corruption("Result Not Match");
     return Status::OK();
 }
 
@@ -57,12 +55,11 @@ Status CheckKVToRecord(Slice key, Slice value){
     std::string dst = EncodeKV(key, value);
 
     // 封装为带crc、长度的record
-    Slice result;
-    EncodeRecord(&result, Slice(dst));
+    std::string record = EncodeRecord(Slice(dst));
 
+    std::string kv;
     // 解析record为kv
-    Slice kv;
-    Status status = DecodeRecord(result, &kv);
+    Status status = DecodeRecord(record, &kv);
     if(!status.ok()) return status;
 
     // 从kv中获得kv
@@ -70,7 +67,8 @@ Status CheckKVToRecord(Slice key, Slice value){
     ValueType type;
 
     // 这里kv是正常的，传入函数就不正常了，导致了bug的出现
-    status = DecodeKV(&kv, &get_key, &get_value, &type);
+    // 原因是kv中的data在传入下面函数的时候被清除了？
+    status = DecodeKV(kv, &get_key, &get_value, &type);
     if(!status.ok()) return status;
 
     // 校验
@@ -121,9 +119,9 @@ void RunAndPrint(const char* name, const Status& status){
 int main(int argc, char** argv) {
     RunAndPrint("Meta", CheckMetaCode(2123, 3434, 234234));
     RunAndPrint("KV", CheckKVCode("cxxxxxdcdczcdxxxxxxxx", "cdcsdcsdcvfvcxfdvdccd"));
-    RunAndPrint("Record", CheckRecordCode("value"));
-    // 这里出了问题
-    RunAndPrint("KVToRecord", CheckKVToRecord("key", "value"));
+    RunAndPrint("Record", CheckRecordCode("sxsxadjxj"));
+    RunAndPrint("KVToRecord", CheckKVToRecord("qnxonazxonxsasubcom", "sxsxscdcdcdcdcdc"));
+    RunAndPrint("KVToRecord", CheckKVToRecord("sxs", "scdv"));
 
     fprintf(stderr, "PASS\n");
     return 0;

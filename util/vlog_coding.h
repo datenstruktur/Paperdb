@@ -13,14 +13,14 @@ namespace leveldb {
         // 把key，value编码为字符串返回
         std::string EncodeKV(Slice key, Slice value);
         // 从编码成slice解码出key、value、type
-        Status DecodeKV(Slice* src, std::string * key, std::string * value, ValueType *type);
+        Status DecodeKV(std::string kv, std::string * key, std::string * value, ValueType *type);
 
         // record的头数据长度，4Byte的crc值，8Byte的length
         const int kVHeaderMaxSize = 4 + 8;
         // 把要持久化的数据data编码为record到result
-        void EncodeRecord(Slice *result, Slice data);
+        std::string EncodeRecord(Slice data);
         // 从磁盘中读取到的record数据src中解析出data数据kv
-        Status DecodeRecord(Slice src, Slice *kv);
+        Status DecodeRecord(std::string input, std::string *kv);
 
         // 把log_number、offset、size编码为字符串返回
         std::string EncodeMeta(uint64_t log_number, uint64_t offset, uint64_t size);

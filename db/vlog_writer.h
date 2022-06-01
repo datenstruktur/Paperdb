@@ -20,7 +20,6 @@ namespace leveldb {
         private:
             WritableFile *dest_;
             uint64_t head_;
-
             Status Write(Slice data);
         };
     }

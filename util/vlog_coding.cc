@@ -10,12 +10,12 @@
  *      log_number[Fixed64]-offset[Fixed64]-size[Fixed64]
  */
 
+#include <iostream>
 #include "vlog_coding.h"
 #include "crc32c.h"
 
 namespace leveldb {
     namespace vlog{
-
         // 编码key/value对
         std::string EncodeKV(Slice key, Slice value) {
             std::string dst;
@@ -30,19 +30,20 @@ namespace leveldb {
         }
 
         // 从src中解码key/value对到key, value, type
-        Status DecodeKV(Slice* src, std::string* key, std::string* value, ValueType *type) {
+        Status DecodeKV(std::string input, std::string* key, std::string* value, ValueType *type) {
+            Slice src(input);
             // 1是1Byte的ValueType，4是key/value的长度
-            if(src->size() < 1 + 4) return Status::Corruption("src is too short!");
+            if(src.size() < 1 + 4) return Status::Corruption("src is too short!");
 
             // 读取第一个字符为type
             // 这里经常出问题，src到这里就变成了乱码了，type就无法准确解析
-            *type = (ValueType) src->data()[0];
+            *type = (ValueType) src.data()[0];
             if (*type != kTypeValue) return Status::Corruption("type not match");
-            src->remove_prefix(1); //去除这个type的1Byte
+            src.remove_prefix(1); //去除这个type的1Byte
 
             // 读取key/vale
             Slice tmp_key, tmp_value;
-            if(!(GetLengthPrefixedSlice(src, &tmp_key) &&GetLengthPrefixedSlice(src, &tmp_value))){
+            if(!(GetLengthPrefixedSlice(&src, &tmp_key) &&GetLengthPrefixedSlice(&src, &tmp_value))){
                 return Status::Corruption("key or value did not parse well");
             } else{
                 // 赋值给key/value形参
@@ -53,7 +54,7 @@ namespace leveldb {
         }
 
         // 编码数据为record
-        void EncodeRecord(Slice *result, Slice data){
+        std::string EncodeRecord(Slice data){
             const char* ptr = data.data();
             size_t left = data.size();
             // kVHeaderMaxSize = 4 + 8
@@ -73,14 +74,13 @@ namespace leveldb {
 
             // 封装为slice，不用的string的主要原因是string会截断\0
             // slice是内存中一段数据的封装(data_指向开头, data_ + size_指向末尾)
-            Slice r(buf, kVHeaderMaxSize + left);
-
+            return std::string(buf, kVHeaderMaxSize + left);
             // 赋值给Slice形参
-            *result = r;
         }
 
         // 把保存在src中的record解码成kv
-        Status DecodeRecord(Slice src, Slice *kv) {
+        Status DecodeRecord(std::string input, std::string *kv) {
+            Slice src(input);
             // 4 + 8是数据头的长度
             if(src.size() < 4 + 8) return Status::Corruption("src is too short");
 
@@ -98,10 +98,10 @@ namespace leveldb {
             //如果crc校验通过
             if(actual_crc == expected_crc){
                 // 赋值kv
-                *kv = Slice(src.data(), length);
+                *kv = src.ToString();
                 return Status::OK();
             }
-            else return Status::Corruption("crc check failed");
+            else { return Status::Corruption("crc check failed");}
         }
 
         // 把log_number、offset、size封装为meta

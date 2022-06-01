@@ -21,11 +21,10 @@ namespace leveldb {
             assert(WriteBatchInternal::Count(meta_batch) == 0);
 
             uint64_t pos = 0;
-
             while (src_batch->ParseBatch(&pos, &key, &value, &type).ok()){
                 switch (type) {
                     case kTypeValue:{
-                        Slice record;
+                        std::string record;
                         uint64_t offset, size;
                         record = EncodeKV(key, value);
                         offset = head_;
@@ -53,8 +52,7 @@ namespace leveldb {
         }
 
         Status VlogWriter::Write(Slice data) {
-            Slice output;
-            EncodeRecord(&output, data);
+            std::string output = EncodeRecord(data);
             Status s = dest_->Append(output);//写一条物理记录就刷一次
             if (s.ok()) {
                 s = dest_->Flush();

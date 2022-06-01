@@ -1172,20 +1172,21 @@ Status DBImpl::Fetch(bool checkKey, const std::string& key, std::string addr, st
     uint64_t log_number, offset, size;
     Status status = vlog::DecodeMeta(addr, &log_number, &offset, &size);
     if(!status.ok()) return status;
-    vlog::VlogReader *reader = new vlog::VlogReader(dbname_, log_number);
+
+    auto *reader = new vlog::VlogReader(dbname_, log_number);
 
     Slice record;
     status = reader->Read(offset, size, &record);
     if(!status.ok()) return status;
 
-    Slice kv;
-    status = vlog::DecodeRecord(record, &kv);
+    std::string kv;
+    status = vlog::DecodeRecord(record.ToString(), &kv);
     if(!status.ok()) return status;
 
     std::string pkey, pvalue;
     ValueType type;
 
-    status = vlog::DecodeKV(&kv, &pkey, &pvalue, &type);
+    status = vlog::DecodeKV(kv, &pkey, &pvalue, &type);
 
     if(!status.ok() ){
         return Status::NotFound("Decode KV failed");

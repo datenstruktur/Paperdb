@@ -12,8 +12,10 @@
 namespace leveldb {
     namespace vlog{
 
-        VlogReader::VlogReader(std::string dbname, uint64_t log_number) :checksum_(true), backing_store_(new char[kBlockSize]), buffer_(), eof_(
+        VlogReader::VlogReader(std::string dbname, uint64_t log_number)
+            :checksum_(true), backing_store_(new char[kBlockSize]), buffer_(), eof_(
                 false){
+
             std::string path = LogFileName(dbname, log_number);
             Env *env = Env::Default();
             env->NewSequentialFile(path, &file_);
