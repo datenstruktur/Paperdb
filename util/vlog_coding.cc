@@ -17,10 +17,13 @@
 namespace leveldb {
     namespace vlog{
         // 编码key/value对
-        std::string EncodeKV(Slice key, Slice value) {
+        std::string EncodeKV(SequenceNumber sn, Slice key, Slice value) {
             std::string dst;
+            char *buf = new char[8];
+            EncodeFixed64(buf, sn);
+            dst.assign(buf, 8);
             // 写入type，持久化到磁盘的只有kTypeValue，也就是Put类型的数据
-            dst.push_back(kTypeValue);
+            dst.push_back(static_cast<char>(kTypeValue));
             // 写入key的长度和key
             PutLengthPrefixedSlice(&dst, key);
             // 写入value的长度和value
@@ -30,10 +33,13 @@ namespace leveldb {
         }
 
         // 从src中解码key/value对到key, value, type
-        Status DecodeKV(std::string input, std::string* key, std::string* value, ValueType *type) {
+        Status DecodeKV(std::string input, SequenceNumber *sn, std::string* key, std::string* value, ValueType *type) {
             Slice src(input);
-            // 1是1Byte的ValueType，4是key/value的长度
+            // 1是1Byte的ValueType，4是key/value的长度,8是SN的长度
             if(src.size() < 1 + 4) return Status::Corruption("src is too short!");
+
+            *sn = DecodeFixed64(src.data());
+            src.remove_prefix(8);
 
             // 读取第一个字符为type
             // 这里经常出问题，src到这里就变成了乱码了，type就无法准确解析

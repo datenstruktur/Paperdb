@@ -11,19 +11,20 @@ using namespace leveldb;
 using namespace vlog;
 
 // 检查kv的编解码功能
-Status CheckKVCode(Slice key, Slice value){
+Status CheckKVCode(SequenceNumber sn, Slice key, Slice value){
     // 把key-value编码为字符串
-    std::string kv = EncodeKV(key, value);
+    std::string kv = EncodeKV(sn, key, value);
 
     // 把字符串解码回key-value
+    SequenceNumber real_sn;
     std::string real_key, real_value;
     ValueType real_type;
-    Status status = DecodeKV(kv, &real_key, &real_value, &real_type);
+    Status status = DecodeKV(kv,&real_sn, &real_key, &real_value, &real_type);
     if(!status.ok() || real_type != kTypeValue) return status;
 
     // 把key-value再编码为字符串
     std::string tmp;
-    tmp = EncodeKV(real_key, real_value);
+    tmp = EncodeKV(real_sn, real_key, real_value);
 
     // 经过编码-解码-再编码，得到的值与原来的值不相同，就报错
     if (kv != tmp) return Status::Corruption("Result Not Match");
@@ -50,9 +51,9 @@ Status CheckRecordCode(Slice data){
 }
 
 // 检查从kv对到可以在磁盘中保存的record的整个流程
-Status CheckKVToRecord(Slice key, Slice value){
+Status CheckKVToRecord(SequenceNumber sn, Slice key, Slice value){
     // 封装为kv对字符串
-    std::string dst = EncodeKV(key, value);
+    std::string dst = EncodeKV(sn, key, value);
 
     // 封装为带crc、长度的record
     std::string record = EncodeRecord(Slice(dst));
@@ -63,16 +64,17 @@ Status CheckKVToRecord(Slice key, Slice value){
     if(!status.ok()) return status;
 
     // 从kv中获得kv
+    SequenceNumber get_sn;
     std::string get_key, get_value;
     ValueType type;
 
     // 这里kv是正常的，传入函数就不正常了，导致了bug的出现
     // 原因是kv中的data在传入下面函数的时候被清除了？
-    status = DecodeKV(kv, &get_key, &get_value, &type);
+    status = DecodeKV(kv, &get_sn, &get_key, &get_value, &type);
     if(!status.ok()) return status;
 
     // 校验
-    if (type == kTypeValue && get_key == key.ToString() && get_value == value.ToString()) return Status::OK();
+    if (get_sn == sn && type == kTypeValue && get_key == key.ToString() && get_value == value.ToString()) return Status::OK();
     return Status::Corruption("Result Not Match");
 }
 
@@ -109,19 +111,13 @@ void RunAndPrint(const char* name, const Status& status){
     }
 }
 
-/*
- * 结果:
- * === Test Meta: [PASS]
- * === Test KV: [PASS]
- * === Test Record: [PASS]
- * === Test KVToRecord: [Corruption: type not match]
- */
+
 int main(int argc, char** argv) {
     RunAndPrint("Meta", CheckMetaCode(2123, 3434, 234234));
-    RunAndPrint("KV", CheckKVCode("cxxxxxdcdczcdxxxxxxxx", "cdcsdcsdcvfvcxfdvdccd"));
+    RunAndPrint("KV", CheckKVCode(10223, "cxxxxxdcdczcdxxxxxxxx", "cdcsdcsdcvfvcxfdvdccd"));
     RunAndPrint("Record", CheckRecordCode("sxsxadjxj"));
-    RunAndPrint("KVToRecord", CheckKVToRecord("qnxonazxonxsasubcom", "sxsxscdcdcdcdcdc"));
-    RunAndPrint("KVToRecord", CheckKVToRecord("sxs", "scdv"));
+    RunAndPrint("KVToRecord", CheckKVToRecord(24532, "qnxonazxonxsasubcom", "sxsxscdcdcdcdcdc"));
+    RunAndPrint("KVToRecord", CheckKVToRecord(6634, "sxs", "scdv"));
 
     fprintf(stderr, "PASS\n");
     return 0;

@@ -21,12 +21,16 @@ namespace leveldb {
             assert(WriteBatchInternal::Count(meta_batch) == 0);
 
             uint64_t pos = 0;
+            SequenceNumber sn = WriteBatchInternal::Sequence(src_batch);
+            SequenceNumber first_sn = sn;
+
             while (src_batch->ParseBatch(&pos, &key, &value, &type).ok()){
                 switch (type) {
                     case kTypeValue:{
                         std::string record;
                         uint64_t offset, size;
-                        record = EncodeKV(key, value);
+                        record = EncodeKV(sn, key, value);
+                        sn ++;
                         offset = head_;
                         size = kVHeaderMaxSize + record.size();
                         Write(record);
@@ -36,6 +40,7 @@ namespace leveldb {
                     }
                     case kTypeDeletion:{
                         meta_batch->Delete(key);
+                        sn++;
                         break;
                     }
                     default:{
@@ -46,8 +51,8 @@ namespace leveldb {
             if (WriteBatchInternal::Count(src_batch) != WriteBatchInternal::Count(meta_batch))
                 return Status::Corruption("two batch has different kv count");
 
-            SequenceNumber sn = WriteBatchInternal::Sequence(src_batch);
-            WriteBatchInternal::SetSequence(meta_batch, sn);
+            if(sn - first_sn != WriteBatchInternal::Count(src_batch)) return Status::Corruption("not read all kvs");
+            WriteBatchInternal::SetSequence(meta_batch, first_sn);
             return Status::OK();
         }
 

@@ -11,9 +11,9 @@
 namespace leveldb {
     namespace vlog{
         // 把key，value编码为字符串返回
-        std::string EncodeKV(Slice key, Slice value);
+        std::string EncodeKV(SequenceNumber sn, Slice key, Slice value);
         // 从编码成slice解码出key、value、type
-        Status DecodeKV(std::string kv, std::string * key, std::string * value, ValueType *type);
+        Status DecodeKV(std::string kv, SequenceNumber *sn, std::string * key, std::string * value, ValueType *type);
 
         // record的头数据长度，4Byte的crc值，8Byte的length
         const int kVHeaderMaxSize = 4 + 8;

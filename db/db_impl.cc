@@ -429,46 +429,52 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
       (unsigned long long)log_number);
 
   // Read all the records and add to a memtable
-  std::string scratch;
-  Slice record;
   WriteBatch batch;
   int compactions = 0;
   MemTable* mem = nullptr;
-  while (reader.ReadRecord(&record, &scratch) && status.ok()) {
-    if (record.size() < 12) {
-      reporter.Corruption(record.size(),
-                          Status::Corruption("log record too small"));
-      continue;
-    }
-    WriteBatchInternal::SetContents(&batch, record);
 
-    if (mem == nullptr) {
+  SequenceNumber sn;
+  std::string key, meta;
+  uint64_t pos = 0;
+
+  reader.Jump(0);
+  bool isFirst = true;
+  bool hasKV = false;
+  while (reader.ReadMeta(&pos, &key, &sn, &meta) && status.ok()) {
+      hasKV = true;
+      if(isFirst) {
+          WriteBatchInternal::SetSequence(&batch, sn);
+          isFirst = false;
+      }
+      batch.Put(key, meta);
+  }
+
+  if (mem == nullptr) {
       mem = new MemTable(internal_comparator_);
       mem->Ref();
-    }
-    status = WriteBatchInternal::InsertInto(&batch, mem);
-    MaybeIgnoreError(&status);
-    if (!status.ok()) {
-      break;
-    }
-    const SequenceNumber last_seq = WriteBatchInternal::Sequence(&batch) +
-                                    WriteBatchInternal::Count(&batch) - 1;
-    if (last_seq > *max_sequence) {
-      *max_sequence = last_seq;
-    }
+  }
 
-    if (mem->ApproximateMemoryUsage() > options_.write_buffer_size) {
-      compactions++;
-      *save_manifest = true;
-      status = WriteLevel0Table(mem, edit, nullptr);
-      mem->Unref();
-      mem = nullptr;
-      if (!status.ok()) {
-        // Reflect errors immediately so that conditions like full
-        // file-systems cause the DB::Open() to fail.
-        break;
+  if(hasKV) { // 如果有数据才插入
+      status = WriteBatchInternal::InsertInto(&batch, mem);
+      MaybeIgnoreError(&status);
+
+      const SequenceNumber last_seq = WriteBatchInternal::Sequence(&batch) +
+                                      WriteBatchInternal::Count(&batch) - 1;
+      if (last_seq > *max_sequence) {
+          *max_sequence = last_seq;
       }
-    }
+
+      if (mem->ApproximateMemoryUsage() > options_.write_buffer_size) {
+          compactions++;
+          *save_manifest = true;
+          status = WriteLevel0Table(mem, edit, nullptr);
+          mem->Unref();
+          mem = nullptr;
+          if (!status.ok()) {
+              // Reflect errors immediately so that conditions like full
+              // file-systems cause the DB::Open() to fail.
+          }
+      }
   }
 
   delete file;
@@ -1183,10 +1189,11 @@ Status DBImpl::Fetch(bool checkKey, const std::string& key, std::string addr, st
     status = vlog::DecodeRecord(record.ToString(), &kv);
     if(!status.ok()) return status;
 
+    SequenceNumber psn;
     std::string pkey, pvalue;
     ValueType type;
 
-    status = vlog::DecodeKV(kv, &pkey, &pvalue, &type);
+    status = vlog::DecodeKV(kv,&psn, &pkey, &pvalue, &type);
 
     if(!status.ok() ){
         return Status::NotFound("Decode KV failed");

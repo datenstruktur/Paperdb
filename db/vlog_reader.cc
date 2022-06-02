@@ -13,8 +13,10 @@ namespace leveldb {
     namespace vlog{
 
         VlogReader::VlogReader(const std::string& dbname, uint64_t log_number)
-            :checksum_(true), backing_store_(new char[kBlockSize]), buffer_(), eof_(
-                false){
+            :checksum_(true),
+            backing_store_(new char[kBlockSize]),
+            buffer_(), eof_(false),
+            log_number_(log_number){
 
             std::string path = LogFileName(dbname, log_number);
             Env *env = Env::Default();
@@ -157,6 +159,23 @@ namespace leveldb {
             file_->Close();
             delete[] backing_store_;
             delete file_;
+        }
+
+        bool VlogReader::ReadMeta(uint64_t *pos, std::string *key, SequenceNumber *sn, std::string *meta) {
+            Slice record;
+            std::string scratch, value;
+            ValueType type;
+
+            if(!ReadRecord(&record, &scratch)) return false;
+            if(record.empty() && !scratch.empty()) record = Slice(scratch);
+
+            Status status = DecodeKV(record.ToString(), sn, key, &value, &type);
+            if(!status.ok()) return false;
+
+            *meta = EncodeMeta(log_number_, *pos, record.size() + 4 + 8);
+
+            *pos += record.size() + 4 + 8;
+            return true;
         }
     }
 } // leveldb

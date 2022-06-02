@@ -24,11 +24,15 @@ namespace leveldb {
                 //
                 bool ReadRecord(Slice* record, std::string* scratch);
 
+                // 读取当前位置pos的record的key，以及这一条record的<log_number, offset, size>
+                bool ReadMeta(uint64_t *pos, std::string *key, SequenceNumber *sn, std::string *meta);
+
                 // 跳转到offfset处，offset必须大于等0
                 Status Jump(uint64_t offset);
 
             private:
                 SequentialFile *file_;
+                uint64_t log_number_;
                 bool JumpTo(uint64_t offset);
 
                 bool const checksum_;
