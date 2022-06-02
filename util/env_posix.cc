@@ -170,6 +170,13 @@ class PosixSequentialFile final : public SequentialFile {
     return Status::OK();
 }
 
+    Status Close(){
+      if(::close(fd_) == static_cast<off_t>(-1)){
+          return PosixError(filename_, errno);
+      }
+      return Status::OK();
+  }
+
  private:
   const int fd_;
   const std::string filename_;

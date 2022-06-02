@@ -251,6 +251,10 @@ class LEVELDB_EXPORT SequentialFile {
       (void)n;
       return Status::NotSupported("Jump");
   }
+
+  virtual Status Close(){
+      return Status::NotSupported("Close");
+  }
 };
 
 // A file abstraction for randomly reading the contents of a file.

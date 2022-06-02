@@ -423,7 +423,8 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
   // paranoid_checks==false so that corruptions cause entire commits
   // to be skipped instead of propagating bad information (like overly
   // large sequence numbers).
-  log::Reader reader(file, &reporter, true /*checksum*/, 0 /*initial_offset*/);
+  //log::Reader reader(file, &reporter, true /*checksum*/, 0 /*initial_offset*/);
+  vlog::VlogReader reader(dbname_, log_number);
   Log(options_.info_log, "Recovering log #%llu",
       (unsigned long long)log_number);
 
@@ -1162,10 +1163,7 @@ Status DBImpl::Get(const ReadOptions& options, const Slice& key,
   if (imm != nullptr) imm->Unref();
   current->Unref();
   if(s.ok()) return Fetch(true, key.ToString(), addr, value);
-  else {
-      std::cout << s.ToString() << std::endl;
-      return s;
-  }
+  else return s;
 }
 
 Status DBImpl::Fetch(bool checkKey, const std::string& key, std::string addr, std::string *value) {
@@ -1178,6 +1176,8 @@ Status DBImpl::Fetch(bool checkKey, const std::string& key, std::string addr, st
     Slice record;
     status = reader->Read(offset, size, &record);
     if(!status.ok()) return status;
+
+    delete reader;
 
     std::string kv;
     status = vlog::DecodeRecord(record.ToString(), &kv);

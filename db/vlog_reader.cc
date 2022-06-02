@@ -12,14 +12,19 @@
 namespace leveldb {
     namespace vlog{
 
-        VlogReader::VlogReader(std::string dbname, uint64_t log_number)
+        VlogReader::VlogReader(const std::string& dbname, uint64_t log_number)
             :checksum_(true), backing_store_(new char[kBlockSize]), buffer_(), eof_(
                 false){
 
             std::string path = LogFileName(dbname, log_number);
             Env *env = Env::Default();
-            env->NewSequentialFile(path, &file_);
+            Status status = env->NewSequentialFile(path, &file_);
+            if(!status.ok()){
+                std::cout << path << std::endl;
+                std::cout << status.ToString() << std::endl;
+            }
         }
+
 
         Status VlogReader::Read(uint64_t offset, uint64_t size, Slice *value) {
             if(!JumpTo(offset)){
@@ -146,6 +151,12 @@ namespace leveldb {
         Status VlogReader::Jump(uint64_t offset) {
             if(offset < 0) return Status::Corruption("offset smaller than 0");
             return file_->Jump(offset);
+        }
+
+        VlogReader::~VlogReader() {
+            file_->Close();
+            delete[] backing_store_;
+            delete file_;
         }
     }
 } // leveldb
