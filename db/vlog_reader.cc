@@ -22,19 +22,17 @@ namespace leveldb {
             Env *env = Env::Default();
             Status status = env->NewSequentialFile(path, &file_);
             if(!status.ok()){
+                //@todo 这里最好用Log代替
                 std::cout << path << std::endl;
                 std::cout << status.ToString() << std::endl;
             }
         }
 
-
-        Status VlogReader::Read(uint64_t offset, uint64_t size, Slice *value) {
+        Status VlogReader::Read(uint64_t offset, uint64_t size, Slice *value, char *scratch) {
             if(!JumpTo(offset)){
                 return Status::Corruption("Jump to offset failed");
             }
-
-            char *buf = new char[size];
-            Status status = file_->Read(size, value, buf);
+            Status status = file_->Read(size, value, scratch);
             if (!status.ok()) return status;
             return Status::OK();
         }

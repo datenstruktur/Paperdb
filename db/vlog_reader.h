@@ -19,7 +19,7 @@ namespace leveldb {
                 ~VlogReader();
 
                 // 从文件中读取[offset, size]到value中
-                Status Read(uint64_t offset, uint64_t size, Slice *value);
+                Status Read(uint64_t offset, uint64_t size, Slice *value, char *scratch);
 
                 //
                 bool ReadRecord(Slice* record, std::string* scratch);
@@ -42,7 +42,6 @@ namespace leveldb {
                 // Reports dropped bytes to the reporter.
                 // buffer_ must be updated to remove the dropped bytes prior to invocation.
                 static const int kBlockSize = 32768;
-
         };
     }
 } // leveldb

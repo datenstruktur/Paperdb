@@ -293,7 +293,7 @@ void DBImpl::RemoveObsoleteFiles() {
   mutex_.Lock();
 }
 
-Status DBImpl::Recover(VersionEdit* edit, bool* save_manifest) {
+Status DBImpl:: Recover(VersionEdit* edit, bool* save_manifest) {
   mutex_.AssertHeld();
 
   // Ignore error from CreateDir since the creation of the DB is
@@ -1180,7 +1180,8 @@ Status DBImpl::Fetch(bool checkKey, const std::string& key, std::string addr, st
     auto *reader = new vlog::VlogReader(dbname_, log_number);
 
     Slice record;
-    status = reader->Read(offset, size, &record);
+    char *buf = new char[size];
+    status = reader->Read(offset, size, &record, buf);
     if(!status.ok()) return status;
 
     delete reader;
@@ -1194,6 +1195,7 @@ Status DBImpl::Fetch(bool checkKey, const std::string& key, std::string addr, st
     ValueType type;
 
     status = vlog::DecodeKV(kv,&psn, &pkey, &pvalue, &type);
+    delete[] buf;
 
     if(!status.ok() ){
         return Status::NotFound("Decode KV failed");

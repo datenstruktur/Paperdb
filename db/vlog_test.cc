@@ -105,6 +105,8 @@ namespace leveldb {
 
                 uint64_t log_number, offset, size;
 
+                char *buf;
+
                 // 读取tmp batch中的key-meta
                 while (syn_batch_->ParseBatch(&pos, &key, &meta, &type).ok()) {
                     if (type == leveldb::kTypeValue) { // 如果是put的，需要解析meta读取真正的key-meta
@@ -114,7 +116,9 @@ namespace leveldb {
 
                         // 根据meta数据初始化reader，读取key-value的数据到record
                         reader_ = new vlog::VlogReader(dbname_, log_number);
-                        status = reader_->Read(offset, size, &record);
+
+                        buf = new char[size];
+                        status = reader_->Read(offset, size, &record, buf);
                         if (!status.ok()) return status;
 
                         // 解析record数据为kv数据
@@ -134,6 +138,7 @@ namespace leveldb {
                         sn ++;
                         // 把key-value加入到dst batch
                         reader_batch_->Put(real_key, real_value);
+                        delete buf;
                     } else if (type == leveldb::kTypeDeletion) { // 如果是删除数据，则没有value就没办法从磁盘读取数据
                         reader_batch_->Delete(key); // 直接插入dst batch
                         sn ++;
@@ -161,9 +166,7 @@ namespace leveldb {
                 reader_->Jump(0);
 
                 while (reader_->ReadRecord(&record, &scratch)){
-                    if(!record.empty()){
-
-                    } else if(!scratch.empty()){
+                    if(record.empty() && !scratch.empty()){
                         record = Slice(scratch);
                     }
 

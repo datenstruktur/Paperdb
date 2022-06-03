@@ -160,6 +160,10 @@ class RecoveryTest : public testing::Test {
   DB* db_;
 };
 
+// leveldb会在Open(db->recover/versionset->recover/versionset->ReuseManifest)的时候对VersionSet进行恢复
+// 恢复需要读取manifest文件
+// 如果manifest太大，或者不可写入，就产生一个新的manifest文件
+// 否则就复用
 TEST_F(RecoveryTest, ManifestReused) {
   if (!CanAppend()) { //测试db文件夹下的CURRENT文件是否可以写入
     std::fprintf(stderr,
@@ -171,8 +175,12 @@ TEST_F(RecoveryTest, ManifestReused) {
   // 读取manifest的路径
   std::string old_manifest = ManifestFileName();
   Open(); // 从manifest中恢复
+  // put的数据量比较小，肯定可以复用
+  // 所以是可以复用的
   ASSERT_EQ(old_manifest, ManifestFileName());
   ASSERT_EQ("bar", Get("foo"));
+
+  // 再测试一下
   Open();
   ASSERT_EQ(old_manifest, ManifestFileName());
   ASSERT_EQ("bar", Get("foo"));
@@ -193,6 +201,7 @@ TEST_F(RecoveryTest, LargeManifestCompacted) {
     uint64_t len = FileSize(old_manifest);
     WritableFile* file;
     ASSERT_LEVELDB_OK(env()->NewAppendableFile(old_manifest, &file));
+    // 1048576 = 1024*1024
     std::string zeroes(3 * 1048576 - static_cast<size_t>(len), 0);
     ASSERT_LEVELDB_OK(file->Append(zeroes));
     ASSERT_LEVELDB_OK(file->Flush());
@@ -229,7 +238,7 @@ TEST_F(RecoveryTest, LogFileReuse) {
     ASSERT_LEVELDB_OK(Put("foo", "bar"));
     if (i == 0) {
       // Compact to ensure current log is empty
-      CompactMemTable();
+      CompactMemTable(); //正常情况下会
     }
     Close();
     ASSERT_EQ(1, NumLogs());
