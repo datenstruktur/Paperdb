@@ -68,5 +68,6 @@ namespace leveldb {
         Status VlogWriter::Sync() {
             return dest_->Sync();
         }
+
     }
 } // leveldb

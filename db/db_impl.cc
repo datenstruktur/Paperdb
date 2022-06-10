@@ -144,7 +144,9 @@ DBImpl::DBImpl(const Options& raw_options, const std::string& dbname)
       has_imm_(false),
       logfile_(nullptr),
       logfile_number_(0),
+      should_gc_(false),
       vlog_(nullptr),
+      vlog_gc_(nullptr),
       seed_(0),
       tmp_batch_(new WriteBatch),
       background_compaction_scheduled_(false),
@@ -170,6 +172,7 @@ DBImpl::~DBImpl() {
   if (imm_ != nullptr) imm_->Unref();
   delete tmp_batch_;
   delete vlog_;
+  delete vlog_gc_;
   delete logfile_;
   delete table_cache_;
 
@@ -479,6 +482,8 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
 
   delete file;
 
+  bool shouldgc = false;
+
   // See if we should keep reusing the last log file.
   if (status.ok() && options_.reuse_logs && last_log && compactions == 0) {
     assert(logfile_ == nullptr);
@@ -491,6 +496,7 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
       //log_ = new log::Writer(logfile_, lfile_size);
       vlog_ = new vlog::VlogWriter(logfile_, lfile_size);
       logfile_number_ = log_number;
+      should_gc_ = vlog_gc_->AddLog(dbname_, logfile_number_);
       if (mem != nullptr) {
         mem_ = mem;
         mem = nullptr;
@@ -509,6 +515,10 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
       status = WriteLevel0Table(mem, edit, nullptr);
     }
     mem->Unref();
+  }
+
+  if(shouldgc){
+      vlog_gc_->StartGC();
   }
 
   return status;
@@ -669,6 +679,45 @@ void DBImpl::RecordBackgroundError(const Status& s) {
     bg_error_ = s;
     background_work_finished_signal_.SignalAll();
   }
+}
+
+void DBImpl::MaybeStartGCThread(){
+    mutex_.AssertHeld();
+    if(background_gc_scheduled_){
+
+    } else if(shutting_down_.load(std::memory_order_acquire)){
+
+    }else if(!bg_error_.ok()){
+
+    }else if(!should_gc_){
+
+    } else{
+        background_gc_scheduled_ = true;
+        env_->StartThread(&DBImpl::BGGCWork, this);
+    }
+}
+
+void DBImpl::BGGCWork(void *db){
+    reinterpret_cast<DBImpl*>(db)->BackgroundGCCall();
+}
+
+void DBImpl::BackgroundGCCall(){
+    MutexLock l(&mutex_);
+    assert(background_gc_scheduled_);
+    if (shutting_down_.load(std::memory_order_acquire)){
+
+    }else if(!bg_error_.ok()){
+        BackgroundGC();
+    }
+    background_gc_scheduled_ = false;
+    background_work_finished_signal_.SignalAll();
+}
+
+void DBImpl::BackgroundGC(){
+    if(should_gc_){
+        vlog_gc_->StartGC();
+    }
+    should_gc_ = false;
 }
 
 void DBImpl::MaybeScheduleCompaction() {
@@ -1403,18 +1452,18 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       allow_delay = false;  // Do not delay a single write more than once
       mutex_.Lock();
     } else if (!force &&
-               (mem_->ApproximateMemoryUsage() <= options_.write_buffer_size)) {
+               (mem_->ApproximateMemoryUsage() <= options_.write_buffer_size) && !vlog_gc_->ShouldGC()) {
       // There is room in current memtable
       break;
-    } else if (imm_ != nullptr) {
+    } else if (should_gc_ || imm_ != nullptr) {
       // We have filled up the current memtable, but the previous
       // one is still being compacted, so we wait.
       Log(options_.info_log, "Current memtable full; waiting...\n");
       background_work_finished_signal_.Wait();
     } else if (versions_->NumLevelFiles(0) >= config::kL0_StopWritesTrigger) {
-      // There are too many level-0 files.
-      Log(options_.info_log, "Too many L0 files; waiting...\n");
-      background_work_finished_signal_.Wait();
+        // There are too many level-0 files.
+        Log(options_.info_log, "Too many L0 files; waiting...\n");
+        background_work_finished_signal_.Wait();
     } else {
       // Attempt to switch to a new memtable and trigger compaction of old
       assert(versions_->PrevLogNumber() == 0);
@@ -1426,8 +1475,10 @@ Status DBImpl::MakeRoomForWrite(bool force) {
         versions_->ReuseFileNumber(new_log_number);
         break;
       }
+
       delete vlog_;
       delete logfile_;
+      should_gc_ = vlog_gc_->AddLog(dbname_, logfile_number_);
       logfile_ = lfile;
       logfile_number_ = new_log_number;
       vlog_ = new vlog::VlogWriter(lfile);
@@ -1436,6 +1487,7 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       mem_ = new MemTable(internal_comparator_);
       mem_->Ref();
       force = false;  // Do not force another compaction if have room
+      if(should_gc_) MaybeStartGCThread();
       MaybeScheduleCompaction();
     }
   }
@@ -1558,6 +1610,8 @@ Status DB::Open(const Options& options, const std::string& dbname, DB** dbptr) {
       impl->logfile_ = lfile;
       impl->logfile_number_ = new_log_number;
       impl->vlog_ = new vlog::VlogWriter(lfile);
+      impl->vlog_gc_ = new vlog::VlogGC(10000, impl, &impl->mutex_);
+      impl->should_gc_ = impl->vlog_gc_->AddLog(dbname, new_log_number);
       impl->mem_ = new MemTable(impl->internal_comparator_);
       impl->mem_->Ref();
     }
@@ -1569,6 +1623,7 @@ Status DB::Open(const Options& options, const std::string& dbname, DB** dbptr) {
   }
   if (s.ok()) {
     impl->RemoveObsoleteFiles();
+    impl->MaybeStartGCThread();
     impl->MaybeScheduleCompaction();
   }
   impl->mutex_.Unlock();

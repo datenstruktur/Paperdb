@@ -17,6 +17,7 @@
 #include "leveldb/env.h"
 #include "port/port.h"
 #include "port/thread_annotations.h"
+#include "vlog_gc.h"
 
 namespace leveldb {
 
@@ -142,6 +143,10 @@ private:
     void RecordBackgroundError(const Status& s);
 
   void MaybeScheduleCompaction() EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+  void MaybeStartGCThread();
+  void BackgroundGC();
+  static void BGGCWork(void *db);
+  void BackgroundGCCall();
   static void BGWork(void* db);
   void BackgroundCall();
   void BackgroundCompaction() EXCLUSIVE_LOCKS_REQUIRED(mutex_);
@@ -185,6 +190,8 @@ private:
   uint64_t logfile_number_ GUARDED_BY(mutex_);
   //log::Writer* log_;
   vlog::VlogWriter *vlog_;
+  vlog::VlogGC *vlog_gc_;
+  bool should_gc_;
   uint32_t seed_ GUARDED_BY(mutex_);  // For sampling.
 
   // Queue of writers.
@@ -199,6 +206,7 @@ private:
 
   // Has a background compaction been scheduled or is running?
   bool background_compaction_scheduled_ GUARDED_BY(mutex_);
+  bool background_gc_scheduled_;
 
   ManualCompaction* manual_compaction_ GUARDED_BY(mutex_);
 

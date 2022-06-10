@@ -5,6 +5,8 @@
 #ifndef LEVELDB_VLOG_WRITER_H
 #define LEVELDB_VLOG_WRITER_H
 
+#include <utility>
+
 #include "leveldb/status.h"
 #include "leveldb/write_batch.h"
 #include "leveldb/env.h"
@@ -17,9 +19,11 @@ namespace leveldb {
             explicit VlogWriter(WritableFile *dest, uint64_t head):dest_(dest), head_(head){};
             leveldb::Status AddRecord(uint64_t log_number, WriteBatch *src_batch, WriteBatch *meta_batch);
             Status Sync();
+
         private:
             WritableFile *dest_;
             uint64_t head_;
+
             Status Write(Slice data);
         };
     }
