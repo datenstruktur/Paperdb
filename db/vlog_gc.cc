@@ -28,11 +28,11 @@ namespace leveldb {
                 // 如果可以查询到，且查询的值准确
                 mux_->Unlock();
                 if(db_->Get(ReadOptions(), key, &get_value).ok() && get_value == value){
+                    mux_->Unlock();
                     // 重新放入db中
                     db_->Put(WriteOptions(), key, value);
                     left += record.size();
                 }
-                mux_->Lock();
             }
             tail += record.size();
             if(tail >= head) break;

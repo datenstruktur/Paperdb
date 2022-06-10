@@ -681,45 +681,6 @@ void DBImpl::RecordBackgroundError(const Status& s) {
   }
 }
 
-void DBImpl::MaybeStartGCThread(){
-    mutex_.AssertHeld();
-    if(background_gc_scheduled_){
-
-    } else if(shutting_down_.load(std::memory_order_acquire)){
-
-    }else if(!bg_error_.ok()){
-
-    }else if(!should_gc_){
-
-    } else{
-        background_gc_scheduled_ = true;
-        env_->StartThread(&DBImpl::BGGCWork, this);
-    }
-}
-
-void DBImpl::BGGCWork(void *db){
-    reinterpret_cast<DBImpl*>(db)->BackgroundGCCall();
-}
-
-void DBImpl::BackgroundGCCall(){
-    MutexLock l(&mutex_);
-    assert(background_gc_scheduled_);
-    if (shutting_down_.load(std::memory_order_acquire)){
-
-    }else if(!bg_error_.ok()){
-        BackgroundGC();
-    }
-    background_gc_scheduled_ = false;
-    background_work_finished_signal_.SignalAll();
-}
-
-void DBImpl::BackgroundGC(){
-    if(should_gc_){
-        vlog_gc_->StartGC();
-    }
-    should_gc_ = false;
-}
-
 void DBImpl::MaybeScheduleCompaction() {
   mutex_.AssertHeld();
   if (background_compaction_scheduled_) {
@@ -762,6 +723,8 @@ void DBImpl::BackgroundCall() {
 
 void DBImpl::BackgroundCompaction() {
   mutex_.AssertHeld();
+
+  if(should_gc_) vlog_gc_->StartGC();
 
   if (imm_ != nullptr) {
     CompactMemTable();
@@ -1487,7 +1450,6 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       mem_ = new MemTable(internal_comparator_);
       mem_->Ref();
       force = false;  // Do not force another compaction if have room
-      if(should_gc_) MaybeStartGCThread();
       MaybeScheduleCompaction();
     }
   }
@@ -1623,7 +1585,6 @@ Status DB::Open(const Options& options, const std::string& dbname, DB** dbptr) {
   }
   if (s.ok()) {
     impl->RemoveObsoleteFiles();
-    impl->MaybeStartGCThread();
     impl->MaybeScheduleCompaction();
   }
   impl->mutex_.Unlock();

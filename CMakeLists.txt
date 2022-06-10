@@ -120,7 +120,7 @@ endif(BUILD_SHARED_LIBS)
 # Must be included before CMAKE_INSTALL_INCLUDEDIR is used.
 include(GNUInstallDirs)
 
-add_library(leveldb "" db/vlog_writer.cc db/vlog_writer.h db/vlog_reader.cc db/vlog_reader.h db/vlog_test.cc util/vlog_coding.cc util/vlog_coding.h issues/kvs-issue3.cc)
+add_library(leveldb ""  issues/kvs-issue3.cc)
 target_sources(leveldb
   PRIVATE
     "${PROJECT_BINARY_DIR}/${LEVELDB_PORT_CONFIG_DIR}/port_config.h"
@@ -194,6 +194,15 @@ target_sources(leveldb
     "util/options.cc"
     "util/random.h"
     "util/status.cc"
+    "db/vlog_writer.cc"
+    "db/vlog_writer.h"
+    "db/vlog_reader.cc"
+    "db/vlog_reader.h"
+    "db/vlog_gc.h"
+    "db/vlog_gc.cc"
+    "db/vlog_test.cc"
+    "util/vlog_coding.cc"
+    "util/vlog_coding.h"
 
   # Only CMake 3.3+ supports PUBLIC sources in targets exported by "install".
   $<$<VERSION_GREATER:CMAKE_VERSION,3.2>:PUBLIC>

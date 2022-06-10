@@ -143,10 +143,6 @@ private:
     void RecordBackgroundError(const Status& s);
 
   void MaybeScheduleCompaction() EXCLUSIVE_LOCKS_REQUIRED(mutex_);
-  void MaybeStartGCThread();
-  void BackgroundGC();
-  static void BGGCWork(void *db);
-  void BackgroundGCCall();
   static void BGWork(void* db);
   void BackgroundCall();
   void BackgroundCompaction() EXCLUSIVE_LOCKS_REQUIRED(mutex_);
