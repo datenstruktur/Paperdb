@@ -26,9 +26,7 @@ namespace leveldb {
             DecodeKV(record.ToString(), &sn, &key, &value, &type);
             if(type == kTypeValue){
                 // 如果可以查询到，且查询的值准确
-                mux_->Unlock();
                 if(db_->Get(ReadOptions(), key, &get_value).ok() && get_value == value){
-                    mux_->Unlock();
                     // 重新放入db中
                     db_->Put(WriteOptions(), key, value);
                     left += record.size();

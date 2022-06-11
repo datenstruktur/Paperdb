@@ -11,7 +11,6 @@
 #include <set>
 #include <string>
 #include <vector>
-#include <iostream>
 
 #include "db/builder.h"
 #include "db/db_iter.h"
@@ -690,7 +689,7 @@ void DBImpl::MaybeScheduleCompaction() {
   } else if (!bg_error_.ok()) {
     // Already got an error; no more changes
   } else if (imm_ == nullptr && manual_compaction_ == nullptr &&
-             !versions_->NeedsCompaction()) {
+             !versions_->NeedsCompaction() && should_gc_) {
     // No work to be done
   } else {
     background_compaction_scheduled_ = true;
@@ -723,8 +722,6 @@ void DBImpl::BackgroundCall() {
 
 void DBImpl::BackgroundCompaction() {
   mutex_.AssertHeld();
-
-  if(should_gc_) vlog_gc_->StartGC();
 
   if (imm_ != nullptr) {
     CompactMemTable();
@@ -802,6 +799,8 @@ void DBImpl::BackgroundCompaction() {
     }
     manual_compaction_ = nullptr;
   }
+
+  if(should_gc_) vlog_gc_->StartGC();
 }
 
 void DBImpl::CleanupCompaction(CompactionState* compact) {
