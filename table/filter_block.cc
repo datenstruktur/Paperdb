@@ -4,6 +4,7 @@
 
 #include "table/filter_block.h"
 
+#include "db/dbformat.h"
 #include "leveldb/filter_policy.h"
 #include "util/coding.h"
 
@@ -14,10 +15,6 @@ namespace leveldb {
 // Generate new filter every 2KB of data
 static const size_t kFilterBaseLg = 11;
 static const size_t kFilterBase = 1 << kFilterBaseLg;
-
-// Generate 4 filters and load 1 filter when FilterBlockReader is created
-static const size_t loaded_filters_number = 1;
-static const size_t filters_number        = 4;
 
 FilterBlockBuilder::FilterBlockBuilder(const FilterPolicy* policy)
     : policy_(policy) {
@@ -110,7 +107,7 @@ void FilterBlockBuilder::GenerateFilter() {
 FilterBlockReader::FilterBlockReader(const FilterPolicy* policy,
                                      const Slice& contents, RandomAccessFile* file)
     : policy_(policy), data_(nullptr), offset_(nullptr), num_(0), base_lg_(0),
-      file_(file), heap_allocated_(false) {
+      file_(file), heap_allocated_(false), access_time_(0), sequence_(0) {
   size_t n = contents.size();
   if (n < 21) return;  // 1 byte for base_lg_ and 21 for start of others
 
@@ -150,6 +147,12 @@ FilterBlockReader::FilterBlockReader(const FilterPolicy* policy,
 
 bool FilterBlockReader::KeyMayMatch(uint64_t block_offset, const Slice& key) {
   uint64_t index = block_offset >> base_lg_;
+  ParsedInternalKey parsedInternalKey;
+  if(ParseInternalKey(key, &parsedInternalKey)) {
+    sequence_ = parsedInternalKey.sequence;
+  }
+  access_time_++;
+
   if (index < num_) {
     uint32_t start = DecodeFixed32(offset_ + index * 4);
     uint32_t limit = DecodeFixed32(offset_ + index * 4 + 4);

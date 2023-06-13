@@ -9,6 +9,7 @@
 #ifndef STORAGE_LEVELDB_TABLE_FILTER_BLOCK_H_
 #define STORAGE_LEVELDB_TABLE_FILTER_BLOCK_H_
 
+#include "db/dbformat.h"
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -22,6 +23,11 @@
 namespace leveldb {
 
 class FilterPolicy;
+
+// Generate 4 filters and load 1 filter when FilterBlockReader is created
+static const size_t loaded_filters_number = 1;
+static const size_t filters_number        = 4;
+static const uint64_t left_time           = 30000;
 
 // A FilterBlockBuilder is used to construct all of the filters for a
 // particular Table.  It generates a single string which is stored as
@@ -65,6 +71,12 @@ class FilterBlockReader {
 
   size_t FilterUnitsNumber() const{return filter_units.size();}
 
+  uint64_t AccessTime() const {return access_time_;}
+
+  bool IsCold(SequenceNumber now_sequence) const {
+    return now_sequence >= (sequence_ + left_time);
+  }
+
  private:
   const FilterPolicy* policy_;
   const char* data_;    // Pointer to filter meta data (at block-start)
@@ -76,6 +88,9 @@ class FilterBlockReader {
   uint32_t all_units_number_; // the number of filter units
   size_t base_lg_;      // Encoding parameter (see kFilterBaseLg in .cc file)
   size_t num_;          // Number of entries in offset array
+
+  uint64_t access_time_;
+  SequenceNumber sequence_;
 
   RandomAccessFile* file_;
 

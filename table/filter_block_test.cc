@@ -326,4 +326,47 @@ TEST_F(FilterBlockTest, LoadAndExcit){
   delete filter_meta;
 }
 
+TEST_F(FilterBlockTest, Hotness){
+  // to support internal key
+  InternalFilterPolicy policy(&policy_);
+  FilterBlockBuilder builder(&policy);
+
+  // First filter
+  builder.StartBlock(0);
+  ParsedInternalKey add_key("foo", 1, kTypeValue);
+  std::string add_result;
+  AppendInternalKey(&add_result, add_key);
+  builder.AddKey(add_result);
+
+  // write bitmap, create builder
+  FileImpl file;
+  BlockHandle handle;
+  const std::vector<std::string>& filters = builder.ReturnFilters();
+  file.WriteRawFilters(filters, kNoCompression, &handle);
+  Slice block = builder.Finish(handle);
+
+  // create reader
+  char *filter_meta = (char *)malloc(sizeof(char) * block.size());
+  memcpy(filter_meta, block.data(), block.size());
+  Slice filter_meta_data(filter_meta, block.size());
+  StringSource* source = file.GetSource();
+  FilterBlockReader reader(&policy, filter_meta_data, source);
+
+  // check
+  for(uint64_t sn = 1; sn < 30000; sn++){
+    ParsedInternalKey check_key("foo", sn, kTypeValue);
+    std::string check_result;
+    AppendInternalKey(&check_result, check_key);
+    // sequence number is sn
+    ASSERT_TRUE(reader.KeyMayMatch(0, check_result));
+    ASSERT_EQ(reader.AccessTime(), sn);
+
+    // reader died in sn + 30000
+    ASSERT_FALSE(reader.IsCold(30000 + sn - 1));
+    ASSERT_TRUE(reader.IsCold(30000 + sn));
+  }
+
+  delete filter_meta;
+}
+
 }  // namespace leveldb
