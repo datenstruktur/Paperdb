@@ -10,8 +10,13 @@
 namespace leveldb {
 
 namespace {
-static uint32_t BloomHash(const Slice& key) {
-  return Hash(key.data(), key.size(), 0xbc9f1d34);
+static uint32_t BloomHash(const Slice& key, int index) {
+  // use one hash code to generate much different hash code
+  // for different filter units
+  uint32_t h = Hash(key.data(), key.size(), 0xbc9f1d34);
+  const uint32_t delta = (h >> 17) | (h << 15);
+  h += (delta * index);
+  return h;
 }
 
 class BloomFilterPolicy : public FilterPolicy {
@@ -25,7 +30,7 @@ class BloomFilterPolicy : public FilterPolicy {
 
   const char* Name() const override { return "leveldb.BuiltinBloomFilter2"; }
 
-  void CreateFilter(const Slice* keys, int n, std::string* dst) const override {
+  void CreateFilter(const Slice* keys, int n, std::string* dst, int index) const override {
     // Compute bloom filter size (in both bits and bytes)
     size_t bits = n * bits_per_key_;
 
@@ -43,7 +48,7 @@ class BloomFilterPolicy : public FilterPolicy {
     for (int i = 0; i < n; i++) {
       // Use double-hashing to generate a sequence of hash values.
       // See analysis in [Kirsch,Mitzenmacher 2006].
-      uint32_t h = BloomHash(keys[i]);
+      uint32_t h = BloomHash(keys[i], index);
       const uint32_t delta = (h >> 17) | (h << 15);  // Rotate right 17 bits
       for (size_t j = 0; j < k_; j++) {
         const uint32_t bitpos = h % bits;
@@ -53,7 +58,7 @@ class BloomFilterPolicy : public FilterPolicy {
     }
   }
 
-  bool KeyMayMatch(const Slice& key, const Slice& bloom_filter) const override {
+  bool KeyMayMatch(const Slice& key, const Slice& bloom_filter, int index) const override {
     const size_t len = bloom_filter.size();
     if (len < 2) return false;
 
@@ -69,7 +74,7 @@ class BloomFilterPolicy : public FilterPolicy {
       return true;
     }
 
-    uint32_t h = BloomHash(key);
+    uint32_t h = BloomHash(key, index);
     const uint32_t delta = (h >> 17) | (h << 15);  // Rotate right 17 bits
     for (size_t j = 0; j < k; j++) {
       const uint32_t bitpos = h % bits;

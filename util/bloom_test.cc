@@ -37,7 +37,7 @@ class BloomTest : public testing::Test {
     }
     filter_.clear();
     policy_->CreateFilter(&key_slices[0], static_cast<int>(key_slices.size()),
-                          &filter_);
+                          &filter_, 0);
     keys_.clear();
     if (kVerbose >= 2) DumpFilter();
   }
@@ -59,7 +59,7 @@ class BloomTest : public testing::Test {
     if (!keys_.empty()) {
       Build();
     }
-    return policy_->KeyMayMatch(s, filter_);
+    return policy_->KeyMayMatch(s, filter_, 0);
   }
 
   double FalsePositiveRate() {

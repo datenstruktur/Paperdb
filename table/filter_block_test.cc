@@ -18,14 +18,14 @@ class TestHashFilter : public FilterPolicy {
  public:
   const char* Name() const override { return "TestHashFilter"; }
 
-  void CreateFilter(const Slice* keys, int n, std::string* dst) const override {
+  void CreateFilter(const Slice* keys, int n, std::string* dst, int index) const override {
     for (int i = 0; i < n; i++) {
       uint32_t h = Hash(keys[i].data(), keys[i].size(), 1);
       PutFixed32(dst, h);
     }
   }
 
-  bool KeyMayMatch(const Slice& key, const Slice& filter) const override {
+  bool KeyMayMatch(const Slice& key, const Slice& filter, int index) const override {
     uint32_t h = Hash(key.data(), key.size(), 1);
     for (size_t i = 0; i + 4 <= filter.size(); i += 4) {
       if (h == DecodeFixed32(filter.data() + i)) {
