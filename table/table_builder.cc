@@ -168,21 +168,6 @@ void TableBuilder::WriteBlock(BlockBuilder* block, BlockHandle* handle) {
       }
       break;
     }
-
-    case kZstdCompression: {
-      std::string* compressed = &r->compressed_output;
-      if (port::Zstd_Compress(r->options.zstd_compression_level, raw.data(),
-                              raw.size(), compressed) &&
-          compressed->size() < raw.size() - (raw.size() / 8u)) {
-        block_contents = *compressed;
-      } else {
-        // Zstd not supported, or compressed less than 12.5%, so just
-        // store uncompressed form
-        block_contents = raw;
-        type = kNoCompression;
-      }
-      break;
-    }
   }
   WriteRawBlock(block_contents, type, handle);
   r->compressed_output.clear();
@@ -208,6 +193,39 @@ void TableBuilder::WriteRawBlock(const Slice& block_contents,
   }
 }
 
+void TableBuilder::WriteRawFilters(const std::vector<std::string>& filters, CompressionType type, BlockHandle* handle){
+  assert(!filters.empty());
+  Rep* r = rep_;
+  handle->set_offset(r->offset);
+  handle->set_size(filters[0].size());
+  /*
+ * filters in disk layout
+ * trailer type(kNoCompression) CRC <--- disk_offset
+ * filter
+ * trailer type(kNoCompression) CRC <--- disk_offset + (disk_size + kBlockTrailerSize)
+ * filter
+ * .........
+ * trailer type(kNoCompression) CRC
+ * filter
+   */
+  for(const auto & filter : filters){
+    Slice filter_slice = Slice(filter);
+    r->status = r->file->Append(filter_slice);
+    if(r->status.ok()){
+      char trailer[kBlockTrailerSize];
+      trailer[0] = type;
+      uint32_t crc = crc32c::Value(filter_slice.data(), filter_slice.size());
+      crc = crc32c::Extend(crc, trailer, 1);  // Extend crc to cover block type
+      EncodeFixed32(trailer + 1, crc32c::Mask(crc));
+      r->status = r->file->Append(Slice(trailer, kBlockTrailerSize));
+      if (r->status.ok()) {
+        r->offset += filter_slice.size() + kBlockTrailerSize;
+      }
+    }
+  }
+
+}
+
 Status TableBuilder::status() const { return rep_->status; }
 
 Status TableBuilder::Finish() {
@@ -216,12 +234,15 @@ Status TableBuilder::Finish() {
   assert(!r->closed);
   r->closed = true;
 
-  BlockHandle filter_block_handle, metaindex_block_handle, index_block_handle;
+  BlockHandle metaindex_block_handle, index_block_handle;
+  Slice filter_block_meta;
 
   // Write filter block
   if (ok() && r->filter_block != nullptr) {
-    WriteRawBlock(r->filter_block->Finish(), kNoCompression,
-                  &filter_block_handle);
+    BlockHandle filters_handle;
+    const std::vector<std::string>& filters = r->filter_block->ReturnFilters();
+    WriteRawFilters(filters, kNoCompression, &filters_handle);
+    filter_block_meta = r->filter_block->Finish(filters_handle);
   }
 
   // Write metaindex block
@@ -231,9 +252,7 @@ Status TableBuilder::Finish() {
       // Add mapping from "filter.Name" to location of filter data
       std::string key = "filter.";
       key.append(r->options.filter_policy->Name());
-      std::string handle_encoding;
-      filter_block_handle.EncodeTo(&handle_encoding);
-      meta_index_block.Add(key, handle_encoding);
+      meta_index_block.Add(key, filter_block_meta);
     }
 
     // TODO(postrelease): Add stats and other meta blocks

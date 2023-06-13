@@ -20,7 +20,7 @@ namespace leveldb {
 struct Table::Rep {
   ~Rep() {
     delete filter;
-    delete[] filter_data;
+    delete[] filter_meta;
     delete index_block;
   }
 
@@ -29,7 +29,7 @@ struct Table::Rep {
   RandomAccessFile* file;
   uint64_t cache_id;
   FilterBlockReader* filter;
-  const char* filter_data;
+  char* filter_meta;
 
   BlockHandle metaindex_handle;  // Handle to metaindex_block: saved from footer
   Block* index_block;
@@ -70,8 +70,9 @@ Status Table::Open(const Options& options, RandomAccessFile* file,
     rep->metaindex_handle = footer.metaindex_handle();
     rep->index_block = index_block;
     rep->cache_id = (options.block_cache ? options.block_cache->NewId() : 0);
-    rep->filter_data = nullptr;
     rep->filter = nullptr;
+    // if not set nullptr, ~Rep() will free invalid pointer
+    rep->filter_meta = nullptr;
     *table = new Table(rep);
     (*table)->ReadMeta(footer);
   }
@@ -102,33 +103,22 @@ void Table::ReadMeta(const Footer& footer) {
   key.append(rep_->options.filter_policy->Name());
   iter->Seek(key);
   if (iter->Valid() && iter->key() == Slice(key)) {
-    ReadFilter(iter->value());
+    Slice filter_meta = iter->value();
+    size_t filter_meta_size = filter_meta.size();
+    assert(filter_meta_size >= 21);
+    // meta index block will be deleted later
+    char* filter_meta_contents = (char *)malloc(sizeof(char) * filter_meta_size);
+    memcpy(filter_meta_contents, filter_meta.data(), filter_meta_size);
+    rep_->filter_meta = filter_meta_contents;
+    // The length must be passed in, if only a char* pointer is passed in,
+    // the length will be taken with strlen() and the string will
+    // be truncated by \0, and thus an error will occur
+    Slice filter_meta_data(filter_meta_contents, filter_meta_size);
+    rep_->filter = new FilterBlockReader(rep_->options.filter_policy,
+                                         filter_meta_data, rep_->file);
   }
   delete iter;
   delete meta;
-}
-
-void Table::ReadFilter(const Slice& filter_handle_value) {
-  Slice v = filter_handle_value;
-  BlockHandle filter_handle;
-  if (!filter_handle.DecodeFrom(&v).ok()) {
-    return;
-  }
-
-  // We might want to unify with ReadBlock() if we start
-  // requiring checksum verification in Table::Open.
-  ReadOptions opt;
-  if (rep_->options.paranoid_checks) {
-    opt.verify_checksums = true;
-  }
-  BlockContents block;
-  if (!ReadBlock(rep_->file, opt, filter_handle, &block).ok()) {
-    return;
-  }
-  if (block.heap_allocated) {
-    rep_->filter_data = block.data.data();  // Will need to delete later
-  }
-  rep_->filter = new FilterBlockReader(rep_->options.filter_policy, block.data);
 }
 
 Table::~Table() { delete rep_; }
