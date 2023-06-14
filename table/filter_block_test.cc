@@ -159,8 +159,6 @@ TEST_F(FilterBlockTest, EmptyBuilder) {
   FilterBlockReader reader(&policy_, filter_meta_data, source);
   ASSERT_TRUE(reader.KeyMayMatch(0, "foo"));
   ASSERT_TRUE(reader.KeyMayMatch(100000, "foo"));
-
-  delete filter_meta;
 }
 
 TEST_F(FilterBlockTest, SingleChunk) {
@@ -205,8 +203,6 @@ TEST_F(FilterBlockTest, SingleChunk) {
   ASSERT_TRUE(reader.KeyMayMatch(100, "foo"));
   ASSERT_TRUE(!reader.KeyMayMatch(100, "missing"));
   ASSERT_TRUE(!reader.KeyMayMatch(100, "other"));
-
-  delete filter_meta;
 }
 
 TEST_F(FilterBlockTest, MultiChunk) {
@@ -266,8 +262,6 @@ TEST_F(FilterBlockTest, MultiChunk) {
   ASSERT_TRUE(reader.KeyMayMatch(9000, "hello"));
   ASSERT_TRUE(!reader.KeyMayMatch(9000, "foo"));
   ASSERT_TRUE(!reader.KeyMayMatch(9000, "bar"));
-
-  delete filter_meta;
 }
 
 TEST_F(FilterBlockTest, LoadAndExcit){
@@ -322,8 +316,6 @@ TEST_F(FilterBlockTest, LoadAndExcit){
   ASSERT_EQ(reader.FilterUnitsNumber(), 4);
 
   ASSERT_FALSE(reader.LoadFilter().ok());
-
-  delete filter_meta;
 }
 
 TEST_F(FilterBlockTest, Hotness){
@@ -365,8 +357,47 @@ TEST_F(FilterBlockTest, Hotness){
     ASSERT_FALSE(reader.IsCold(30000 + sn - 1));
     ASSERT_TRUE(reader.IsCold(30000 + sn));
   }
+}
 
-  delete filter_meta;
+TEST_F(FilterBlockTest, Size){
+  FilterBlockBuilder builder(&policy_);
+  builder.StartBlock(100);
+  builder.AddKey("foo");
+  builder.AddKey("bar");
+  builder.AddKey("box");
+  builder.StartBlock(200);
+  builder.AddKey("box");
+  builder.StartBlock(300);
+  builder.AddKey("hello");
+
+  FileImpl file;
+  BlockHandle handle;
+  const std::vector<std::string>& filters = builder.ReturnFilters();
+  file.WriteRawFilters(filters, kNoCompression, &handle);
+
+  size_t bitmap_size = handle.size();
+  Slice block = builder.Finish(handle);
+
+  char *filter_meta = (char *)malloc(sizeof(char) * block.size());
+  memcpy(filter_meta, block.data(), block.size());
+  Slice filter_meta_data(filter_meta, block.size());
+
+  StringSource* source = file.GetSource();
+  FilterBlockReader reader(&policy_, filter_meta_data, source);
+
+  // evict all filter units
+  while (reader.EvictFilter().ok()){}
+  ASSERT_EQ(reader.FilterUnitsNumber(), 0);
+  ASSERT_EQ(reader.Size(), 0);
+
+  // load filter units one by one
+  // check memory overhead
+  int filter_unit_number = 1;
+  while (reader.LoadFilter().ok()){
+    ASSERT_EQ(reader.FilterUnitsNumber(), filter_unit_number);
+    ASSERT_EQ(reader.Size(), bitmap_size * filter_unit_number);
+    filter_unit_number++;
+  }
 }
 
 }  // namespace leveldb

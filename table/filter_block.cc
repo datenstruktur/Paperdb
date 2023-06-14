@@ -222,16 +222,18 @@ Status FilterBlockReader::EvictFilter() {
   // load from left to right
   // evict from right to left
   const char* data = filter_units[size - 1];
-  delete data;
+  delete[] data;
   filter_units.pop_back();
   return Status::OK();
 }
 
 FilterBlockReader::~FilterBlockReader() {
   if(heap_allocated_){
-    for(auto & filter_unit : filter_units){
-      delete filter_unit;
+    for(const char * filter_unit : filter_units){
+      delete[] filter_unit;
     }
   }
+
+  delete[] data_;
 }
 }  // namespace leveldb

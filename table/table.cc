@@ -19,9 +19,8 @@ namespace leveldb {
 
 struct Table::Rep {
   ~Rep() {
-    delete filter;
-    delete[] filter_meta;
     delete index_block;
+    delete filter;
   }
 
   Options options;
@@ -29,8 +28,7 @@ struct Table::Rep {
   RandomAccessFile* file;
   uint64_t cache_id;
   FilterBlockReader* filter;
-  char* filter_meta;
-
+  Footer footer;
   BlockHandle metaindex_handle;  // Handle to metaindex_block: saved from footer
   Block* index_block;
 };
@@ -70,19 +68,26 @@ Status Table::Open(const Options& options, RandomAccessFile* file,
     rep->metaindex_handle = footer.metaindex_handle();
     rep->index_block = index_block;
     rep->cache_id = (options.block_cache ? options.block_cache->NewId() : 0);
-    rep->filter = nullptr;
-    // if not set nullptr, ~Rep() will free invalid pointer
-    rep->filter_meta = nullptr;
+    rep->footer = footer;
     *table = new Table(rep);
-    (*table)->ReadMeta(footer);
+
+    // if filter block can be cached, the flag cache_filter_block should be true
+    // and LRUCache should be created.
+    if(!options.cache_filter_block || !options.block_cache){
+      rep->filter = (*table)->ReadMeta();
+    }else{
+      rep->filter = nullptr;
+    }
   }
 
   return s;
 }
 
-void Table::ReadMeta(const Footer& footer) {
+// Read filter block from disk, if needed. ReadMeta maybe called
+// by ReadFilter, so, footer need saved in rep
+FilterBlockReader* Table::ReadMeta() {
   if (rep_->options.filter_policy == nullptr) {
-    return;  // Do not need any metadata
+    return nullptr;  // Do not need any metadata
   }
 
   // TODO(sanjay): Skip this if footer.metaindex_handle() size indicates
@@ -92,10 +97,12 @@ void Table::ReadMeta(const Footer& footer) {
     opt.verify_checksums = true;
   }
   BlockContents contents;
-  if (!ReadBlock(rep_->file, opt, footer.metaindex_handle(), &contents).ok()) {
+  if (!ReadBlock(rep_->file, opt, rep_->footer.metaindex_handle(), &contents)
+           .ok()) {
     // Do not propagate errors since meta info is not needed for operation
-    return;
+    return nullptr;
   }
+  FilterBlockReader* reader = nullptr;
   Block* meta = new Block(contents);
 
   Iterator* iter = meta->NewIterator(BytewiseComparator());
@@ -107,18 +114,66 @@ void Table::ReadMeta(const Footer& footer) {
     size_t filter_meta_size = filter_meta.size();
     assert(filter_meta_size >= 21);
     // meta index block will be deleted later
-    char* filter_meta_contents = (char *)malloc(sizeof(char) * filter_meta_size);
+    char* filter_meta_contents = (char*)malloc(sizeof(char) * filter_meta_size);
     memcpy(filter_meta_contents, filter_meta.data(), filter_meta_size);
-    rep_->filter_meta = filter_meta_contents;
     // The length must be passed in, if only a char* pointer is passed in,
     // the length will be taken with strlen() and the string will
     // be truncated by \0, and thus an error will occur
     Slice filter_meta_data(filter_meta_contents, filter_meta_size);
-    rep_->filter = new FilterBlockReader(rep_->options.filter_policy,
-                                         filter_meta_data, rep_->file);
+    reader = new FilterBlockReader(rep_->options.filter_policy,
+                                       filter_meta_data, rep_->file);
   }
   delete iter;
   delete meta;
+
+  return reader;
+}
+
+
+static void DeleteCacheFilter(const Slice& key, void* value) {
+  FilterBlockReader* block = reinterpret_cast<FilterBlockReader*>(value);
+  delete block;
+}
+
+// get FilterBlockReader and saved in rep_->filter, we should return
+// cache handle and reader, so the pointer of reader passed in ReadFilter
+Cache::Handle* Table::ReadFilter(FilterBlockReader** reader) {
+  if (rep_->options.filter_policy == nullptr){
+    return nullptr;
+  }
+
+  Cache* block_cache = rep_->options.block_cache;
+  // not cache in LRUCache
+  // need to new filter
+  if(!rep_->options.cache_filter_block || block_cache == nullptr){
+    return nullptr;
+  }
+
+  // Get filter block from cache, or read from disk and insert
+  std::string filter_key = "filter.";
+  filter_key.append(rep_->options.filter_policy->Name());
+  char cache_key_buffer[8];
+  EncodeFixed64(cache_key_buffer, rep_->cache_id);
+  filter_key.append(cache_key_buffer, 8);
+  Slice key(filter_key.data(), filter_key.size());
+
+  Cache::Handle* cache_handle;
+
+  cache_handle = block_cache->Lookup(key);
+  if (cache_handle != nullptr) {
+    *reader = reinterpret_cast<FilterBlockReader*>(
+        block_cache->Value(cache_handle));
+  } else {
+    *reader = ReadMeta();
+    if(*reader != nullptr){
+      cache_handle = block_cache->Insert(key, *reader, (*reader)->Size(),
+                                         &DeleteCacheFilter);
+    }else{
+      return nullptr;
+    }
+  }
+
+  return cache_handle;
 }
 
 Table::~Table() { delete rep_; }
@@ -155,7 +210,8 @@ Iterator* Table::BlockReader(void* arg, const ReadOptions& options,
 
   if (s.ok()) {
     BlockContents contents;
-    if (block_cache != nullptr) {
+    // if cache_data_block is false, read datablock from disk everytime
+    if (block_cache != nullptr && table->rep_->options.cache_data_block) {
       char cache_key_buffer[16];
       EncodeFixed64(cache_key_buffer, table->rep_->cache_id);
       EncodeFixed64(cache_key_buffer + 8, handle.offset());
@@ -209,7 +265,15 @@ Status Table::InternalGet(const ReadOptions& options, const Slice& k, void* arg,
   iiter->Seek(k);
   if (iiter->Valid()) {
     Slice handle_value = iiter->value();
+    Cache::Handle* cache_handle = nullptr;
     FilterBlockReader* filter = rep_->filter;
+
+    // try to read filter from cache
+    // maybe filter cache in LRUCache
+    if(filter == nullptr){
+      cache_handle = ReadFilter(&filter);
+    }
+
     BlockHandle handle;
     if (filter != nullptr && handle.DecodeFrom(&handle_value).ok() &&
         !filter->KeyMayMatch(handle.offset(), k)) {
@@ -222,6 +286,12 @@ Status Table::InternalGet(const ReadOptions& options, const Slice& k, void* arg,
       }
       s = block_iter->status();
       delete block_iter;
+    }
+
+    // release handle if we use filter block from cache
+    if(rep_->options.cache_filter_block &&
+        rep_->options.block_cache && cache_handle){
+      rep_->options.block_cache->Release(cache_handle);
     }
   }
   if (s.ok()) {

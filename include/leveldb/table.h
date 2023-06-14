@@ -7,8 +7,10 @@
 
 #include <cstdint>
 
+#include "leveldb/cache.h"
 #include "leveldb/export.h"
 #include "leveldb/iterator.h"
+#include "table/filter_block.h"
 
 namespace leveldb {
 
@@ -73,8 +75,8 @@ class LEVELDB_EXPORT Table {
                      void (*handle_result)(void* arg, const Slice& k,
                                            const Slice& v));
 
-  void ReadMeta(const Footer& footer);
-  void ReadFilter(const Slice& filter_handle_value);
+  FilterBlockReader* ReadMeta();
+  Cache::Handle* ReadFilter(FilterBlockReader** reader);
 
   Rep* const rep_;
 };

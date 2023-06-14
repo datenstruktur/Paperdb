@@ -1935,6 +1935,63 @@ TEST_F(DBTest, BloomFilter) {
   Options options = CurrentOptions();
   options.env = env_;
   options.block_cache = NewLRUCache(0);  // Prevent cache hits
+
+  // do not cache filter block in LRUCache
+  // cache_handle's ref will be 1 after inserting to cache
+  // filter block will be free in InternalGet()
+  options.cache_filter_block = false;
+  options.filter_policy = NewBloomFilterPolicy(10);
+  Reopen(&options);
+
+  // Populate multiple layers
+  const int N = 10000;
+  for (int i = 0; i < N; i++) {
+    ASSERT_LEVELDB_OK(Put(Key(i), Key(i)));
+  }
+  Compact("a", "z");
+  for (int i = 0; i < N; i += 100) {
+    ASSERT_LEVELDB_OK(Put(Key(i), Key(i)));
+  }
+  dbfull()->TEST_CompactMemTable();
+
+  // Prevent auto compactions triggered by seeks
+  env_->delay_data_sync_.store(true, std::memory_order_release);
+
+  // Lookup present keys.  Should rarely read from small sstable.
+  env_->random_read_counter_.Reset();
+  for (int i = 0; i < N; i++) {
+    ASSERT_EQ(Key(i), Get(Key(i)));
+  }
+  int reads = env_->random_read_counter_.Read();
+  std::fprintf(stderr, "%d present => %d reads\n", N, reads);
+  ASSERT_GE(reads, N);
+  ASSERT_LE(reads, N + 2 * N / 100);
+
+  // Lookup present keys.  Should rarely read from either sstable.
+  env_->random_read_counter_.Reset();
+  for (int i = 0; i < N; i++) {
+    ASSERT_EQ("NOT_FOUND", Get(Key(i) + ".missing"));
+  }
+  reads = env_->random_read_counter_.Read();
+  std::fprintf(stderr, "%d missing => %d reads\n", N, reads);
+  ASSERT_LE(reads, 3 * N / 100);
+
+  env_->delay_data_sync_.store(false, std::memory_order_release);
+  Close();
+  delete options.block_cache;
+  delete options.filter_policy;
+}
+
+// Test caching filter block feature
+TEST_F(DBTest, BloomFilterInCache) {
+  env_->count_random_reads_ = true;
+  Options options = CurrentOptions();
+  options.env = env_;
+
+  // only cache filter block reader
+  options.block_cache = NewLRUCache(8 << 20);
+  options.cache_data_block = false;
+
   options.filter_policy = NewBloomFilterPolicy(10);
   Reopen(&options);
 

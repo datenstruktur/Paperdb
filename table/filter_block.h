@@ -77,6 +77,13 @@ class FilterBlockReader {
     return now_sequence >= (sequence_ + left_time);
   }
 
+  //filter block memory overhead(Byte), use by Cache->Insert
+  size_t Size() const{
+    if(filter_units.empty()){
+      return 0;
+    }
+    return filter_units.size() * disk_size_;
+  }
  private:
   const FilterPolicy* policy_;
   const char* data_;    // Pointer to filter meta data (at block-start)
