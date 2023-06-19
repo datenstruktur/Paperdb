@@ -12,6 +12,7 @@
 namespace leveldb {
 
 class Cache;
+class MultiQueue;
 class Comparator;
 class Env;
 class FilterPolicy;
@@ -59,14 +60,6 @@ struct LEVELDB_EXPORT Options {
   // become unreadable or for the entire DB to become unopenable.
   bool paranoid_checks = false;
 
-  // If true, the filter block will be cached in LRUCache rather than
-  // managed by table, LRUCache's capacity_ can not be zero
-  bool cache_filter_block = true;
-
-  // If true, the data block will be cached in LRUCache, if false, leveldb
-  // will read data block from disk every time.
-  bool cache_data_block = true;
-
   // Use the specified object to interact with the environment,
   // e.g. to read/write files, schedule background work, etc.
   // Default: Env::Default()
@@ -101,6 +94,8 @@ struct LEVELDB_EXPORT Options {
   // If non-null, use the specified cache for blocks.
   // If null, leveldb will automatically create and use an 8MB internal cache.
   Cache* block_cache = nullptr;
+
+  MultiQueue* multi_queue = nullptr;
 
   // Approximate size of user data packed per block.  Note that the
   // block size specified here corresponds to uncompressed data.  The

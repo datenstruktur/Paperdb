@@ -5,9 +5,9 @@
 #include "leveldb/table.h"
 
 #include "leveldb/cache.h"
+#include "leveldb/multi_queue.h"
 #include "leveldb/comparator.h"
 #include "leveldb/env.h"
-#include "leveldb/filter_policy.h"
 #include "leveldb/options.h"
 #include "table/block.h"
 #include "table/filter_block.h"
@@ -21,16 +21,21 @@ struct Table::Rep {
   ~Rep() {
     delete index_block;
     delete filter;
+    if(options.multi_queue && options.filter_policy){
+      options.multi_queue->Erase(key);
+    }
   }
 
   Options options;
   Status status;
   RandomAccessFile* file;
-  uint64_t cache_id;
+  uint64_t block_cache_id;
+  uint64_t multi_queue_id;
   FilterBlockReader* filter;
   Footer footer;
   BlockHandle metaindex_handle;  // Handle to metaindex_block: saved from footer
   Block* index_block;
+  std::string key;
 };
 
 Status Table::Open(const Options& options, RandomAccessFile* file,
@@ -67,16 +72,23 @@ Status Table::Open(const Options& options, RandomAccessFile* file,
     rep->file = file;
     rep->metaindex_handle = footer.metaindex_handle();
     rep->index_block = index_block;
-    rep->cache_id = (options.block_cache ? options.block_cache->NewId() : 0);
+    rep->block_cache_id = (options.block_cache ? options.block_cache->NewId() : 0);
+    rep->multi_queue_id = (options.multi_queue ? options.multi_queue->NewId() : 0);
+    if(rep->options.filter_policy) {
+      rep->key = "filter.";
+      rep->key.append(rep->options.filter_policy->Name());
+    }else{
+      rep->key = "";
+    }
     rep->footer = footer;
     *table = new Table(rep);
 
     // if filter block can be cached, the flag cache_filter_block should be true
     // and LRUCache should be created.
-    if(!options.cache_filter_block || !options.block_cache){
-      rep->filter = (*table)->ReadMeta();
+    if(options.multi_queue){
+      rep->filter = nullptr; //waiting for reading from caching
     }else{
-      rep->filter = nullptr;
+      rep->filter = (*table)->ReadMeta();
     }
   }
 
@@ -106,10 +118,8 @@ FilterBlockReader* Table::ReadMeta() {
   Block* meta = new Block(contents);
 
   Iterator* iter = meta->NewIterator(BytewiseComparator());
-  std::string key = "filter.";
-  key.append(rep_->options.filter_policy->Name());
-  iter->Seek(key);
-  if (iter->Valid() && iter->key() == Slice(key)) {
+  iter->Seek(rep_->key);
+  if (iter->Valid() && iter->key() == Slice(rep_->key)) {
     Slice filter_meta = iter->value();
     size_t filter_meta_size = filter_meta.size();
     assert(filter_meta_size >= 21);
@@ -130,22 +140,21 @@ FilterBlockReader* Table::ReadMeta() {
 }
 
 
-static void DeleteCacheFilter(const Slice& key, void* value) {
-  FilterBlockReader* block = reinterpret_cast<FilterBlockReader*>(value);
-  delete block;
+static void DeleteCacheFilter(const Slice& key, FilterBlockReader* value) {
+    delete value;
 }
 
 // get FilterBlockReader and saved in rep_->filter, we should return
 // cache handle and reader, so the pointer of reader passed in ReadFilter
-Cache::Handle* Table::ReadFilter(FilterBlockReader** reader) {
+MultiQueue::Handle* Table::ReadFilter(FilterBlockReader** reader) {
   if (rep_->options.filter_policy == nullptr){
     return nullptr;
   }
 
-  Cache* block_cache = rep_->options.block_cache;
+  MultiQueue* multi_queue = rep_->options.multi_queue;
   // not cache in LRUCache
   // need to new filter
-  if(!rep_->options.cache_filter_block || block_cache == nullptr){
+  if(!multi_queue){
     return nullptr;
   }
 
@@ -153,21 +162,20 @@ Cache::Handle* Table::ReadFilter(FilterBlockReader** reader) {
   std::string filter_key = "filter.";
   filter_key.append(rep_->options.filter_policy->Name());
   char cache_key_buffer[8];
-  EncodeFixed64(cache_key_buffer, rep_->cache_id);
+  EncodeFixed64(cache_key_buffer, rep_->multi_queue_id);
   filter_key.append(cache_key_buffer, 8);
   Slice key(filter_key.data(), filter_key.size());
 
-  Cache::Handle* cache_handle;
+  MultiQueue::Handle* cache_handle;
 
-  cache_handle = block_cache->Lookup(key);
+  cache_handle = multi_queue->Lookup(key);
   if (cache_handle != nullptr) {
     *reader = reinterpret_cast<FilterBlockReader*>(
-        block_cache->Value(cache_handle));
+        multi_queue->Value(cache_handle));
   } else {
     *reader = ReadMeta();
     if(*reader != nullptr){
-      cache_handle = block_cache->Insert(key, *reader, (*reader)->Size(),
-                                         &DeleteCacheFilter);
+      cache_handle = multi_queue->Insert(key, *reader, &DeleteCacheFilter);
     }else{
       return nullptr;
     }
@@ -211,9 +219,9 @@ Iterator* Table::BlockReader(void* arg, const ReadOptions& options,
   if (s.ok()) {
     BlockContents contents;
     // if cache_data_block is false, read datablock from disk everytime
-    if (block_cache != nullptr && table->rep_->options.cache_data_block) {
+    if (block_cache != nullptr) {
       char cache_key_buffer[16];
-      EncodeFixed64(cache_key_buffer, table->rep_->cache_id);
+      EncodeFixed64(cache_key_buffer, table->rep_->block_cache_id);
       EncodeFixed64(cache_key_buffer + 8, handle.offset());
       Slice key(cache_key_buffer, sizeof(cache_key_buffer));
       cache_handle = block_cache->Lookup(key);
@@ -265,7 +273,7 @@ Status Table::InternalGet(const ReadOptions& options, const Slice& k, void* arg,
   iiter->Seek(k);
   if (iiter->Valid()) {
     Slice handle_value = iiter->value();
-    Cache::Handle* cache_handle = nullptr;
+    MultiQueue::Handle* cache_handle = nullptr;
     FilterBlockReader* filter = rep_->filter;
 
     // try to read filter from cache
@@ -288,10 +296,9 @@ Status Table::InternalGet(const ReadOptions& options, const Slice& k, void* arg,
       delete block_iter;
     }
 
-    // release handle if we use filter block from cache
-    if(rep_->options.cache_filter_block &&
-        rep_->options.block_cache && cache_handle){
-      rep_->options.block_cache->Release(cache_handle);
+    MultiQueue* multi_queue = rep_->options.multi_queue;
+    if(multi_queue && cache_handle){
+      multi_queue->Release(cache_handle);
     }
   }
   if (s.ok()) {

@@ -3,109 +3,17 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "table/filter_block.h"
+
 #include "leveldb/filter_policy.h"
+
 #include "util/coding.h"
-#include "util/crc32c.h"
+#include "util/file_impl.h"
 #include "util/hash.h"
 #include "util/logging.h"
+
 #include "gtest/gtest.h"
 
 namespace leveldb {
-class StringSink : public WritableFile {
- public:
-  ~StringSink() override = default;
-
-  const std::string& contents() const { return contents_; }
-
-  Status Close() override { return Status::OK(); }
-  Status Flush() override { return Status::OK(); }
-  Status Sync() override { return Status::OK(); }
-
-  Status Append(const Slice& data) override {
-    contents_.append(data.data(), data.size());
-    return Status::OK();
-  }
-
- private:
-  std::string contents_;
-};
-
-class StringSource : public RandomAccessFile {
- public:
-  StringSource(const Slice& contents)
-      : contents_(contents.data(), contents.size()) {}
-
-  ~StringSource() override = default;
-
-  uint64_t Size() const { return contents_.size(); }
-
-  Status Read(uint64_t offset, size_t n, Slice* result,
-              char* scratch) const override {
-    if (offset >= contents_.size()) {
-      return Status::InvalidArgument("invalid Read offset");
-    }
-    if (offset + n > contents_.size()) {
-      n = contents_.size() - offset;
-    }
-    std::memcpy(scratch, &contents_[offset], n);
-    *result = Slice(scratch, n);
-    return Status::OK();
-  }
-
- private:
-  std::string contents_;
-};
-
-class FileImpl {
- public:
-  FileImpl() : write_offset_(0) {
-    sink_ = new StringSink();
-    source_ = nullptr;
-  }
-
-  void WriteRawFilters(std::vector<std::string> filters, CompressionType type, BlockHandle* handle) {
-    assert(!filters.empty());
-    handle->set_offset(write_offset_);
-    handle->set_size(filters[0].size());
-
-    Status status;
-
-    for(int i = 0; i < filters.size(); i++){
-      std::string filter = filters[i];
-      Slice filter_slice = Slice(filter);
-      status = sink_->Append(filter_slice);
-      if(status.ok()){
-        char trailer[kBlockTrailerSize];
-        trailer[0] = type;
-        uint32_t crc = crc32c::Value(filter_slice.data(), filter_slice.size());
-        crc = crc32c::Extend(crc, trailer, 1);  // Extend crc to cover block type
-        EncodeFixed32(trailer + 1, crc32c::Mask(crc));
-        status = sink_->Append(Slice(trailer, kBlockTrailerSize));
-        if (status.ok()) {
-          write_offset_ += filter_slice.size() + kBlockTrailerSize;
-        }
-      }
-    }
-  }
-
-  inline StringSource* GetSource() {
-    if (source_ == nullptr) {
-      source_ = new StringSource(sink_->contents());
-    }
-    return source_;
-  }
-
-  ~FileImpl() {
-    delete sink_;
-    delete source_;
-  }
-
- private:
-  StringSink* sink_;
-  StringSource* source_;
-  uint64_t write_offset_;
-};
-
 // For testing: emit an array with one hash value per key
 class TestHashFilter : public FilterPolicy {
  public:
@@ -140,7 +48,7 @@ TEST_F(FilterBlockTest, EmptyBuilder) {
   FilterBlockBuilder builder(&policy_);
   FileImpl file;
   BlockHandle handle;
-  file.WriteRawFilters(builder.ReturnFilters(), kNoCompression, &handle);
+  file.WriteRawFilters(builder.ReturnFilters(), &handle);
 
   Slice block = builder.Finish(handle);
   char *filter_meta = (char *)malloc(sizeof (char) * block.size());
@@ -175,7 +83,7 @@ TEST_F(FilterBlockTest, SingleChunk) {
   FileImpl file;
   BlockHandle handle;
   const std::vector<std::string>& filters = builder.ReturnFilters();
-  file.WriteRawFilters(filters, kNoCompression, &handle);
+  file.WriteRawFilters(filters, &handle);
   Slice block = builder.Finish(handle);
 
   char *filter_meta = (char *)malloc(sizeof(char) * block.size());
@@ -229,7 +137,7 @@ TEST_F(FilterBlockTest, MultiChunk) {
   FileImpl file;
   const std::vector<std::string>& filter = builder.ReturnFilters();
   BlockHandle handle;
-  file.WriteRawFilters(filter, kNoCompression, &handle);
+  file.WriteRawFilters(filter, &handle);
   Slice block = builder.Finish(handle);
 
   char *filter_meta = (char *)malloc(sizeof (char ) * block.size());
@@ -287,7 +195,7 @@ TEST_F(FilterBlockTest, LoadAndExcit){
   FileImpl file;
   const std::vector<std::string>& filter = builder.ReturnFilters();
   BlockHandle handle;
-  file.WriteRawFilters(filter, kNoCompression, &handle);
+  file.WriteRawFilters(filter, &handle);
   Slice block = builder.Finish(handle);
 
   char *filter_meta = (char *)malloc(sizeof (char ) * block.size());
@@ -334,7 +242,7 @@ TEST_F(FilterBlockTest, Hotness){
   FileImpl file;
   BlockHandle handle;
   const std::vector<std::string>& filters = builder.ReturnFilters();
-  file.WriteRawFilters(filters, kNoCompression, &handle);
+  file.WriteRawFilters(filters, &handle);
   Slice block = builder.Finish(handle);
 
   // create reader
@@ -373,7 +281,7 @@ TEST_F(FilterBlockTest, Size){
   FileImpl file;
   BlockHandle handle;
   const std::vector<std::string>& filters = builder.ReturnFilters();
-  file.WriteRawFilters(filters, kNoCompression, &handle);
+  file.WriteRawFilters(filters, &handle);
 
   size_t bitmap_size = handle.size();
   Slice block = builder.Finish(handle);

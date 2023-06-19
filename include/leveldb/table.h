@@ -7,7 +7,7 @@
 
 #include <cstdint>
 
-#include "leveldb/cache.h"
+#include "leveldb/multi_queue.h"
 #include "leveldb/export.h"
 #include "leveldb/iterator.h"
 #include "table/filter_block.h"
@@ -76,7 +76,7 @@ class LEVELDB_EXPORT Table {
                                            const Slice& v));
 
   FilterBlockReader* ReadMeta();
-  Cache::Handle* ReadFilter(FilterBlockReader** reader);
+  MultiQueue::Handle* ReadFilter(FilterBlockReader** reader);
 
   Rep* const rep_;
 };

@@ -1450,6 +1450,10 @@ bool DBImpl::GetProperty(const Slice& property, std::string* value) {
     if (imm_) {
       total_usage += imm_->ApproximateMemoryUsage();
     }
+    if(options_.multi_queue){
+      total_usage += options_.multi_queue->TotalCharge();
+    }
+
     char buf[50];
     std::snprintf(buf, sizeof(buf), "%llu",
                   static_cast<unsigned long long>(total_usage));

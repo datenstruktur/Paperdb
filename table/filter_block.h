@@ -27,7 +27,7 @@ class FilterPolicy;
 // Generate 4 filters and load 1 filter when FilterBlockReader is created
 static const size_t loaded_filters_number = 1;
 static const size_t filters_number        = 4;
-static const uint64_t left_time           = 30000;
+static const uint64_t life_time           = 30000;
 
 // A FilterBlockBuilder is used to construct all of the filters for a
 // particular Table.  It generates a single string which is stored as
@@ -74,14 +74,11 @@ class FilterBlockReader {
   uint64_t AccessTime() const {return access_time_;}
 
   bool IsCold(SequenceNumber now_sequence) const {
-    return now_sequence >= (sequence_ + left_time);
+    return now_sequence >= (sequence_ + life_time);
   }
 
   //filter block memory overhead(Byte), use by Cache->Insert
   size_t Size() const{
-    if(filter_units.empty()){
-      return 0;
-    }
     return filter_units.size() * disk_size_;
   }
  private:

@@ -185,11 +185,14 @@ target_sources(leveldb
     "util/hash.h"
     "util/logging.cc"
     "util/logging.h"
+    "util/multi_queue.cc"
     "util/mutexlock.h"
     "util/no_destructor.h"
     "util/options.cc"
     "util/random.h"
     "util/status.cc"
+    "util/file_impl.cc"
+    "util/file_impl.h"
 
   # Only CMake 3.3+ supports PUBLIC sources in targets exported by "install".
   $<$<VERSION_GREATER:CMAKE_VERSION,3.2>:PUBLIC>
@@ -202,6 +205,7 @@ target_sources(leveldb
     "${LEVELDB_PUBLIC_INCLUDE_DIR}/export.h"
     "${LEVELDB_PUBLIC_INCLUDE_DIR}/filter_policy.h"
     "${LEVELDB_PUBLIC_INCLUDE_DIR}/iterator.h"
+    "${LEVELDB_PUBLIC_INCLUDE_DIR}/multi_queue.h"
     "${LEVELDB_PUBLIC_INCLUDE_DIR}/options.h"
     "${LEVELDB_PUBLIC_INCLUDE_DIR}/slice.h"
     "${LEVELDB_PUBLIC_INCLUDE_DIR}/status.h"
@@ -344,6 +348,7 @@ if(LEVELDB_BUILD_TESTS)
         "util/arena_test.cc"
         "util/bloom_test.cc"
         "util/cache_test.cc"
+        "util/multi_queue_test.cc"
         "util/coding_test.cc"
         "util/crc32c_test.cc"
         "util/hash_test.cc"
@@ -486,6 +491,7 @@ if(LEVELDB_INSTALL)
       "${LEVELDB_PUBLIC_INCLUDE_DIR}/export.h"
       "${LEVELDB_PUBLIC_INCLUDE_DIR}/filter_policy.h"
       "${LEVELDB_PUBLIC_INCLUDE_DIR}/iterator.h"
+      "${LEVELDB_PUBLIC_INCLUDE_DIR}/multi_queue.h"
       "${LEVELDB_PUBLIC_INCLUDE_DIR}/options.h"
       "${LEVELDB_PUBLIC_INCLUDE_DIR}/slice.h"
       "${LEVELDB_PUBLIC_INCLUDE_DIR}/status.h"

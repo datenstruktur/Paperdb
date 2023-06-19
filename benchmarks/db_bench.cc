@@ -13,6 +13,7 @@
 #include "leveldb/db.h"
 #include "leveldb/env.h"
 #include "leveldb/filter_policy.h"
+#include "leveldb/multi_queue.h"
 #include "leveldb/write_batch.h"
 #include "port/port.h"
 #include "util/crc32c.h"
@@ -101,6 +102,10 @@ static int FLAGS_block_size = 0;
 // Number of bytes to use as a cache of uncompressed data.
 // Negative means use default settings.
 static int FLAGS_cache_size = -1;
+
+// Number of bytes to use as a cache of filter block.
+// Negative means disable caching filter block.
+static int FLAGS_multi_queue_size = 0;
 
 // Maximum number of files to keep open at the same time (use default if == 0)
 static int FLAGS_open_files = 0;
@@ -428,6 +433,7 @@ void Uncompress(
 class Benchmark {
  private:
   Cache* cache_;
+  MultiQueue* multi_queue_;
   const FilterPolicy* filter_policy_;
   DB* db_;
   int num_;
@@ -520,6 +526,7 @@ class Benchmark {
  public:
   Benchmark()
       : cache_(FLAGS_cache_size >= 0 ? NewLRUCache(FLAGS_cache_size) : nullptr),
+        multi_queue_(FLAGS_multi_queue_size >= 0 ? NewMultiQueue() : nullptr),
         filter_policy_(FLAGS_bloom_bits >= 0
                            ? NewBloomFilterPolicy(FLAGS_bloom_bits)
                            : nullptr),
@@ -546,6 +553,7 @@ class Benchmark {
   ~Benchmark() {
     delete db_;
     delete cache_;
+    delete multi_queue_;
     delete filter_policy_;
   }
 
@@ -805,6 +813,7 @@ class Benchmark {
     options.env = g_env;
     options.create_if_missing = !FLAGS_use_existing_db;
     options.block_cache = cache_;
+    options.multi_queue = multi_queue_;
     options.write_buffer_size = FLAGS_write_buffer_size;
     options.max_file_size = FLAGS_max_file_size;
     options.block_size = FLAGS_block_size;
@@ -1111,6 +1120,8 @@ int main(int argc, char** argv) {
       FLAGS_key_prefix = n;
     } else if (sscanf(argv[i], "--cache_size=%d%c", &n, &junk) == 1) {
       FLAGS_cache_size = n;
+    } else if (sscanf(argv[i], "--multi_queue_size=%d%c", &n, &junk) == 1) {
+      FLAGS_multi_queue_size = n;
     } else if (sscanf(argv[i], "--bloom_bits=%d%c", &n, &junk) == 1) {
       FLAGS_bloom_bits = n;
     } else if (sscanf(argv[i], "--open_files=%d%c", &n, &junk) == 1) {
