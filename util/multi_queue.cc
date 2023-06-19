@@ -10,6 +10,9 @@ struct QueueHandle{
   QueueHandle* next;
   QueueHandle* prev;
 
+  int ref;
+  bool in_cache;
+
   size_t key_length;
   char key_data[1];  // Beginning of key
 
@@ -22,19 +25,28 @@ struct QueueHandle{
   }
 };
 
-
-
 class SingleQueue{
  public:
   SingleQueue(){
     lru_.next = &lru_;
     lru_.prev = &lru_;
+
+    in_use_.next = &in_use_;
+    in_use_.prev = &in_use_;
   }
 
   ~SingleQueue(){
+    assert(in_use_.next == &in_use_); // in_use lru must be empty
+    // travel lru, all entry in it
+    // all entry must not in cache
+    // because we will call Release after using it
+    // all entry must not be used
     for(QueueHandle* e = lru_.next; e != nullptr && e != &lru_;){
       QueueHandle* next = e->next;
-      FreeHandle(e);
+      assert(e->in_cache);
+      e->in_cache = false;
+      assert(e->ref == 1);  // Invariant of lru_ list.
+      Unref(e);
       e = next;
     }
   }
@@ -46,19 +58,56 @@ class SingleQueue{
     e->reader = reader;
     e->deleter = deleter;
     e->key_length = key.size();
+    e->in_cache = true;
+    e->ref = 1;
     std::memcpy(e->key_data, key.data(), key.size());
 
-    Queue_Append(&lru_, e);
+    Queue_Append(&in_use_, e);
 
     return e;
   }
 
   void Erase(QueueHandle* handle){
-    Queue_Remove(handle);
-    FreeHandle(handle);
+    if(handle != nullptr) {
+      // if dont in cache
+      // will be in lru
+      // will be free after all client finish using it
+      assert(handle->in_cache);
+      // remove from in_use lru
+      Queue_Remove(handle);
+      // can be unref
+      handle->in_cache = false;
+      Unref(handle);
+    }
+  }
+
+  void Ref(QueueHandle* e){
+    // if in lru, but not be erased
+    // move to in_use
+    if(e->ref == 1 && e->in_cache){
+      Queue_Remove(e);
+      Queue_Append(&in_use_, e); // dont free
+    }
+    e->ref++;
+  }
+
+  // free e:
+  // e->in_cache is false
+  // e->ref == 0
+  void Unref(QueueHandle* e){
+    assert(e->ref >= 0);
+    e->ref--;
+    if(e->ref == 0){
+      assert(!e->in_cache);
+      FreeHandle(e);
+    }else if(e->in_cache && e->ref == 1){
+      Queue_Remove(e);
+      Queue_Append(&lru_, e); // ready for free
+    }
   }
  private:
   QueueHandle lru_;
+  QueueHandle in_use_;
 
   void Queue_Append(QueueHandle *list, QueueHandle* e){
     // Make "e" newest entry by inserting just before *list
@@ -96,6 +145,30 @@ class InterMultiQueue: public MultiQueue{
     }
   }
 
+  SingleQueue* FindQueue(QueueHandle *handle){
+    FilterBlockReader* reader = Value(reinterpret_cast<Handle*>(handle));
+    if(reader != nullptr) {
+      int number = reader->FilterUnitsNumber();
+      SingleQueue* queue = queues_[number];
+      return queue;
+    }
+    return nullptr;
+  }
+
+  void RefHandle(QueueHandle *handle){
+    SingleQueue* queue = FindQueue(handle);
+    if(queue != nullptr){
+      queue->Ref(reinterpret_cast<QueueHandle*>(handle));
+    }
+  }
+
+  void UnRefHandle(QueueHandle *handle){
+    SingleQueue* queue = FindQueue(handle);
+    if(queue != nullptr){
+      queue->Unref(reinterpret_cast<QueueHandle*>(handle));
+    }
+  }
+
   Handle* Insert(const Slice& key, FilterBlockReader* reader,
                  void (*deleter)(const Slice&, FilterBlockReader*)) override {
     assert(reader != nullptr);
@@ -104,6 +177,7 @@ class InterMultiQueue: public MultiQueue{
     QueueHandle* handle = queue->Insert(key, reader, deleter);
     map_.insert(std::make_pair(key.ToString(), handle));
     usage_ += reader->Size();
+    RefHandle(handle);
     return reinterpret_cast<Handle*>(handle);
   }
 
@@ -111,6 +185,7 @@ class InterMultiQueue: public MultiQueue{
     auto iter = map_.find(key.ToString());
     if(iter != map_.end()) {
       QueueHandle* handle = map_.find(key.ToString())->second;
+      RefHandle(handle);
       return reinterpret_cast<Handle*>(handle);
     }else{
       return nullptr;
@@ -118,7 +193,7 @@ class InterMultiQueue: public MultiQueue{
   }
 
   void Release(Handle* handle) override {
-
+      UnRefHandle(reinterpret_cast<QueueHandle*>(handle));
   }
 
   FilterBlockReader* Value(Handle* handle) override {
@@ -134,9 +209,8 @@ class InterMultiQueue: public MultiQueue{
     if(iter != map_.end()) {
       QueueHandle* handle = iter->second;
       map_.erase(key.ToString());
-      int number = handle->reader->FilterUnitsNumber();
-      SingleQueue* queue = queues_[number];
-      usage_ -= handle->reader->Size();
+      SingleQueue* queue = FindQueue(handle);
+      usage_ -=  handle->reader->Size();
       queue->Erase(handle);
     }
   }

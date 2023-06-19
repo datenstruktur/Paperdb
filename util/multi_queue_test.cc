@@ -75,26 +75,39 @@ class MultiQueueTest : public testing::Test {
 };
 
 TEST_F(MultiQueueTest, InsertAndLookup){
+    // insert kv to cache
     MultiQueue::Handle* insert_handle = Insert("key1");
     ASSERT_NE(insert_handle, nullptr);
+
+    // lookup kv from cache
     MultiQueue::Handle* lookup_handle = Lookup("key1");
     ASSERT_NE(lookup_handle, nullptr);
+
 
     ASSERT_EQ(lookup_handle, insert_handle);
 
     FilterBlockReader* reader = Value(lookup_handle);
     ASSERT_NE(reader, nullptr);
-
     ASSERT_TRUE(reader->KeyMayMatch(100, "foo"));
+
+    // unref
+    multi_queue_->Release(insert_handle);
+    multi_queue_->Release(lookup_handle);
 }
 
 TEST_F(MultiQueueTest, InsertAndErase){
     MultiQueue::Handle* insert_handle = Insert("key1");
     ASSERT_NE(insert_handle, nullptr);
-    Erase("key1");
 
+    // erase from cache
+    multi_queue_->Erase("key1");
+
+    // can not be found in cache
     MultiQueue::Handle* lookup_handle = Lookup("key1");
     ASSERT_EQ(lookup_handle, nullptr);
+
+    // free from memory
+    multi_queue_->Release(insert_handle);
 }
 
 TEST_F(MultiQueueTest, TotalCharge){
@@ -102,8 +115,10 @@ TEST_F(MultiQueueTest, TotalCharge){
     ASSERT_NE(insert_handle, nullptr);
     FilterBlockReader* reader = Value(insert_handle);
     ASSERT_EQ(TotalCharge(), reader->Size());
-    Erase("key1");
+    Erase("key1"); // erase from cache, but still in memory
     ASSERT_EQ(TotalCharge(), 0);
+    // free from memory
+    multi_queue_->Release(insert_handle);
 }
 
 TEST_F(MultiQueueTest, NewId) {
