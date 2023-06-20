@@ -166,15 +166,23 @@ class InterMultiQueue : public MultiQueue {
       adjusted_ios += handle->reader->EvictIOs();
     }
     adjusted_ios += hot->reader->LoadIOs();
+    adjusted_ios += (cold.size() + 1.0);
 
-    if (adjusted_ios < original_ios && logger_ != nullptr) {
-      Log(logger_,
-          "Cold BF Number: %zu, Filter Units number of Hot BF: %zu, adjusted "
-          "ios: %f, original ios: %f",
-          cold.size(), hot->reader->FilterUnitsNumber(), adjusted_ios,
-          original_ios);
+    if (adjusted_ios < original_ios) {
+#if NDEBUG
+
+#else
+      if(logger_ != nullptr) {
+        Log(logger_,
+            "Cold BF Number: %zu, Filter Units number of Hot BF: %zu, adjusted "
+            "ios: %f, original ios: %f",
+            cold.size(), hot->reader->FilterUnitsNumber(), adjusted_ios,
+            original_ios);
+      }
+#endif
+      return true;
     }
-    return adjusted_ios < original_ios;
+    return false;
   }
 
   void LoadHandle(QueueHandle* handle){
