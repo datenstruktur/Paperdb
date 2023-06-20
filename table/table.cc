@@ -22,7 +22,7 @@ struct Table::Rep {
     delete index_block;
     if(options.multi_queue && handle){
       // release for this table
-      options.multi_queue->Release(handle);
+      options.multi_queue->Erase(handle);
     }
   }
 
@@ -254,7 +254,7 @@ Status Table::InternalGet(const ReadOptions& options, const Slice& k, void* arg,
   iiter->Seek(k);
   if (iiter->Valid()) {
     Slice handle_value = iiter->value();
-   ReadFilter();
+    ReadFilter();
     BlockHandle handle;
     if (rep_->handle != nullptr && handle.DecodeFrom(&handle_value).ok() &&
         !rep_->options.multi_queue->KeyMayMatch(rep_->handle, handle.offset(), k)) {

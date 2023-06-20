@@ -417,6 +417,7 @@ class Harness : public testing::Test {
     // Use shorter block size for tests to exercise block boundary
     // conditions more.
     options_.block_size = 256;
+    //options_.multi_queue = NewMultiQueue();
     if (args.reverse_compare) {
       options_.comparator = &reverse_key_comparator;
     }
