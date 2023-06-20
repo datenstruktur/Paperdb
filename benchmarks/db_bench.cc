@@ -2,11 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
-#include <sys/types.h>
-
+#include "db/filename.h"
 #include <atomic>
 #include <cstdio>
 #include <cstdlib>
+#include <sys/types.h>
 
 #include "leveldb/cache.h"
 #include "leveldb/comparator.h"
@@ -15,6 +15,7 @@
 #include "leveldb/filter_policy.h"
 #include "leveldb/multi_queue.h"
 #include "leveldb/write_batch.h"
+
 #include "port/port.h"
 #include "util/crc32c.h"
 #include "util/histogram.h"
@@ -105,14 +106,14 @@ static int FLAGS_cache_size = -1;
 
 // Number of bytes to use as a cache of filter block.
 // Negative means disable caching filter block.
-static bool FLAGS_multi_queue_open = false;
+static bool FLAGS_multi_queue_open = true;
 
 // Maximum number of files to keep open at the same time (use default if == 0)
 static int FLAGS_open_files = 0;
 
 // Bloom filter bits per key.
 // Negative means use default settings.
-static int FLAGS_bloom_bits = -1;
+static int FLAGS_bloom_bits = 4;
 
 // Common key prefix length.
 static int FLAGS_key_prefix = 0;
@@ -1120,7 +1121,8 @@ int main(int argc, char** argv) {
       FLAGS_key_prefix = n;
     } else if (sscanf(argv[i], "--cache_size=%d%c", &n, &junk) == 1) {
       FLAGS_cache_size = n;
-    } else if (sscanf(argv[i], "--multi_queue_size=%d%c", &n, &junk) == 1) {
+    } else if (sscanf(argv[i], "--multi_queue_open=%d%c", &n, &junk) == 1 &&
+               (n == 0 || n == 1)) {
       FLAGS_multi_queue_open = n;
     } else if (sscanf(argv[i], "--bloom_bits=%d%c", &n, &junk) == 1) {
       FLAGS_bloom_bits = n;

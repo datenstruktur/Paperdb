@@ -88,6 +88,8 @@ class LEVELDB_EXPORT MultiQueue {
   // Return an estimate of the combined charges of all elements stored in the
   // cache.
   virtual size_t TotalCharge() const = 0;
+
+  virtual void SetLogger(Logger* logger) = 0;
 };
 
 }  // namespace leveldb

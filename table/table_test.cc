@@ -231,7 +231,7 @@ class TableConstructor : public Constructor {
     source_ = new StringSource(sink.contents());
     Options table_options;
     table_options.comparator = options.comparator;
-    return Table::Open(table_options, source_, sink.contents().size(), &table_);
+    return Table::Open(table_options, source_, sink.contents().size(), &table_, 0);
   }
 
   Iterator* NewIterator() const override {
@@ -417,7 +417,6 @@ class Harness : public testing::Test {
     // Use shorter block size for tests to exercise block boundary
     // conditions more.
     options_.block_size = 256;
-    //options_.multi_queue = NewMultiQueue();
     if (args.reverse_compare) {
       options_.comparator = &reverse_key_comparator;
     }

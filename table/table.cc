@@ -31,7 +31,7 @@ struct Table::Rep {
   Status status;
   RandomAccessFile* file;
   uint64_t block_cache_id;
-  uint64_t multi_queue_id;
+  uint64_t table_id;
   Footer footer;
   BlockHandle metaindex_handle;  // Handle to metaindex_block: saved from footer
   Block* index_block;
@@ -40,7 +40,7 @@ struct Table::Rep {
 };
 
 Status Table::Open(const Options& options, RandomAccessFile* file,
-                   uint64_t size, Table** table) {
+                   uint64_t size, Table** table, uint64_t table_id) {
   *table = nullptr;
   if (size < Footer::kEncodedLength) {
     return Status::Corruption("file is too short to be an sstable");
@@ -74,7 +74,7 @@ Status Table::Open(const Options& options, RandomAccessFile* file,
     rep->metaindex_handle = footer.metaindex_handle();
     rep->index_block = index_block;
     rep->block_cache_id = (options.block_cache ? options.block_cache->NewId() : 0);
-    rep->multi_queue_id = (options.multi_queue ? options.multi_queue->NewId() : 0);
+    rep->table_id = table_id;
     rep->handle = nullptr;
     rep->reader = nullptr;
     rep->footer = footer;
@@ -156,7 +156,7 @@ void Table::ReadFilter() {
     std::string filter_key = "filter.";
     filter_key.append(rep_->options.filter_policy->Name());
     char cache_key_buffer[8];
-    EncodeFixed64(cache_key_buffer, rep_->multi_queue_id);
+    EncodeFixed64(cache_key_buffer, rep_->table_id);
     filter_key.append(cache_key_buffer, 8);
     Slice key(filter_key.data(), filter_key.size());
 

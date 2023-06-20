@@ -112,6 +112,9 @@ Options SanitizeOptions(const std::string& dbname,
       result.info_log = nullptr;
     }
   }
+  if(result.multi_queue){
+    result.multi_queue->SetLogger(result.info_log);
+  }
   if (result.block_cache == nullptr) {
     result.block_cache = NewLRUCache(8 << 20);
   }

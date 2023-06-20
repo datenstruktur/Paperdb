@@ -5,7 +5,7 @@
 
 namespace leveldb {
 MultiQueue::~MultiQueue() {}
-struct QueueHandle{
+struct QueueHandle {
   FilterBlockReader* reader;
   void (*deleter)(const Slice&, FilterBlockReader* reader);
   QueueHandle* next;
@@ -23,21 +23,21 @@ struct QueueHandle{
   }
 };
 
-void FreeHandle(QueueHandle* handle){
+void FreeHandle(QueueHandle* handle) {
   handle->deleter(handle->key(), handle->reader);
   free(handle);
 }
 
-class SingleQueue{
+class SingleQueue {
  public:
-  SingleQueue(){
+  SingleQueue() {
     in_use_.next = &in_use_;
     in_use_.prev = &in_use_;
   }
 
-  ~SingleQueue(){
+  ~SingleQueue() {
     // all entry should be unref
-    for(QueueHandle* e = in_use_.next; e != &in_use_;){
+    for (QueueHandle* e = in_use_.next; e != &in_use_;) {
       QueueHandle* next = e->next;
       FreeHandle(e);
       e = next;
@@ -45,9 +45,10 @@ class SingleQueue{
   }
 
   QueueHandle* Insert(const Slice& key, FilterBlockReader* reader,
-                      void (*deleter)(const Slice&, FilterBlockReader*)){
-    QueueHandle* e = // -1 for first char in key
-        reinterpret_cast<QueueHandle*>(malloc(sizeof(QueueHandle) - 1 + key.size()));
+                      void (*deleter)(const Slice&, FilterBlockReader*)) {
+    QueueHandle* e =  // -1 for first char in key
+        reinterpret_cast<QueueHandle*>(
+            malloc(sizeof(QueueHandle) - 1 + key.size()));
     e->reader = reader;
     e->deleter = deleter;
     e->key_length = key.size();
@@ -58,31 +59,29 @@ class SingleQueue{
     return e;
   }
 
-  void Erase(QueueHandle* handle){
-    if(handle != nullptr) {
+  void Erase(QueueHandle* handle) {
+    if (handle != nullptr) {
       Queue_Remove(handle);
       FreeHandle(handle);
     }
   }
 
-  void Remove(QueueHandle* handle){
-    Queue_Remove(handle);
-  }
+  void Remove(QueueHandle* handle) { Queue_Remove(handle); }
 
-  void MoveToMRU(QueueHandle* handle){
+  void MoveToMRU(QueueHandle* handle) {
     Remove(handle);
     Queue_Append(&in_use_, handle);
   }
 
   void FindColdFilter(uint64_t& memory, SequenceNumber sn,
-                      std::vector<QueueHandle*>& filters){
+                      std::vector<QueueHandle*>& filters) {
     QueueHandle* e = in_use_.prev;
-    do{
-      if(e == nullptr || e == &in_use_){
+    do {
+      if (e == nullptr || e == &in_use_) {
         break;
       }
       QueueHandle* next = e->prev;
-      if(e->reader->IsCold(sn) && e->reader->CanBeEvict()){
+      if (e->reader->IsCold(sn) && e->reader->CanBeEvict()) {
         memory -= e->reader->OneUnitSize();
         filters.push_back(e);
       }
@@ -91,9 +90,9 @@ class SingleQueue{
   }
 
  private:
-  QueueHandle in_use_; // ref >= 2 && in_cache == true
+  QueueHandle in_use_;  // ref >= 2 && in_cache == true
 
-  void Queue_Append(QueueHandle *list, QueueHandle* e){
+  void Queue_Append(QueueHandle* list, QueueHandle* e) {
     // Make "e" newest entry by inserting just before *list
     e->next = list;
     e->prev = list->prev;
@@ -107,24 +106,24 @@ class SingleQueue{
   }
 };
 
-class InterMultiQueue: public MultiQueue{
+class InterMultiQueue : public MultiQueue {
  public:
-  explicit InterMultiQueue():usage_(0),last_id_(0){
+  explicit InterMultiQueue() : usage_(0), last_id_(0), logger_(nullptr) {
     queues_.resize(filters_number + 1);
-    for(int i = 0; i < filters_number + 1; i++){
+    for (int i = 0; i < filters_number + 1; i++) {
       queues_[i] = new SingleQueue();
     }
   }
 
   ~InterMultiQueue() override {
-    for(int i = 0; i < filters_number + 1; i++){
+    for (int i = 0; i < filters_number + 1; i++) {
       delete queues_[i];
     }
   }
 
-  SingleQueue* FindQueue(QueueHandle *handle){
+  SingleQueue* FindQueue(QueueHandle* handle) {
     FilterBlockReader* reader = Value(reinterpret_cast<Handle*>(handle));
-    if(reader != nullptr) {
+    if (reader != nullptr) {
       int number = reader->FilterUnitsNumber();
       SingleQueue* queue = queues_[number];
       return queue;
@@ -143,11 +142,10 @@ class InterMultiQueue: public MultiQueue{
     return reinterpret_cast<Handle*>(handle);
   }
 
-  std::vector<QueueHandle*> FindColdFilter(uint64_t memory,
-                      SequenceNumber sn){
+  std::vector<QueueHandle*> FindColdFilter(uint64_t memory, SequenceNumber sn) {
     SingleQueue* queue = nullptr;
     std::vector<QueueHandle*> filters;
-    for(int i = filters_number; i > 1; i--){
+    for (int i = filters_number; i > 1; i--) {
       queue = queues_[i];
       queue->FindColdFilter(memory, sn, filters);
     }
@@ -155,20 +153,27 @@ class InterMultiQueue: public MultiQueue{
     return filters;
   }
 
-  bool CanBeAdjusted(const std::vector<QueueHandle*> &cold, QueueHandle* hot){
+  bool CanBeAdjusted(const std::vector<QueueHandle*>& cold, QueueHandle* hot) {
     double original_ios = 0;
-    for(QueueHandle* handle : cold){
-      if(!handle->reader->CanBeEvict()) return false;
+    for (QueueHandle* handle : cold) {
+      if (!handle->reader->CanBeEvict()) return false;
       original_ios += handle->reader->IOs();
     }
     original_ios += hot->reader->IOs();
 
     double adjusted_ios = 0;
-    for(QueueHandle* handle : cold){
+    for (QueueHandle* handle : cold) {
       adjusted_ios += handle->reader->EvictIOs();
     }
     adjusted_ios += hot->reader->LoadIOs();
 
+    if (adjusted_ios < original_ios && logger_ != nullptr) {
+      Log(logger_,
+          "Cold BF Number: %zu, Filter Units number of Hot BF: %zu, adjusted "
+          "ios: %f, original ios: %f",
+          cold.size(), hot->reader->FilterUnitsNumber(), adjusted_ios,
+          original_ios);
+    }
     return adjusted_ios < original_ios;
   }
 
@@ -250,9 +255,14 @@ class InterMultiQueue: public MultiQueue{
   uint64_t NewId() override { return ++last_id_; }
 
   size_t TotalCharge() const override { return usage_; }
+
+  void SetLogger(Logger* logger){
+    logger_ = logger;
+  }
  private:
   size_t usage_;
   uint64_t last_id_;
+  Logger* logger_;
 
   std::vector<SingleQueue*> queues_;
   std::unordered_map<std::string, QueueHandle*> map_;

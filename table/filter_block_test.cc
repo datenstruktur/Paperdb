@@ -60,8 +60,8 @@ TEST_F(FilterBlockTest, EmptyBuilder) {
   ASSERT_EQ(
       "\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
       "\\x00\\x00\\x00\\x00"
-      "\\x01\\x00\\x00\\x00"
-      "\\x04\\x00\\x00\\x00"
+      "\\x0" + std::to_string(loaded_filters_number) + "\\x00\\x00\\x00"
+      "\\x0" + std::to_string(filters_number)        + "\\x00\\x00\\x00"
       "\\x0b",
       EscapeString(block));
 
@@ -98,8 +98,8 @@ TEST_F(FilterBlockTest, SingleChunk) {
   ASSERT_EQ(
       "\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
       "\\x14\\x00\\x00\\x00"
-      "\\x01\\x00\\x00\\x00"
-      "\\x04\\x00\\x00\\x00"
+      "\\x0" + std::to_string(loaded_filters_number) + "\\x00\\x00\\x00"
+      "\\x0" + std::to_string(filters_number)        + "\\x00\\x00\\x00"
       "\\x0b",
       escapestring);
 
@@ -208,22 +208,17 @@ TEST_F(FilterBlockTest, LoadAndExcit){
   FilterBlockReader reader(&policy_, filter_meta_data, source);
 
   // todo can automatically adapt to different parameters
-  ASSERT_EQ(reader.FilterUnitsNumber(), 1);
-  ASSERT_TRUE(reader.EvictFilter().ok());
-  ASSERT_EQ(reader.FilterUnitsNumber(), 0);
+  for(int i = loaded_filters_number; i > 0; i--){
+    ASSERT_EQ(reader.FilterUnitsNumber(), i);
+    ASSERT_TRUE(reader.EvictFilter().ok());
+  }
+
   ASSERT_FALSE(reader.EvictFilter().ok());
 
-  ASSERT_TRUE(reader.LoadFilter().ok());
-  ASSERT_EQ(reader.FilterUnitsNumber(), 1);
-
-  ASSERT_TRUE(reader.LoadFilter().ok());
-  ASSERT_EQ(reader.FilterUnitsNumber(), 2);
-
-  ASSERT_TRUE(reader.LoadFilter().ok());
-  ASSERT_EQ(reader.FilterUnitsNumber(), 3);
-
-  ASSERT_TRUE(reader.LoadFilter().ok());
-  ASSERT_EQ(reader.FilterUnitsNumber(), 4);
+  for(int i = 0; i < filters_number; i++){
+    ASSERT_EQ(reader.FilterUnitsNumber(), i);
+    ASSERT_TRUE(reader.LoadFilter().ok());
+  }
 
   ASSERT_FALSE(reader.LoadFilter().ok());
 }
