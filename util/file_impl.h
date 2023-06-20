@@ -5,13 +5,10 @@
 #ifndef LEVELDB_FILE_IMPL_H
 #define LEVELDB_FILE_IMPL_H
 
-#include "table/filter_block.h"
-#include "leveldb/filter_policy.h"
-#include "util/coding.h"
 #include "util/crc32c.h"
-#include "util/hash.h"
-#include "util/logging.h"
-#include "gtest/gtest.h"
+#include "leveldb/status.h"
+#include "leveldb/env.h"
+#include "table/format.h"
 
 namespace leveldb {
 

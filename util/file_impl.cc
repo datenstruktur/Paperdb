@@ -3,6 +3,7 @@
 //
 
 #include "file_impl.h"
+#include "util/coding.h"
 
 namespace leveldb {
   FileImpl::FileImpl() : write_offset_(0) {

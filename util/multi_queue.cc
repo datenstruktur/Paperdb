@@ -205,7 +205,7 @@ class InterMultiQueue : public MultiQueue {
     if(hot_handle->reader->CanBeLoaded()) {
       size_t memory = hot_handle->reader->OneUnitSize();
       std::vector<QueueHandle*> cold = FindColdFilter(memory, sn);
-      if (CanBeAdjusted(cold, hot_handle)) {
+      if (!cold.empty() && CanBeAdjusted(cold, hot_handle)) {
         ApplyAjustment(cold, hot_handle);
       }
     }
