@@ -76,7 +76,7 @@ class LEVELDB_EXPORT Table {
                                            const Slice& v));
 
   FilterBlockReader* ReadMeta();
-  MultiQueue::Handle* ReadFilter(FilterBlockReader** reader);
+  void ReadFilter();
 
   Rep* const rep_;
 };

@@ -59,6 +59,8 @@ class LEVELDB_EXPORT MultiQueue {
   virtual Handle* Insert(const Slice& key, FilterBlockReader* reader,
                          void (*deleter)(const Slice& key, FilterBlockReader* value)) = 0;
 
+  virtual bool KeyMayMatch(Handle* handle, uint64_t block_offset, const Slice& key) = 0;
+
   // If the cache has no mapping for "key", returns nullptr.
   //
   // Else return a handle that corresponds to the mapping.  The caller

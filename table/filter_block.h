@@ -77,6 +77,14 @@ class FilterBlockReader {
     return now_sequence >= (sequence_ + life_time);
   }
 
+  size_t OneUnitSize() const {
+      return disk_size_;
+  }
+
+  bool CanBeLoaded() const {
+      return filter_units.size() < filters_number;
+  }
+
   //filter block memory overhead(Byte), use by Cache->Insert
   size_t Size() const{
     return filter_units.size() * disk_size_;

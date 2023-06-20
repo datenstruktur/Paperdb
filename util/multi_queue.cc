@@ -36,11 +36,8 @@ class SingleQueue{
   }
 
   ~SingleQueue(){
-    assert(in_use_.next == &in_use_); // in_use lru must be empty
-    // travel lru, all entry in it
-    // all entry must not in cache
-    // because we will call Release after using it
-    // all entry must not be used
+    // all entry should be unref
+    assert(in_use_.next == &in_use_);
     for(QueueHandle* e = lru_.next; e != nullptr && e != &lru_;){
       QueueHandle* next = e->next;
       assert(e->in_cache);
@@ -81,6 +78,16 @@ class SingleQueue{
     }
   }
 
+  void MoveToMRU(QueueHandle* handle){
+    assert(handle->in_cache);
+    Queue_Remove(handle);
+    if(handle->ref == 1){
+      Queue_Append(&lru_, handle);
+    } else{
+      Queue_Append(&in_use_, handle);
+    }
+  }
+
   void Ref(QueueHandle* e){
     // if in lru, but not be erased
     // move to in_use
@@ -99,15 +106,17 @@ class SingleQueue{
     e->ref--;
     if(e->ref == 0){
       assert(!e->in_cache);
-      FreeHandle(e);
+      e->deleter(e->key(), e->reader);
+      free(e);
     }else if(e->in_cache && e->ref == 1){
       Queue_Remove(e);
       Queue_Append(&lru_, e); // ready for free
     }
   }
+
  private:
-  QueueHandle lru_;
-  QueueHandle in_use_;
+  QueueHandle lru_; // ref == 1 && in_cache == true
+  QueueHandle in_use_; // ref >= 2 && in_cache == true
 
   void Queue_Append(QueueHandle *list, QueueHandle* e){
     // Make "e" newest entry by inserting just before *list
@@ -120,13 +129,6 @@ class SingleQueue{
   void Queue_Remove(QueueHandle* e) {
     e->next->prev = e->prev;
     e->prev->next = e->next;
-  }
-
-  void FreeHandle(QueueHandle* e){
-    if(e){
-      e->deleter(e->key(), e->reader);
-      free(e);
-    }
   }
 };
 
@@ -181,6 +183,13 @@ class InterMultiQueue: public MultiQueue{
     return reinterpret_cast<Handle*>(handle);
   }
 
+  bool KeyMayMatch(Handle* handle, uint64_t block_offset, const Slice& key) override{
+    FilterBlockReader* reader = Value(handle);
+    QueueHandle* queue_handle = reinterpret_cast<QueueHandle*>(handle);
+    FindQueue(queue_handle)->MoveToMRU(queue_handle);
+    return reader->KeyMayMatch(block_offset, key);
+  }
+
   Handle* Lookup(const Slice& key) override {
     auto iter = map_.find(key.ToString());
     if(iter != map_.end()) {
@@ -223,7 +232,6 @@ class InterMultiQueue: public MultiQueue{
   uint64_t last_id_;
 
   std::vector<SingleQueue*> queues_;
-
   std::unordered_map<std::string, QueueHandle*> map_;
 };
 
