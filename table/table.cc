@@ -20,6 +20,7 @@ namespace leveldb {
 struct Table::Rep {
   ~Rep() {
     delete index_block;
+    delete reader;
     if(options.multi_queue && handle){
       // release for this table
       options.multi_queue->Erase(handle);
@@ -35,6 +36,7 @@ struct Table::Rep {
   BlockHandle metaindex_handle;  // Handle to metaindex_block: saved from footer
   Block* index_block;
   MultiQueue::Handle* handle;
+  FilterBlockReader* reader;
 };
 
 Status Table::Open(const Options& options, RandomAccessFile* file,
@@ -74,6 +76,7 @@ Status Table::Open(const Options& options, RandomAccessFile* file,
     rep->block_cache_id = (options.block_cache ? options.block_cache->NewId() : 0);
     rep->multi_queue_id = (options.multi_queue ? options.multi_queue->NewId() : 0);
     rep->handle = nullptr;
+    rep->reader = nullptr;
     rep->footer = footer;
     *table = new Table(rep);
   }
@@ -136,7 +139,12 @@ static void DeleteCacheFilter(const Slice& key, FilterBlockReader* value) {
 // cache handle and reader, so the pointer of reader passed in ReadFilter
 void Table::ReadFilter() {
     MultiQueue* multi_queue = rep_->options.multi_queue;
-    if (rep_->options.filter_policy == nullptr || multi_queue == nullptr){
+    if (rep_->options.filter_policy == nullptr || rep_->reader != nullptr){
+      return;
+    }
+
+    if(multi_queue == nullptr){
+      rep_->reader = ReadMeta();
       return;
     }
 
@@ -256,7 +264,10 @@ Status Table::InternalGet(const ReadOptions& options, const Slice& k, void* arg,
     Slice handle_value = iiter->value();
     ReadFilter();
     BlockHandle handle;
-    if (rep_->handle != nullptr && handle.DecodeFrom(&handle_value).ok() &&
+    bool is_decode_ok = handle.DecodeFrom(&handle_value).ok();
+    if(rep_->reader && is_decode_ok && !rep_->reader->KeyMayMatch(handle.offset(), k)){
+      // Not found
+    }else if (rep_->handle != nullptr && is_decode_ok &&
         !rep_->options.multi_queue->KeyMayMatch(rep_->handle, handle.offset(), k)) {
       // Not found
     } else {

@@ -105,7 +105,7 @@ static int FLAGS_cache_size = -1;
 
 // Number of bytes to use as a cache of filter block.
 // Negative means disable caching filter block.
-static int FLAGS_multi_queue_size = 0;
+static bool FLAGS_multi_queue_open = false;
 
 // Maximum number of files to keep open at the same time (use default if == 0)
 static int FLAGS_open_files = 0;
@@ -526,7 +526,7 @@ class Benchmark {
  public:
   Benchmark()
       : cache_(FLAGS_cache_size >= 0 ? NewLRUCache(FLAGS_cache_size) : nullptr),
-        multi_queue_(FLAGS_multi_queue_size >= 0 ? NewMultiQueue() : nullptr),
+        multi_queue_(FLAGS_multi_queue_open == true ? NewMultiQueue() : nullptr),
         filter_policy_(FLAGS_bloom_bits >= 0
                            ? NewBloomFilterPolicy(FLAGS_bloom_bits)
                            : nullptr),
@@ -1121,7 +1121,7 @@ int main(int argc, char** argv) {
     } else if (sscanf(argv[i], "--cache_size=%d%c", &n, &junk) == 1) {
       FLAGS_cache_size = n;
     } else if (sscanf(argv[i], "--multi_queue_size=%d%c", &n, &junk) == 1) {
-      FLAGS_multi_queue_size = n;
+      FLAGS_multi_queue_open = n;
     } else if (sscanf(argv[i], "--bloom_bits=%d%c", &n, &junk) == 1) {
       FLAGS_bloom_bits = n;
     } else if (sscanf(argv[i], "--open_files=%d%c", &n, &junk) == 1) {
