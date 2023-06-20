@@ -49,6 +49,8 @@ class LEVELDB_EXPORT FilterPolicy {
   // This method may return true or false if the key was not on the
   // list, but it should aim to return false with a high probability.
   virtual bool KeyMayMatch(const Slice& key, const Slice& filter, int index) const = 0;
+
+  virtual double FalsePositiveRate() const = 0;
 };
 
 // Return a new filter policy that uses a bloom filter with approximately

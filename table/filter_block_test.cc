@@ -37,6 +37,8 @@ class TestHashFilter : public FilterPolicy {
     }
     return false;
   }
+
+  double  FalsePositiveRate() const override { return 0; }
 };
 
 class FilterBlockTest : public testing::Test {

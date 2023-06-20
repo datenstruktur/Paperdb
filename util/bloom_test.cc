@@ -21,6 +21,12 @@ class BloomTest : public testing::Test {
  public:
   BloomTest() : policy_(NewBloomFilterPolicy(10)) {}
 
+  void SetBloomFilter(int bits_per_key){
+    delete policy_;
+    Reset();
+    policy_ = NewBloomFilterPolicy(bits_per_key);
+  }
+
   ~BloomTest() { delete policy_; }
 
   void Reset() {
@@ -71,6 +77,10 @@ class BloomTest : public testing::Test {
       }
     }
     return result / 10000.0;
+  }
+
+  double FalsePositiveRateInTheory() {
+    return policy_->FalsePositiveRate();
   }
 
  private:
@@ -147,6 +157,13 @@ TEST_F(BloomTest, VaryingLengths) {
                  mediocre_filters);
   }
   ASSERT_LE(mediocre_filters, good_filters / 5);
+}
+
+TEST_F(BloomTest, FalsePositiveRate){
+  for(int i = 1; i < 1000; i++){
+    SetBloomFilter(i);
+    ASSERT_EQ(FalsePositiveRateInTheory(), pow(0.6185, i));
+  }
 }
 
 // Different bits-per-byte

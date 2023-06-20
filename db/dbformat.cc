@@ -119,6 +119,7 @@ void InternalFilterPolicy::CreateFilter(const Slice* keys, int n,
 bool InternalFilterPolicy::KeyMayMatch(const Slice& key, const Slice& f, int index) const {
   return user_policy_->KeyMayMatch(ExtractUserKey(key), f, index);
 }
+double InternalFilterPolicy::FalsePositiveRate() const { return 0; }
 
 LookupKey::LookupKey(const Slice& user_key, SequenceNumber s) {
   size_t usize = user_key.size();

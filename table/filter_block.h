@@ -10,14 +10,18 @@
 #define STORAGE_LEVELDB_TABLE_FILTER_BLOCK_H_
 
 #include "db/dbformat.h"
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <iostream>
 
 #include "leveldb/env.h"
 #include "leveldb/slice.h"
+
 #include "util/hash.h"
+
 #include "format.h"
 
 namespace leveldb {
@@ -85,10 +89,28 @@ class FilterBlockReader {
       return filter_units.size() < filters_number;
   }
 
+  bool CanBeEvict() const {
+      return filter_units.size() > 1;
+  }
+
   //filter block memory overhead(Byte), use by Cache->Insert
   size_t Size() const{
     return filter_units.size() * disk_size_;
   }
+
+  double IOs() const{
+    return pow(policy_->FalsePositiveRate(), filter_units.size()) * access_time_;
+  }
+
+  double LoadIOs() const{
+    return pow(policy_->FalsePositiveRate(), filter_units.size() + 1) * access_time_;
+  }
+
+  double EvictIOs() const{
+    assert(filter_units.size() > 1);
+    return pow(policy_->FalsePositiveRate(), filter_units.size() - 1) * access_time_;
+  }
+
  private:
   const FilterPolicy* policy_;
   const char* data_;    // Pointer to filter meta data (at block-start)

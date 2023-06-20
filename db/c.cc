@@ -137,6 +137,8 @@ struct leveldb_filterpolicy_t : public FilterPolicy {
                          filter.size());
   }
 
+  double  FalsePositiveRate() const override { return 0; }
+
   void* state_;
   void (*destructor_)(void*);
   const char* (*name_)(void*);

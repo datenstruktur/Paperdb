@@ -1,5 +1,6 @@
 #include "leveldb/multi_queue.h"
 
+#include <iostream>
 #include <unordered_map>
 
 namespace leveldb {
@@ -78,9 +79,13 @@ class SingleQueue{
     }
   }
 
-  void MoveToMRU(QueueHandle* handle){
+  void Remove(QueueHandle* handle){
     assert(handle->in_cache);
     Queue_Remove(handle);
+  }
+
+  void MoveToMRU(QueueHandle* handle){
+    Remove(handle);
     if(handle->ref == 1){
       Queue_Append(&lru_, handle);
     } else{
@@ -112,6 +117,23 @@ class SingleQueue{
       Queue_Remove(e);
       Queue_Append(&lru_, e); // ready for free
     }
+  }
+
+  void FindColdFilter(uint64_t& memory, SequenceNumber sn,
+                      std::vector<QueueHandle*>& filters){
+    QueueHandle* e = in_use_.prev;
+    do{
+      if(e == nullptr || e == &in_use_){
+        break;
+      }
+      QueueHandle* next = e->prev;
+      assert(e->in_cache);
+      if(e->reader->IsCold(sn) && e->reader->CanBeEvict()){
+        memory -= e->reader->OneUnitSize();
+        filters.push_back(e);
+      }
+      e = next;
+    } while (memory > 0);
   }
 
  private:
@@ -183,10 +205,78 @@ class InterMultiQueue: public MultiQueue{
     return reinterpret_cast<Handle*>(handle);
   }
 
+  std::vector<QueueHandle*> FindColdFilter(uint64_t memory,
+                      SequenceNumber sn){
+    SingleQueue* queue = nullptr;
+    std::vector<QueueHandle*> filters;
+    for(int i = filters_number; i > 1; i--){
+      queue = queues_[i];
+      queue->FindColdFilter(memory, sn, filters);
+    }
+
+    return filters;
+  }
+
+  bool CanBeAdjusted(const std::vector<QueueHandle*> &cold, QueueHandle* hot){
+    double original_ios = 0;
+    for(QueueHandle* handle : cold){
+      if(!handle->reader->CanBeEvict()) return false;
+      original_ios += handle->reader->IOs();
+    }
+    original_ios += hot->reader->IOs();
+
+    double adjusted_ios = 0;
+    for(QueueHandle* handle : cold){
+      adjusted_ios += handle->reader->EvictIOs();
+    }
+    adjusted_ios += hot->reader->LoadIOs();
+
+    return adjusted_ios < original_ios;
+  }
+
+  void LoadHandle(QueueHandle* handle){
+    int number = handle->reader->FilterUnitsNumber();
+    queues_[number]->Remove(handle);
+    queues_[number + 1]->MoveToMRU(handle);
+    handle->reader->LoadFilter();
+  }
+
+  void EvictHandle(QueueHandle* handle){
+    int number = handle->reader->FilterUnitsNumber();
+    queues_[number]->Remove(handle);
+    queues_[number - 1]->MoveToMRU(handle);
+    handle->reader->EvictFilter();
+  }
+
+  void ApplyAjustment(const std::vector<QueueHandle*> &cold, QueueHandle* hot){
+    for(QueueHandle* handle : cold){
+      EvictHandle(handle);
+    }
+
+    LoadHandle(hot);
+  }
+
+  void Adjustment(QueueHandle* hot_handle, SequenceNumber sn){
+    if(hot_handle->reader->CanBeLoaded()) {
+      size_t memory = hot_handle->reader->OneUnitSize();
+      std::vector<QueueHandle*> cold = FindColdFilter(memory, sn);
+      if (CanBeAdjusted(cold, hot_handle)) {
+        ApplyAjustment(cold, hot_handle);
+      }
+    }
+  }
+
   bool KeyMayMatch(Handle* handle, uint64_t block_offset, const Slice& key) override{
     FilterBlockReader* reader = Value(handle);
     QueueHandle* queue_handle = reinterpret_cast<QueueHandle*>(handle);
     FindQueue(queue_handle)->MoveToMRU(queue_handle);
+
+    ParsedInternalKey parsedInternalKey;
+    if(ParseInternalKey(key, &parsedInternalKey)) {
+      SequenceNumber sn = parsedInternalKey.sequence;
+      Adjustment(queue_handle, sn);
+    }
+
     return reader->KeyMayMatch(block_offset, key);
   }
 
@@ -219,7 +309,7 @@ class InterMultiQueue: public MultiQueue{
       QueueHandle* handle = iter->second;
       map_.erase(key.ToString());
       SingleQueue* queue = FindQueue(handle);
-      usage_ -=  handle->reader->Size();
+      usage_ -= handle->reader->Size();
       queue->Erase(handle);
     }
   }
