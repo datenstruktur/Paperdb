@@ -121,16 +121,6 @@ class InterMultiQueue : public MultiQueue {
     }
   }
 
-  SingleQueue* FindQueue(QueueHandle* handle) {
-    FilterBlockReader* reader = Value(reinterpret_cast<Handle*>(handle));
-    if (reader != nullptr) {
-      int number = reader->FilterUnitsNumber();
-      SingleQueue* queue = queues_[number];
-      return queue;
-    }
-    return nullptr;
-  }
-
   Handle* Insert(const Slice& key, FilterBlockReader* reader,
                  void (*deleter)(const Slice&, FilterBlockReader*)) override {
     assert(reader != nullptr);
@@ -142,6 +132,66 @@ class InterMultiQueue : public MultiQueue {
     return reinterpret_cast<Handle*>(handle);
   }
 
+  bool KeyMayMatch(Handle* handle, uint64_t block_offset, const Slice& key) override{
+    FilterBlockReader* reader = Value(handle);
+    QueueHandle* queue_handle = reinterpret_cast<QueueHandle*>(handle);
+    FindQueue(queue_handle)->MoveToMRU(queue_handle);
+
+    ParsedInternalKey parsedInternalKey;
+    if(ParseInternalKey(key, &parsedInternalKey)) {
+      SequenceNumber sn = parsedInternalKey.sequence;
+      Adjustment(queue_handle, sn);
+    }
+
+    return reader->KeyMayMatch(block_offset, key);
+  }
+
+  Handle* Lookup(const Slice& key) override {
+    auto iter = map_.find(key.ToString());
+    if(iter != map_.end()) {
+      QueueHandle* handle = map_.find(key.ToString())->second;
+      return reinterpret_cast<Handle*>(handle);
+    }else{
+      return nullptr;
+    }
+  }
+
+  FilterBlockReader* Value(Handle* handle) override {
+    if(handle) {
+      return reinterpret_cast<QueueHandle*>(handle)->reader;
+    }else{
+      return nullptr;
+    }
+  }
+
+  void Erase(Handle* handle) override {
+    QueueHandle* queue_handle = reinterpret_cast<QueueHandle*>(handle);
+    std::string key = queue_handle->key().ToString();
+    auto iter = map_.find(key);
+    if(iter != map_.end()) {
+      map_.erase(key);
+      SingleQueue* queue = FindQueue(queue_handle);
+      usage_ -= queue_handle->reader->Size();
+      queue->Erase(queue_handle);
+    }
+  }
+
+  uint64_t NewId() override { return ++last_id_; }
+
+  size_t TotalCharge() const override { return usage_; }
+
+  void SetLogger(Logger* logger) override{
+    logger_ = logger;
+  }
+
+ private:
+  size_t usage_;
+  uint64_t last_id_;
+  Logger* logger_;
+
+  std::vector<SingleQueue*> queues_;
+  std::unordered_map<std::string, QueueHandle*> map_;
+
   std::vector<QueueHandle*> FindColdFilter(uint64_t memory, SequenceNumber sn) {
     SingleQueue* queue = nullptr;
     std::vector<QueueHandle*> filters;
@@ -151,6 +201,16 @@ class InterMultiQueue : public MultiQueue {
     }
 
     return filters;
+  }
+
+  SingleQueue* FindQueue(QueueHandle* handle) {
+    FilterBlockReader* reader = Value(reinterpret_cast<Handle*>(handle));
+    if (reader != nullptr) {
+      int number = reader->FilterUnitsNumber();
+      SingleQueue* queue = queues_[number];
+      return queue;
+    }
+    return nullptr;
   }
 
   bool CanBeAdjusted(const std::vector<QueueHandle*>& cold, QueueHandle* hot) {
@@ -218,65 +278,6 @@ class InterMultiQueue : public MultiQueue {
       }
     }
   }
-
-  bool KeyMayMatch(Handle* handle, uint64_t block_offset, const Slice& key) override{
-    FilterBlockReader* reader = Value(handle);
-    QueueHandle* queue_handle = reinterpret_cast<QueueHandle*>(handle);
-    FindQueue(queue_handle)->MoveToMRU(queue_handle);
-
-    ParsedInternalKey parsedInternalKey;
-    if(ParseInternalKey(key, &parsedInternalKey)) {
-      SequenceNumber sn = parsedInternalKey.sequence;
-      Adjustment(queue_handle, sn);
-    }
-
-    return reader->KeyMayMatch(block_offset, key);
-  }
-
-  Handle* Lookup(const Slice& key) override {
-    auto iter = map_.find(key.ToString());
-    if(iter != map_.end()) {
-      QueueHandle* handle = map_.find(key.ToString())->second;
-      return reinterpret_cast<Handle*>(handle);
-    }else{
-      return nullptr;
-    }
-  }
-
-  FilterBlockReader* Value(Handle* handle) override {
-    if(handle) {
-      return reinterpret_cast<QueueHandle*>(handle)->reader;
-    }else{
-      return nullptr;
-    }
-  }
-
-  void Erase(Handle* handle) override {
-    QueueHandle* queue_handle = reinterpret_cast<QueueHandle*>(handle);
-    std::string key = queue_handle->key().ToString();
-    auto iter = map_.find(key);
-    if(iter != map_.end()) {
-      map_.erase(key);
-      SingleQueue* queue = FindQueue(queue_handle);
-      usage_ -= queue_handle->reader->Size();
-      queue->Erase(queue_handle);
-    }
-  }
-
-  uint64_t NewId() override { return ++last_id_; }
-
-  size_t TotalCharge() const override { return usage_; }
-
-  void SetLogger(Logger* logger) override{
-    logger_ = logger;
-  }
- private:
-  size_t usage_;
-  uint64_t last_id_;
-  Logger* logger_;
-
-  std::vector<SingleQueue*> queues_;
-  std::unordered_map<std::string, QueueHandle*> map_;
 };
 
 MultiQueue* NewMultiQueue() { return new InterMultiQueue(); }
