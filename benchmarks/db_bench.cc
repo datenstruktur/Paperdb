@@ -129,6 +129,9 @@ static bool FLAGS_reuse_logs = false;
 // If true, use compression.
 static bool FLAGS_compression = true;
 
+// If true, print FinishedSingleOp log
+static bool FLAGS_print_process = true;
+
 // Use the db with the following name.
 static const char* FLAGS_db = nullptr;
 
@@ -313,8 +316,10 @@ class Stats {
         next_report_ += 50000;
       else
         next_report_ += 100000;
-      std::fprintf(stderr, "... finished %d ops%30s\r", done_, "");
-      std::fflush(stderr);
+      if(FLAGS_print_process) {
+        std::fprintf(stderr, "... finished %d ops%30s\r", done_, "");
+        std::fflush(stderr);
+      }
     }
   }
 
@@ -1103,6 +1108,9 @@ int main(int argc, char** argv) {
     } else if (sscanf(argv[i], "--compression=%d%c", &n, &junk) == 1 &&
                (n == 0 || n == 1)) {
       FLAGS_compression = n;
+    }else if (sscanf(argv[i], "--print_process=%d%c", &n, &junk) == 1 &&
+               (n == 0 || n == 1)) {
+        FLAGS_print_process = n;
     } else if (sscanf(argv[i], "--num=%d%c", &n, &junk) == 1) {
       FLAGS_num = n;
     } else if (sscanf(argv[i], "--reads=%d%c", &n, &junk) == 1) {
