@@ -79,6 +79,9 @@ Status Table::Open(const Options& options, RandomAccessFile* file,
     rep->reader = nullptr;
     rep->footer = footer;
     *table = new Table(rep);
+    if(!options.multi_queue){
+      (*table)->ReadFilter();
+    }
   }
 
   return s;
@@ -144,7 +147,9 @@ void Table::ReadFilter() {
     }
 
     if(multi_queue == nullptr){
-      rep_->reader = ReadMeta();
+      if(rep_->reader == nullptr) {
+          rep_->reader = ReadMeta();
+      }
       return;
     }
 

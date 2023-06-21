@@ -254,10 +254,13 @@ class InterMultiQueue : public MultiQueue {
   void Erase(Handle* handle) override {
     QueueHandle* queue_handle = reinterpret_cast<QueueHandle*>(handle);
     std::string key = queue_handle->key().ToString();
-    map_.erase(key);
-    SingleQueue* queue = FindQueue(queue_handle);
-    usage_ -= queue_handle->reader->Size();
-    queue->Erase(queue_handle);
+    auto iter = map_.find(key);
+    if(iter != map_.end()) {
+      map_.erase(key);
+      SingleQueue* queue = FindQueue(queue_handle);
+      usage_ -= queue_handle->reader->Size();
+      queue->Erase(queue_handle);
+    }
   }
 
   uint64_t NewId() override { return ++last_id_; }
