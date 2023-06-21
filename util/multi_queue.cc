@@ -267,7 +267,7 @@ class InterMultiQueue : public MultiQueue {
 
   size_t TotalCharge() const override { return usage_; }
 
-  void SetLogger(Logger* logger){
+  void SetLogger(Logger* logger) override{
     logger_ = logger;
   }
  private:
