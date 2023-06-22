@@ -23,6 +23,7 @@ if(NOT CMAKE_CXX_STANDARD)
 endif(NOT CMAKE_CXX_STANDARD)
 
 option(USE_SAN "Use sanitizers to check memory leaks" OFF)
+option(USE_ADJUSTMENT_LOGGING "Use logging to record adjustment information" OFF)
 
 if (WIN32)
   set(LEVELDB_PLATFORM_NAME LEVELDB_PLATFORM_WINDOWS)
