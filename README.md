@@ -47,7 +47,7 @@ Quick start:
 
 ```bash
 mkdir -p build && cd build
-cmake -DCMAKE_BUILD_TYPE=Release -USE_SAN=ON .. && cmake --build .
+cmake -DCMAKE_BUILD_TYPE=Release -DUSE_SAN=ON .. && cmake --build .
 ```
 
 ### Building for Windows
