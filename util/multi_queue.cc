@@ -1,6 +1,5 @@
 #include "leveldb/multi_queue.h"
 
-#include <iostream>
 #include <unordered_map>
 
 namespace leveldb {
@@ -132,13 +131,14 @@ class InternalMultiQueue : public MultiQueue {
     return reinterpret_cast<Handle*>(handle);
   }
 
-  bool KeyMayMatch(Handle* handle, uint64_t block_offset, const Slice& key) override{
+  bool KeyMayMatch(Handle* handle, uint64_t block_offset,
+                   const Slice& key) override {
     FilterBlockReader* reader = Value(handle);
     QueueHandle* queue_handle = reinterpret_cast<QueueHandle*>(handle);
     FindQueue(queue_handle)->MoveToMRU(queue_handle);
 
     ParsedInternalKey parsedInternalKey;
-    if(ParseInternalKey(key, &parsedInternalKey)) {
+    if (ParseInternalKey(key, &parsedInternalKey)) {
       SequenceNumber sn = parsedInternalKey.sequence;
       Adjustment(queue_handle, sn);
     }
@@ -148,18 +148,18 @@ class InternalMultiQueue : public MultiQueue {
 
   Handle* Lookup(const Slice& key) override {
     auto iter = map_.find(key.ToString());
-    if(iter != map_.end()) {
+    if (iter != map_.end()) {
       QueueHandle* handle = map_.find(key.ToString())->second;
       return reinterpret_cast<Handle*>(handle);
-    }else{
+    } else {
       return nullptr;
     }
   }
 
   FilterBlockReader* Value(Handle* handle) override {
-    if(handle) {
+    if (handle) {
       return reinterpret_cast<QueueHandle*>(handle)->reader;
-    }else{
+    } else {
       return nullptr;
     }
   }
@@ -168,7 +168,7 @@ class InternalMultiQueue : public MultiQueue {
     QueueHandle* queue_handle = reinterpret_cast<QueueHandle*>(handle);
     std::string key = queue_handle->key().ToString();
     auto iter = map_.find(key);
-    if(iter != map_.end()) {
+    if (iter != map_.end()) {
       map_.erase(key);
       SingleQueue* queue = FindQueue(queue_handle);
       usage_ -= queue_handle->reader->Size();
@@ -180,9 +180,7 @@ class InternalMultiQueue : public MultiQueue {
 
   size_t TotalCharge() const override { return usage_; }
 
-  void SetLogger(Logger* logger) override{
-    logger_ = logger;
-  }
+  void SetLogger(Logger* logger) override { logger_ = logger; }
 
  private:
   size_t usage_;
@@ -230,9 +228,10 @@ class InternalMultiQueue : public MultiQueue {
 
     if (adjusted_ios < original_ios) {
 #ifdef USE_ADJUSTMENT_LOGGING
-      if(logger_ != nullptr) {
+      if (logger_ != nullptr) {
         Log(logger_,
-            "Adjustment: Cold BF Number: %zu, Filter Units number of Hot BF: %zu, adjusted "
+            "Adjustment: Cold BF Number: %zu, Filter Units number of Hot BF: "
+            "%zu, adjusted "
             "ios: %f, original ios: %f",
             cold.size(), hot->reader->FilterUnitsNumber(), adjusted_ios,
             original_ios);
@@ -243,7 +242,7 @@ class InternalMultiQueue : public MultiQueue {
     return false;
   }
 
-  void LoadHandle(QueueHandle* handle){
+  void LoadHandle(QueueHandle* handle) {
     int number = handle->reader->FilterUnitsNumber();
     assert(number + 1 <= filters_number);
     queues_[number]->Remove(handle);
@@ -251,7 +250,7 @@ class InternalMultiQueue : public MultiQueue {
     handle->reader->LoadFilter();
   }
 
-  void EvictHandle(QueueHandle* handle){
+  void EvictHandle(QueueHandle* handle) {
     int number = handle->reader->FilterUnitsNumber();
     assert(number - 1 >= 0);
     queues_[number]->Remove(handle);
@@ -259,16 +258,17 @@ class InternalMultiQueue : public MultiQueue {
     handle->reader->EvictFilter();
   }
 
-  void ApplyAjustment(const std::vector<QueueHandle*> &colds, QueueHandle* hot){
-    for(QueueHandle* cold : colds){
+  void ApplyAjustment(const std::vector<QueueHandle*>& colds,
+                      QueueHandle* hot) {
+    for (QueueHandle* cold : colds) {
       EvictHandle(cold);
     }
 
     LoadHandle(hot);
   }
 
-  void Adjustment(QueueHandle* hot_handle, SequenceNumber sn){
-    if(hot_handle->reader->CanBeLoaded()) {
+  void Adjustment(QueueHandle* hot_handle, SequenceNumber sn) {
+    if (hot_handle->reader->CanBeLoaded()) {
       size_t memory = hot_handle->reader->OneUnitSize();
       std::vector<QueueHandle*> cold = FindColdFilter(memory, sn);
       if (!cold.empty() && CanBeAdjusted(cold, hot_handle)) {
@@ -279,4 +279,4 @@ class InternalMultiQueue : public MultiQueue {
 };
 
 MultiQueue* NewMultiQueue() { return new InternalMultiQueue(); }
-}
+}  // namespace leveldb

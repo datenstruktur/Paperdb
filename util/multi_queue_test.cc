@@ -5,38 +5,39 @@
 #include "leveldb/multi_queue.h"
 
 #include <vector>
+
 #include "file_impl.h"
 #include "gtest/gtest.h"
 
 namespace leveldb {
 class MultiQueueTest : public testing::Test {
  public:
-  MultiQueueTest(){
+  MultiQueueTest() {
     multi_queue_ = NewMultiQueue();
     policy_ = NewBloomFilterPolicy(10);
   }
 
-  ~MultiQueueTest(){
+  ~MultiQueueTest() {
     delete multi_queue_;
     delete policy_;
-    for(int i = 0; i < file_impl_.size(); i++){
+    for (int i = 0; i < file_impl_.size(); i++) {
       delete file_impl_[i];
     }
   }
 
-  FilterBlockReader* NewReader(){
+  FilterBlockReader* NewReader() {
     FilterBlockBuilder builder(policy_);
     builder.StartBlock(100);
     builder.AddKey("foo");
 
-    FileImpl *file = new FileImpl();
+    FileImpl* file = new FileImpl();
     BlockHandle handle;
     const std::vector<std::string>& filters = builder.ReturnFilters();
     file->WriteRawFilters(filters, &handle);
 
     Slice block = builder.Finish(handle);
 
-    char *filter_meta = (char *)malloc(sizeof(char) * block.size());
+    char* filter_meta = (char*)malloc(sizeof(char) * block.size());
     memcpy(filter_meta, block.data(), block.size());
     Slice filter_meta_data(filter_meta, block.size());
 
@@ -49,74 +50,69 @@ class MultiQueueTest : public testing::Test {
     delete reader;
   }
 
-  MultiQueue::Handle* Insert(const Slice& key){
+  MultiQueue::Handle* Insert(const Slice& key) {
     return multi_queue_->Insert(key, NewReader(), MultiQueueTest::Deleter);
   }
 
-  MultiQueue::Handle* Lookup(const Slice& key){
+  MultiQueue::Handle* Lookup(const Slice& key) {
     return multi_queue_->Lookup(key);
   }
 
-  void Erase(MultiQueue::Handle* handle){
-    multi_queue_->Erase(handle);
-  }
+  void Erase(MultiQueue::Handle* handle) { multi_queue_->Erase(handle); }
 
-  FilterBlockReader* Value(MultiQueue::Handle* handle){
+  FilterBlockReader* Value(MultiQueue::Handle* handle) {
     return multi_queue_->Value(handle);
   }
 
-  size_t TotalCharge(){
-    return multi_queue_->TotalCharge();
-  }
+  size_t TotalCharge() { return multi_queue_->TotalCharge(); }
 
-  MultiQueue *multi_queue_;
-  const FilterPolicy *policy_;
+  MultiQueue* multi_queue_;
+  const FilterPolicy* policy_;
   std::vector<FileImpl*> file_impl_;
 };
 
-TEST_F(MultiQueueTest, InsertAndLookup){
-    // insert kv to cache
-    MultiQueue::Handle* insert_handle = Insert("key1");
-    ASSERT_NE(insert_handle, nullptr);
+TEST_F(MultiQueueTest, InsertAndLookup) {
+  // insert kv to cache
+  MultiQueue::Handle* insert_handle = Insert("key1");
+  ASSERT_NE(insert_handle, nullptr);
 
-    // lookup kv from cache
-    MultiQueue::Handle* lookup_handle = Lookup("key1");
-    ASSERT_NE(lookup_handle, nullptr);
+  // lookup kv from cache
+  MultiQueue::Handle* lookup_handle = Lookup("key1");
+  ASSERT_NE(lookup_handle, nullptr);
 
+  ASSERT_EQ(lookup_handle, insert_handle);
 
-    ASSERT_EQ(lookup_handle, insert_handle);
-
-    FilterBlockReader* reader = Value(lookup_handle);
-    ASSERT_NE(reader, nullptr);
-    ASSERT_TRUE(reader->KeyMayMatch(100, "foo"));
+  FilterBlockReader* reader = Value(lookup_handle);
+  ASSERT_NE(reader, nullptr);
+  ASSERT_TRUE(reader->KeyMayMatch(100, "foo"));
 }
 
-TEST_F(MultiQueueTest, InsertAndErase){
-    MultiQueue::Handle* insert_handle = Insert("key1");
-    ASSERT_NE(insert_handle, nullptr);
+TEST_F(MultiQueueTest, InsertAndErase) {
+  MultiQueue::Handle* insert_handle = Insert("key1");
+  ASSERT_NE(insert_handle, nullptr);
 
-    // erase from cache
-    Erase(insert_handle);
+  // erase from cache
+  Erase(insert_handle);
 
-    // can not be found in cache
-    MultiQueue::Handle* lookup_handle = Lookup("key1");
-    ASSERT_EQ(lookup_handle, nullptr);
+  // can not be found in cache
+  MultiQueue::Handle* lookup_handle = Lookup("key1");
+  ASSERT_EQ(lookup_handle, nullptr);
 }
 
-TEST_F(MultiQueueTest, TotalCharge){
-    MultiQueue::Handle* insert_handle = Insert("key1");
-    ASSERT_NE(insert_handle, nullptr);
+TEST_F(MultiQueueTest, TotalCharge) {
+  MultiQueue::Handle* insert_handle = Insert("key1");
+  ASSERT_NE(insert_handle, nullptr);
 
-    FilterBlockReader* reader = Value(insert_handle);
-    ASSERT_EQ(TotalCharge(), reader->Size());
+  FilterBlockReader* reader = Value(insert_handle);
+  ASSERT_EQ(TotalCharge(), reader->Size());
 
-    Erase(insert_handle); // erase from cache, but still in memory
-    ASSERT_EQ(TotalCharge(), 0);
+  Erase(insert_handle);  // erase from cache, but still in memory
+  ASSERT_EQ(TotalCharge(), 0);
 }
 
 TEST_F(MultiQueueTest, NewId) {
-    uint64_t a = multi_queue_->NewId();
-    uint64_t b = multi_queue_->NewId();
-    ASSERT_NE(a, b);
+  uint64_t a = multi_queue_->NewId();
+  uint64_t b = multi_queue_->NewId();
+  ASSERT_NE(a, b);
 }
 }  // namespace leveldb

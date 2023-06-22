@@ -32,7 +32,8 @@ class BloomFilterPolicy : public FilterPolicy {
 
   const char* Name() const override { return "leveldb.BuiltinBloomFilter2"; }
 
-  void CreateFilter(const Slice* keys, int n, std::string* dst, int index) const override {
+  void CreateFilter(const Slice* keys, int n, std::string* dst,
+                    int index) const override {
     // Compute bloom filter size (in both bits and bytes)
     size_t bits = n * bits_per_key_;
 
@@ -60,7 +61,8 @@ class BloomFilterPolicy : public FilterPolicy {
     }
   }
 
-  bool KeyMayMatch(const Slice& key, const Slice& bloom_filter, int index) const override {
+  bool KeyMayMatch(const Slice& key, const Slice& bloom_filter,
+                   int index) const override {
     const size_t len = bloom_filter.size();
     if (len < 2) return false;
 
@@ -87,7 +89,7 @@ class BloomFilterPolicy : public FilterPolicy {
   }
 
   double FalsePositiveRate() const override {
-    return pow(0.6185, static_cast<double >(bits_per_key_));
+    return pow(0.6185, static_cast<double>(bits_per_key_));
   }
 
  private:

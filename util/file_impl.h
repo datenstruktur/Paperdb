@@ -5,10 +5,11 @@
 #ifndef LEVELDB_FILE_IMPL_H
 #define LEVELDB_FILE_IMPL_H
 
-#include "util/crc32c.h"
-#include "leveldb/status.h"
 #include "leveldb/env.h"
+#include "leveldb/status.h"
+
 #include "table/format.h"
+#include "util/crc32c.h"
 
 namespace leveldb {
 

@@ -4,9 +4,7 @@
 
 #include "table/filter_block.h"
 
-#include "db/dbformat.h"
 #include "leveldb/filter_policy.h"
-#include "util/coding.h"
 
 namespace leveldb {
 
@@ -48,8 +46,8 @@ const std::vector<std::string>& FilterBlockBuilder::ReturnFilters() {
  * filter offset <--- unint32_t for every offset
  * offset        <--- unint64_t  first filter offset in disk
  * size          <--- unint32_t  one filter size
- * loaded        <--- unint32_t  the number of filter to load when FilterBlockReader is created
- * number        <--- unint32_t  all filters number
+ * loaded        <--- unint32_t  the number of filter to load when
+ * FilterBlockReader is created number        <--- unint32_t  all filters number
  * baselg        <--- char
  */
 Slice FilterBlockBuilder::Finish(const BlockHandle& handle) {
@@ -96,9 +94,10 @@ void FilterBlockBuilder::GenerateFilter() {
 
   // Generate filter for current set of keys and append to result_.
   filter_offsets_.push_back(filter_units_[0].size());
-  for(int i = 0; i < filters_number; i++){
+  for (int i = 0; i < filters_number; i++) {
     // generate different bitmap for different filter units
-    policy_->CreateFilter(&tmp_keys_[0], static_cast<int>(num_keys), &filter_units_[i], i);
+    policy_->CreateFilter(&tmp_keys_[0], static_cast<int>(num_keys),
+                          &filter_units_[i], i);
   }
 
   tmp_keys_.clear();
@@ -107,44 +106,51 @@ void FilterBlockBuilder::GenerateFilter() {
 }
 
 FilterBlockReader::FilterBlockReader(const FilterPolicy* policy,
-                                     const Slice& contents, RandomAccessFile* file)
-    : policy_(policy), data_(nullptr), offset_(nullptr), num_(0), base_lg_(0),
-      file_(file), heap_allocated_(false), access_time_(0), sequence_(0) {
+                                     const Slice& contents,
+                                     RandomAccessFile* file)
+    : policy_(policy),
+      data_(nullptr),
+      offset_(nullptr),
+      num_(0),
+      base_lg_(0),
+      file_(file),
+      heap_allocated_(false),
+      access_time_(0),
+      sequence_(0) {
   size_t n = contents.size();
   if (n < 25) return;  // 1 byte for base_lg_ and 21 for start of others
 
   /*
- * meta data for filter units' bitmaps layout:
- * filter offset  <--- data + 0
- * filterunit len <--- data + n - 25
- * offset         <--- data + n - 21  | 8Byte 4Byte can only index 4GB disk offset
- * size           <--- data + n - 13  | 4Byte
- * loaded         <--- data + n - 9   | 4Byte
- * number         <--- data + n - 5   | 4Byte
- * base lg        <--- data + n - 1   | 1Byte
+   * meta data for filter units' bitmaps layout:
+   * filter offset  <--- data + 0
+   * filterunit len <--- data + n - 25
+   * offset         <--- data + n - 21  | 8Byte 4Byte can only index 4GB disk
+   * offset size           <--- data + n - 13  | 4Byte loaded         <--- data
+   * + n - 9   | 4Byte number         <--- data + n - 5   | 4Byte base lg <---
+   * data + n - 1   | 1Byte
    */
   base_lg_ = contents[n - 1];
   data_ = contents.data();
   all_units_number_ = DecodeFixed32(data_ + n - 5);
-  if(all_units_number_ < 0) return;
+  if (all_units_number_ < 0) return;
 
   init_units_number_ = DecodeFixed32(data_ + n - 9);
 
-  if(init_units_number_  < 0 && init_units_number_ > all_units_number_) return;
+  if (init_units_number_ < 0 && init_units_number_ > all_units_number_) return;
 
   disk_size_ = DecodeFixed32(data_ + n - 13);
   disk_offset_ = DecodeFixed64(data_ + n - 21);
-  offset_ =  contents.data();
+  offset_ = contents.data();
 
   num_ = (n - 25) / 4;
 
-  //todo: design multi units load
-  //todo: use multi thread to speed up loading
+  // todo: design multi units load
+  // todo: use multi thread to speed up loading
   Status status;
-  for(int i = 0; i < init_units_number_; i++) {
+  for (int i = 0; i < init_units_number_; i++) {
     status = LoadFilter();
-    if(!status.ok()){
-      return ;
+    if (!status.ok()) {
+      return;
     }
   }
 }
@@ -152,7 +158,7 @@ FilterBlockReader::FilterBlockReader(const FilterPolicy* policy,
 bool FilterBlockReader::KeyMayMatch(uint64_t block_offset, const Slice& key) {
   uint64_t index = block_offset >> base_lg_;
   ParsedInternalKey parsedInternalKey;
-  if(ParseInternalKey(key, &parsedInternalKey)) {
+  if (ParseInternalKey(key, &parsedInternalKey)) {
     sequence_ = parsedInternalKey.sequence;
   }
   access_time_++;
@@ -166,9 +172,9 @@ bool FilterBlockReader::KeyMayMatch(uint64_t block_offset, const Slice& key) {
       // every filter return true, return true
       // at least one filter return false, return false
       // bloom filter has no false negative rate, but has false positive rate
-      for(int i = 0; i < filter_units.size(); i++){
+      for (int i = 0; i < filter_units.size(); i++) {
         filter = Slice(filter_units[i] + start, limit - start);
-        if(!policy_->KeyMayMatch(key, filter, i)){
+        if (!policy_->KeyMayMatch(key, filter, i)) {
           return false;
         }
       }
@@ -185,15 +191,15 @@ bool FilterBlockReader::KeyMayMatch(uint64_t block_offset, const Slice& key) {
  * filters in disk layout:
  * trailer type(kNoCompression) CRC <--- disk_offset
  * filter
- * trailer type(kNoCompression) CRC <--- disk_offset + (disk_size + kBlockTrailerSize)
- * filter
+ * trailer type(kNoCompression) CRC <--- disk_offset + (disk_size +
+ * kBlockTrailerSize) filter
  * .........
  * trailer type(kNoCompression) CRC
  * filter
  */
 Status FilterBlockReader::LoadFilter() {
-  uint64_t units_index  = filter_units.size();
-  if(units_index >= all_units_number_)
+  uint64_t units_index = filter_units.size();
+  if (units_index >= all_units_number_)
     return Status::Corruption("all filter units were loaded");
 
   ReadOptions readOptions;
@@ -203,13 +209,14 @@ Status FilterBlockReader::LoadFilter() {
   BlockContents contents;
 
   // every filter has same size: disk_size_ + kBlockTrailerSize
-  uint64_t offset = disk_offset_ + (disk_size_ + kBlockTrailerSize) * units_index;
+  uint64_t offset =
+      disk_offset_ + (disk_size_ + kBlockTrailerSize) * units_index;
   handle.set_offset(offset);
   handle.set_size(disk_size_);
 
   Status s = ReadBlock(file_, readOptions, handle, &contents);
 
-  if(!s.ok()) return s;
+  if (!s.ok()) return s;
 
   // if heap_allocated, delete by FilterBlockReader
   // if not, delete by mmap
@@ -219,7 +226,7 @@ Status FilterBlockReader::LoadFilter() {
 }
 
 Status FilterBlockReader::EvictFilter() {
-  if(filter_units.empty())
+  if (filter_units.empty())
     return Status::Corruption("there is no filter can be  evicted");
 
   uint32_t size = filter_units.size();
@@ -232,12 +239,12 @@ Status FilterBlockReader::EvictFilter() {
 }
 
 FilterBlockReader::~FilterBlockReader() {
-  if(heap_allocated_){
-    for(const char * filter_unit : filter_units){
+  if (heap_allocated_) {
+    for (const char* filter_unit : filter_units) {
       delete[] filter_unit;
     }
   }
 
- free((char *)data_);
+  free((char*)data_);
 }
 }  // namespace leveldb

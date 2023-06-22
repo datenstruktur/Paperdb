@@ -5,15 +5,13 @@
 #include "leveldb/table.h"
 
 #include "leveldb/cache.h"
-#include "leveldb/multi_queue.h"
 #include "leveldb/comparator.h"
 #include "leveldb/env.h"
+#include "leveldb/multi_queue.h"
 #include "leveldb/options.h"
+
 #include "table/block.h"
-#include "table/filter_block.h"
-#include "table/format.h"
 #include "table/two_level_iterator.h"
-#include "util/coding.h"
 
 namespace leveldb {
 
@@ -21,7 +19,7 @@ struct Table::Rep {
   ~Rep() {
     delete index_block;
     delete reader;
-    if(options.multi_queue && handle){
+    if (options.multi_queue && handle) {
       // release for this table
       options.multi_queue->Erase(handle);
     }
@@ -73,13 +71,14 @@ Status Table::Open(const Options& options, RandomAccessFile* file,
     rep->file = file;
     rep->metaindex_handle = footer.metaindex_handle();
     rep->index_block = index_block;
-    rep->block_cache_id = (options.block_cache ? options.block_cache->NewId() : 0);
+    rep->block_cache_id =
+        (options.block_cache ? options.block_cache->NewId() : 0);
     rep->table_id = table_id;
     rep->handle = nullptr;
     rep->reader = nullptr;
     rep->footer = footer;
     *table = new Table(rep);
-    if(!options.multi_queue){
+    if (!options.multi_queue) {
       (*table)->ReadFilter();
     }
   }
@@ -125,7 +124,7 @@ FilterBlockReader* Table::ReadMeta() {
     // be truncated by \0, and thus an error will occur
     Slice filter_meta_data(filter_meta_contents, filter_meta_size);
     reader = new FilterBlockReader(rep_->options.filter_policy,
-                                       filter_meta_data, rep_->file);
+                                   filter_meta_data, rep_->file);
   }
   delete iter;
   delete meta;
@@ -133,49 +132,48 @@ FilterBlockReader* Table::ReadMeta() {
   return reader;
 }
 
-
 static void DeleteCacheFilter(const Slice& key, FilterBlockReader* value) {
-    delete value;
+  delete value;
 }
 
 // get FilterBlockReader and saved in rep_->filter, we should return
 // cache handle and reader, so the pointer of reader passed in ReadFilter
 void Table::ReadFilter() {
-    MultiQueue* multi_queue = rep_->options.multi_queue;
-    if (rep_->options.filter_policy == nullptr || rep_->reader != nullptr){
-      return;
+  MultiQueue* multi_queue = rep_->options.multi_queue;
+  if (rep_->options.filter_policy == nullptr || rep_->reader != nullptr) {
+    return;
+  }
+
+  if (multi_queue == nullptr) {
+    if (rep_->reader == nullptr) {
+      rep_->reader = ReadMeta();
     }
+    return;
+  }
 
-    if(multi_queue == nullptr){
-      if(rep_->reader == nullptr) {
-          rep_->reader = ReadMeta();
-      }
-      return;
+  if (rep_->handle) {
+    return;
+  }
+
+  // Get filter block from cache, or read from disk and insert
+  std::string filter_key = "filter.";
+  filter_key.append(rep_->options.filter_policy->Name());
+  char cache_key_buffer[8];
+  EncodeFixed64(cache_key_buffer, rep_->table_id);
+  filter_key.append(cache_key_buffer, 8);
+  Slice key(filter_key.data(), filter_key.size());
+
+  MultiQueue::Handle* cache_handle;
+
+  cache_handle = multi_queue->Lookup(key);
+  if (cache_handle == nullptr) {
+    FilterBlockReader* reader = ReadMeta();
+    if (reader != nullptr) {
+      cache_handle = multi_queue->Insert(key, reader, &DeleteCacheFilter);
     }
+  }
 
-    if(rep_->handle){
-      return;
-    }
-
-    // Get filter block from cache, or read from disk and insert
-    std::string filter_key = "filter.";
-    filter_key.append(rep_->options.filter_policy->Name());
-    char cache_key_buffer[8];
-    EncodeFixed64(cache_key_buffer, rep_->table_id);
-    filter_key.append(cache_key_buffer, 8);
-    Slice key(filter_key.data(), filter_key.size());
-
-    MultiQueue::Handle* cache_handle;
-
-    cache_handle = multi_queue->Lookup(key);
-    if (cache_handle == nullptr) {
-      FilterBlockReader* reader = ReadMeta();
-      if(reader != nullptr){
-        cache_handle = multi_queue->Insert(key, reader, &DeleteCacheFilter);
-      }
-    }
-
-    rep_->handle = cache_handle;
+  rep_->handle = cache_handle;
 }
 
 Table::~Table() { delete rep_; }
@@ -270,10 +268,12 @@ Status Table::InternalGet(const ReadOptions& options, const Slice& k, void* arg,
     ReadFilter();
     BlockHandle handle;
     bool is_decode_ok = handle.DecodeFrom(&handle_value).ok();
-    if(rep_->reader && is_decode_ok && !rep_->reader->KeyMayMatch(handle.offset(), k)){
+    if (rep_->reader && is_decode_ok &&
+        !rep_->reader->KeyMayMatch(handle.offset(), k)) {
       // Not found
-    }else if (rep_->handle != nullptr && is_decode_ok &&
-        !rep_->options.multi_queue->KeyMayMatch(rep_->handle, handle.offset(), k)) {
+    } else if (rep_->handle != nullptr && is_decode_ok &&
+               !rep_->options.multi_queue->KeyMayMatch(rep_->handle,
+                                                       handle.offset(), k)) {
       // Not found
     } else {
       Iterator* block_iter = BlockReader(this, options, iiter->value());

@@ -6,10 +6,7 @@
 
 #include "leveldb/filter_policy.h"
 
-#include "util/coding.h"
 #include "util/file_impl.h"
-#include "util/hash.h"
-#include "util/logging.h"
 
 #include "gtest/gtest.h"
 
@@ -38,7 +35,7 @@ class TestHashFilter : public FilterPolicy {
     return false;
   }
 
-  double  FalsePositiveRate() const override { return 0; }
+  double FalsePositiveRate() const override { return 0; }
 };
 
 class FilterBlockTest : public testing::Test {
@@ -53,17 +50,21 @@ TEST_F(FilterBlockTest, EmptyBuilder) {
   file.WriteRawFilters(builder.ReturnFilters(), &handle);
 
   Slice block = builder.Finish(handle);
-  char *filter_meta = (char *)malloc(sizeof (char) * block.size());
+  char* filter_meta = (char*)malloc(sizeof(char) * block.size());
   memcpy(filter_meta, block.data(), block.size());
   Slice filter_meta_data(filter_meta, block.size());
 
   ASSERT_EQ(
-      "\\x00\\x00\\x00\\x00"                                             // bitmap len
-      "\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"                         // offset
-      "\\x00\\x00\\x00\\x00"                                             // size
-      "\\x0" + std::to_string(loaded_filters_number) + "\\x00\\x00\\x00" // loaded
-      "\\x0" + std::to_string(filters_number)        + "\\x00\\x00\\x00" // number
-      "\\x0b",                                                           // baselg
+      "\\x00\\x00\\x00\\x00"                      // bitmap len
+      "\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"  // offset
+      "\\x00\\x00\\x00\\x00"                      // size
+      "\\x0" +
+          std::to_string(loaded_filters_number) +
+          "\\x00\\x00\\x00"  // loaded
+          "\\x0" +
+          std::to_string(filters_number) +
+          "\\x00\\x00\\x00"  // number
+          "\\x0b",           // baselg
       EscapeString(block));
 
   StringSource* source = file.GetSource();
@@ -89,22 +90,26 @@ TEST_F(FilterBlockTest, SingleChunk) {
   file.WriteRawFilters(filters, &handle);
   Slice block = builder.Finish(handle);
 
-  char *filter_meta = (char *)malloc(sizeof(char) * block.size());
+  char* filter_meta = (char*)malloc(sizeof(char) * block.size());
   memcpy(filter_meta, block.data(), block.size());
   Slice filter_meta_data(filter_meta, block.size());
 
   std::string escapestring = EscapeString(block);
-  //remove filter's bitmap
+  // remove filter's bitmap
   escapestring = escapestring.substr(escapestring.size() - 25 * 4, 25 * 4);
 
   ASSERT_EQ(
-      "\\x14\\x00\\x00\\x00" // bitmap len(20 = 4Byte * 5 key)
+      "\\x14\\x00\\x00\\x00"  // bitmap len(20 = 4Byte * 5 key)
       "\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"  // bitmap offset(0)
       // bitmap size in disk, as same as bitmap len
       "\\x14\\x00\\x00\\x00"
-      "\\x0" + std::to_string(loaded_filters_number) + "\\x00\\x00\\x00"
-      "\\x0" + std::to_string(filters_number)        + "\\x00\\x00\\x00"
-      "\\x0b",
+      "\\x0" +
+          std::to_string(loaded_filters_number) +
+          "\\x00\\x00\\x00"
+          "\\x0" +
+          std::to_string(filters_number) +
+          "\\x00\\x00\\x00"
+          "\\x0b",
       escapestring);
 
   StringSource* source = file.GetSource();
@@ -146,7 +151,7 @@ TEST_F(FilterBlockTest, MultiChunk) {
   file.WriteRawFilters(filter, &handle);
   Slice block = builder.Finish(handle);
 
-  char *filter_meta = (char *)malloc(sizeof (char ) * block.size());
+  char* filter_meta = (char*)malloc(sizeof(char) * block.size());
   memcpy(filter_meta, block.data(), block.size());
   Slice filter_meta_data(filter_meta, block.size());
 
@@ -178,7 +183,7 @@ TEST_F(FilterBlockTest, MultiChunk) {
   ASSERT_TRUE(!reader.KeyMayMatch(9000, "bar"));
 }
 
-TEST_F(FilterBlockTest, LoadAndExcit){
+TEST_F(FilterBlockTest, LoadAndExcit) {
   FilterBlockBuilder builder(&policy_);
 
   // First filter
@@ -204,7 +209,7 @@ TEST_F(FilterBlockTest, LoadAndExcit){
   file.WriteRawFilters(filter, &handle);
   Slice block = builder.Finish(handle);
 
-  char *filter_meta = (char *)malloc(sizeof (char ) * block.size());
+  char* filter_meta = (char*)malloc(sizeof(char) * block.size());
   memcpy(filter_meta, block.data(), block.size());
   Slice filter_meta_data(filter_meta, block.size());
 
@@ -212,14 +217,14 @@ TEST_F(FilterBlockTest, LoadAndExcit){
   FilterBlockReader reader(&policy_, filter_meta_data, source);
 
   // todo can automatically adapt to different parameters
-  for(int i = loaded_filters_number; i > 0; i--){
+  for (int i = loaded_filters_number; i > 0; i--) {
     ASSERT_EQ(reader.FilterUnitsNumber(), i);
     ASSERT_TRUE(reader.EvictFilter().ok());
   }
 
   ASSERT_FALSE(reader.EvictFilter().ok());
 
-  for(int i = 0; i < filters_number; i++){
+  for (int i = 0; i < filters_number; i++) {
     ASSERT_EQ(reader.FilterUnitsNumber(), i);
     ASSERT_TRUE(reader.LoadFilter().ok());
   }
@@ -227,7 +232,7 @@ TEST_F(FilterBlockTest, LoadAndExcit){
   ASSERT_FALSE(reader.LoadFilter().ok());
 }
 
-TEST_F(FilterBlockTest, Hotness){
+TEST_F(FilterBlockTest, Hotness) {
   // to support internal key
   InternalFilterPolicy policy(&policy_);
   FilterBlockBuilder builder(&policy);
@@ -247,14 +252,14 @@ TEST_F(FilterBlockTest, Hotness){
   Slice block = builder.Finish(handle);
 
   // create reader
-  char *filter_meta = (char *)malloc(sizeof(char) * block.size());
+  char* filter_meta = (char*)malloc(sizeof(char) * block.size());
   memcpy(filter_meta, block.data(), block.size());
   Slice filter_meta_data(filter_meta, block.size());
   StringSource* source = file.GetSource();
   FilterBlockReader reader(&policy, filter_meta_data, source);
 
   // check
-  for(uint64_t sn = 1; sn < 30000; sn++){
+  for (uint64_t sn = 1; sn < 30000; sn++) {
     ParsedInternalKey check_key("foo", sn, kTypeValue);
     std::string check_result;
     AppendInternalKey(&check_result, check_key);
@@ -268,7 +273,7 @@ TEST_F(FilterBlockTest, Hotness){
   }
 }
 
-TEST_F(FilterBlockTest, Size){
+TEST_F(FilterBlockTest, Size) {
   FilterBlockBuilder builder(&policy_);
   builder.StartBlock(100);
   builder.AddKey("foo");
@@ -287,7 +292,7 @@ TEST_F(FilterBlockTest, Size){
   size_t bitmap_size = handle.size();
   Slice block = builder.Finish(handle);
 
-  char *filter_meta = (char *)malloc(sizeof(char) * block.size());
+  char* filter_meta = (char*)malloc(sizeof(char) * block.size());
   memcpy(filter_meta, block.data(), block.size());
   Slice filter_meta_data(filter_meta, block.size());
 
@@ -295,21 +300,22 @@ TEST_F(FilterBlockTest, Size){
   FilterBlockReader reader(&policy_, filter_meta_data, source);
 
   // evict all filter units
-  while (reader.EvictFilter().ok()){}
+  while (reader.EvictFilter().ok()) {
+  }
   ASSERT_EQ(reader.FilterUnitsNumber(), 0);
   ASSERT_EQ(reader.Size(), 0);
 
   // load filter units one by one
   // check memory overhead
   int filter_unit_number = 1;
-  while (reader.LoadFilter().ok()){
+  while (reader.LoadFilter().ok()) {
     ASSERT_EQ(reader.FilterUnitsNumber(), filter_unit_number);
     ASSERT_EQ(reader.Size(), bitmap_size * filter_unit_number);
     filter_unit_number++;
   }
 }
 
-TEST_F(FilterBlockTest, IOs){
+TEST_F(FilterBlockTest, IOs) {
   const FilterPolicy* policy = NewBloomFilterPolicy(10);
   FilterBlockBuilder builder(policy);
   builder.StartBlock(100);
@@ -328,7 +334,7 @@ TEST_F(FilterBlockTest, IOs){
 
   Slice block = builder.Finish(handle);
 
-  char *filter_meta = (char *)malloc(sizeof(char) * block.size());
+  char* filter_meta = (char*)malloc(sizeof(char) * block.size());
   memcpy(filter_meta, block.data(), block.size());
   Slice filter_meta_data(filter_meta, block.size());
 
@@ -336,23 +342,22 @@ TEST_F(FilterBlockTest, IOs){
   FilterBlockReader reader(policy, filter_meta_data, source);
 
   int access = 1000;
-  for(int i = 0; i < access;i++){
+  for (int i = 0; i < access; i++) {
     ASSERT_TRUE(reader.KeyMayMatch(100, "foo"));
   }
-
 
   double false_positive_rate = pow(0.6185, 10);
 
   ASSERT_EQ(reader.AccessTime(), access);
-  ASSERT_EQ(reader.IOs(), pow(false_positive_rate ,
-                              loaded_filters_number) * access);
+  ASSERT_EQ(reader.IOs(),
+            pow(false_positive_rate, loaded_filters_number) * access);
 
-  if(loaded_filters_number < filters_number) {
+  if (loaded_filters_number < filters_number) {
     ASSERT_EQ(reader.LoadIOs(),
               pow(false_positive_rate, loaded_filters_number + 1) * access);
   }
 
-  if(loaded_filters_number > 1){
+  if (loaded_filters_number > 1) {
     ASSERT_EQ(reader.EvictIOs(),
               pow(false_positive_rate, loaded_filters_number - 1) * access);
   }

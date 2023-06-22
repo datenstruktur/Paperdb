@@ -57,9 +57,11 @@ class LEVELDB_EXPORT MultiQueue {
   // When the inserted entry is no longer needed, the key and
   // value will be passed to "deleter".
   virtual Handle* Insert(const Slice& key, FilterBlockReader* reader,
-                         void (*deleter)(const Slice& key, FilterBlockReader* value)) = 0;
+                         void (*deleter)(const Slice& key,
+                                         FilterBlockReader* value)) = 0;
 
-  virtual bool KeyMayMatch(Handle* handle, uint64_t block_offset, const Slice& key) = 0;
+  virtual bool KeyMayMatch(Handle* handle, uint64_t block_offset,
+                           const Slice& key) = 0;
 
   // If the cache has no mapping for "key", returns nullptr.
   //

@@ -8,12 +8,10 @@
 
 #include "leveldb/comparator.h"
 #include "leveldb/env.h"
-#include "leveldb/filter_policy.h"
 #include "leveldb/options.h"
+
 #include "table/block_builder.h"
 #include "table/filter_block.h"
-#include "table/format.h"
-#include "util/coding.h"
 #include "util/crc32c.h"
 
 namespace leveldb {
@@ -208,25 +206,26 @@ void TableBuilder::WriteRawBlock(const Slice& block_contents,
   }
 }
 
-void TableBuilder::WriteRawFilters(const std::vector<std::string>& filters, CompressionType type, BlockHandle* handle){
+void TableBuilder::WriteRawFilters(const std::vector<std::string>& filters,
+                                   CompressionType type, BlockHandle* handle) {
   assert(!filters.empty());
   Rep* r = rep_;
   handle->set_offset(r->offset);
   handle->set_size(filters[0].size());
   /*
- * filters in disk layout
- * trailer type(kNoCompression) CRC <--- disk_offset
- * filter
- * trailer type(kNoCompression) CRC <--- disk_offset + (disk_size + kBlockTrailerSize)
- * filter
- * .........
- * trailer type(kNoCompression) CRC
- * filter
+   * filters in disk layout
+   * trailer type(kNoCompression) CRC <--- disk_offset
+   * filter
+   * trailer type(kNoCompression) CRC <--- disk_offset + (disk_size +
+   * kBlockTrailerSize) filter
+   * .........
+   * trailer type(kNoCompression) CRC
+   * filter
    */
-  for(const auto & filter : filters){
+  for (const auto& filter : filters) {
     Slice filter_slice = Slice(filter);
     r->status = r->file->Append(filter_slice);
-    if(r->status.ok()){
+    if (r->status.ok()) {
       char trailer[kBlockTrailerSize];
       trailer[0] = type;
       uint32_t crc = crc32c::Value(filter_slice.data(), filter_slice.size());
@@ -238,7 +237,6 @@ void TableBuilder::WriteRawFilters(const std::vector<std::string>& filters, Comp
       }
     }
   }
-
 }
 
 Status TableBuilder::status() const { return rep_->status; }
