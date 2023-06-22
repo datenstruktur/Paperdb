@@ -59,6 +59,19 @@ cat LOG | grep "Adjustment:"
 
 **Note2**: Adjustment only be active when db has a lot of KV(100GB in paper), and a lot of get requests(10milion in paper).
 
+# Unit test and benchmark
+
+```bash
+cd build
+
+./leveldb_tests
+./env_posix_test
+./c_test
+```
+benchmark
+```bash
+./db_bench
+```
 # Main changed files
 
 * **util/bloom.cc**: Generate and read multi filter units' bitmap for a scope of keys
@@ -67,7 +80,7 @@ cat LOG | grep "Adjustment:"
 * **table/table_builder.cc**: Construct filter block
 * **util/multi_queue.cc**: Manage filter units in memory to reduce adjust overhead
 
-# Benchmark
+# Performance
 
 ## Setup
 
@@ -93,8 +106,9 @@ CPU
 
 ## Write performance
 
+Todo
 ## Read performance
-
+Todo
 # ToDo
 - Using multi thread to speed up filter units loading in multi queue
 - Using shared hash in this paper[2] to reduce multi bloom filter look up overhead
