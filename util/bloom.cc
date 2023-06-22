@@ -15,7 +15,9 @@ namespace {
 static uint32_t BloomHash(const Slice& key, int index) {
   // use one hash code to generate much different hash code
   // for different filter units
-  uint32_t h = Hash(key.data(), key.size(), 0xbc9f1d34);
+  // change the hash seed to reduce multi filter units false positive rate
+  // to reach theoretical value
+  uint32_t h = Hash(key.data(), key.size(), 0xbc9f2d21);
   const uint32_t delta = (h >> 17) | (h << 15);
   h += (delta * index);
   return h;
