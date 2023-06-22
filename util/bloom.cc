@@ -87,7 +87,7 @@ class BloomFilterPolicy : public FilterPolicy {
   }
 
   double FalsePositiveRate() const override {
-    return pow(0.6185, bits_per_key_);
+    return pow(0.6185, static_cast<double >(bits_per_key_));
   }
 
  private:

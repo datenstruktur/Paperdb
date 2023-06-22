@@ -309,4 +309,55 @@ TEST_F(FilterBlockTest, Size){
   }
 }
 
+TEST_F(FilterBlockTest, IOs){
+  const FilterPolicy* policy = NewBloomFilterPolicy(10);
+  FilterBlockBuilder builder(policy);
+  builder.StartBlock(100);
+  builder.AddKey("foo");
+  builder.AddKey("bar");
+  builder.AddKey("box");
+  builder.StartBlock(200);
+  builder.AddKey("box");
+  builder.StartBlock(300);
+  builder.AddKey("hello");
+
+  FileImpl file;
+  BlockHandle handle;
+  const std::vector<std::string>& filters = builder.ReturnFilters();
+  file.WriteRawFilters(filters, &handle);
+
+  Slice block = builder.Finish(handle);
+
+  char *filter_meta = (char *)malloc(sizeof(char) * block.size());
+  memcpy(filter_meta, block.data(), block.size());
+  Slice filter_meta_data(filter_meta, block.size());
+
+  StringSource* source = file.GetSource();
+  FilterBlockReader reader(policy, filter_meta_data, source);
+
+  int access = 1000;
+  for(int i = 0; i < access;i++){
+    ASSERT_TRUE(reader.KeyMayMatch(100, "foo"));
+  }
+
+
+  double false_positive_rate = pow(0.6185, 10);
+
+  ASSERT_EQ(reader.AccessTime(), access);
+  ASSERT_EQ(reader.IOs(), pow(false_positive_rate ,
+                              loaded_filters_number) * access);
+
+  if(loaded_filters_number < filters_number) {
+    ASSERT_EQ(reader.LoadIOs(),
+              pow(false_positive_rate, loaded_filters_number + 1) * access);
+  }
+
+  if(loaded_filters_number > 1){
+    ASSERT_EQ(reader.EvictIOs(),
+              pow(false_positive_rate, loaded_filters_number - 1) * access);
+  }
+
+  delete policy;
+}
+
 }  // namespace leveldb

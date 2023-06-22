@@ -100,18 +100,21 @@ class FilterBlockReader {
 
   double IOs() const{
     return pow(policy_->FalsePositiveRate(),
-               static_cast<double>(filter_units.size())) * access_time_;
+               static_cast<double>(filter_units.size()))
+           * static_cast<double >(access_time_);
   }
 
   double LoadIOs() const{
     return pow(policy_->FalsePositiveRate(),
-               static_cast<double>((filter_units.size() + 1.0))) * access_time_;
+               static_cast<double>((static_cast<double >(filter_units.size() + 1))))
+           * static_cast<double >(access_time_);
   }
 
   double EvictIOs() const{
     assert(filter_units.size() > 1);
     return pow(policy_->FalsePositiveRate(),
-               static_cast<double>(filter_units.size() - 1.0)) * access_time_;
+               static_cast<double>((static_cast<double >(filter_units.size() - 1))))
+          * static_cast<double >(access_time_);
   }
 
  private:
