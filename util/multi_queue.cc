@@ -106,16 +106,16 @@ class SingleQueue {
   }
 };
 
-class InterMultiQueue : public MultiQueue {
+class InternalMultiQueue : public MultiQueue {
  public:
-  explicit InterMultiQueue() : usage_(0), last_id_(0), logger_(nullptr) {
+  explicit InternalMultiQueue() : usage_(0), last_id_(0), logger_(nullptr) {
     queues_.resize(filters_number + 1);
     for (int i = 0; i < filters_number + 1; i++) {
       queues_[i] = new SingleQueue();
     }
   }
 
-  ~InterMultiQueue() override {
+  ~InternalMultiQueue() override {
     for (int i = 0; i < filters_number + 1; i++) {
       delete queues_[i];
     }
@@ -280,5 +280,5 @@ class InterMultiQueue : public MultiQueue {
   }
 };
 
-MultiQueue* NewMultiQueue() { return new InterMultiQueue(); }
+MultiQueue* NewMultiQueue() { return new InternalMultiQueue(); }
 }

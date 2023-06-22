@@ -38,10 +38,6 @@ void FilterBlockBuilder::AddKey(const Slice& key) {
 const std::vector<std::string>& FilterBlockBuilder::ReturnFilters() {
   if (!start_.empty()) {
     GenerateFilter();
-    // generate limit offset for last filter
-    // array offset is last filter's limit in leveldb
-    // but we remove it
-    filter_offsets_.push_back(filter_units_[0].size());
   }
 
   // const & to reduce vector copy overhead
@@ -61,6 +57,12 @@ Slice FilterBlockBuilder::Finish(const BlockHandle& handle) {
   for (size_t i = 0; i < filter_offsets_.size(); i++) {
     PutFixed32(&result_, filter_offsets_[i]);
   }
+
+  // generate limit offset for last filter
+  // array offset is last filter's limit in leveldb
+  // but we remove it
+  // todo : deal with a filter block without filter units
+  PutFixed32(&result_, filter_units_[0].size());
 
   PutFixed64(&result_, handle.offset());
   PutFixed32(&result_, handle.size());
@@ -109,11 +111,12 @@ FilterBlockReader::FilterBlockReader(const FilterPolicy* policy,
     : policy_(policy), data_(nullptr), offset_(nullptr), num_(0), base_lg_(0),
       file_(file), heap_allocated_(false), access_time_(0), sequence_(0) {
   size_t n = contents.size();
-  if (n < 21) return;  // 1 byte for base_lg_ and 21 for start of others
+  if (n < 25) return;  // 1 byte for base_lg_ and 21 for start of others
 
   /*
  * meta data for filter units' bitmaps layout:
  * filter offset  <--- data + 0
+ * filterunit len <--- data + n - 25
  * offset         <--- data + n - 21  | 8Byte 4Byte can only index 4GB disk offset
  * size           <--- data + n - 13  | 4Byte
  * loaded         <--- data + n - 9   | 4Byte
@@ -133,9 +136,10 @@ FilterBlockReader::FilterBlockReader(const FilterPolicy* policy,
   disk_offset_ = DecodeFixed64(data_ + n - 21);
   offset_ =  contents.data();
 
-  num_ = (n - 21) / 4;
+  num_ = (n - 25) / 4;
 
-  //todo desgin new error catch code
+  //todo: design multi units load
+  //todo: use multi thread to speed up loading
   Status status;
   for(int i = 0; i < init_units_number_; i++) {
     status = LoadFilter();

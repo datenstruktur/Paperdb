@@ -58,11 +58,12 @@ TEST_F(FilterBlockTest, EmptyBuilder) {
   Slice filter_meta_data(filter_meta, block.size());
 
   ASSERT_EQ(
-      "\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
-      "\\x00\\x00\\x00\\x00"
-      "\\x0" + std::to_string(loaded_filters_number) + "\\x00\\x00\\x00"
-      "\\x0" + std::to_string(filters_number)        + "\\x00\\x00\\x00"
-      "\\x0b",
+      "\\x00\\x00\\x00\\x00"                                             // bitmap len
+      "\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"                         // offset
+      "\\x00\\x00\\x00\\x00"                                             // size
+      "\\x0" + std::to_string(loaded_filters_number) + "\\x00\\x00\\x00" // loaded
+      "\\x0" + std::to_string(filters_number)        + "\\x00\\x00\\x00" // number
+      "\\x0b",                                                           // baselg
       EscapeString(block));
 
   StringSource* source = file.GetSource();
@@ -93,10 +94,13 @@ TEST_F(FilterBlockTest, SingleChunk) {
   Slice filter_meta_data(filter_meta, block.size());
 
   std::string escapestring = EscapeString(block);
-  escapestring = escapestring.substr(escapestring.size() - 21 * 4, 21 * 4);
+  //remove filter's bitmap
+  escapestring = escapestring.substr(escapestring.size() - 25 * 4, 25 * 4);
 
   ASSERT_EQ(
-      "\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"
+      "\\x14\\x00\\x00\\x00" // bitmap len(20 = 4Byte * 5 key)
+      "\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"  // bitmap offset(0)
+      // bitmap size in disk, as same as bitmap len
       "\\x14\\x00\\x00\\x00"
       "\\x0" + std::to_string(loaded_filters_number) + "\\x00\\x00\\x00"
       "\\x0" + std::to_string(filters_number)        + "\\x00\\x00\\x00"
