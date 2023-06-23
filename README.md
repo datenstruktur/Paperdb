@@ -9,6 +9,7 @@
 * Fine-grained Bloom Filter Allocation
 * Hotness Identification
 * Bloom Filter Management in Memory
+* more details see in [doc/elasticbf.md](./doc/elasticbf.md), Chinese version see in [feishu](https://o444bvn7jh.feishu.cn/docx/XlBldwKc2oOTGMxPpLlckKLunvd)
 
 # Getting the Source
 
