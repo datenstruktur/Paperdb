@@ -79,11 +79,11 @@ The format of the new filterblock is as follows, divided into two parts, the dis
 <end_of_file>
 ```
 
-**Node**: It is worth noting that the size of each filter unit is the same, and the filter units are closely arranged, so we only need to save the offset and size of the first filter unit. In the process of reading, crc needs to be used for verification to prevent reading the wrong bitmap and misjudgment, so that the existing key is judged to not exist, resulting in data loss.
+**Note**: It is worth noting that the size of each filter unit is the same, and the filter units are closely arranged, so we only need to save the offset and size of the first filter unit. In the process of reading, crc needs to be used for verification to prevent reading the wrong bitmap and misjudgment, so that the existing key is judged to not exist, resulting in data loss.
 
-**Node**: In the process of implementation, because only TableBuilder saves the entire SSTable file offset, when we generate all the filter units, we need to return to TableBuilder for persistence, get the offset and size of the filter unit from TableBuilder, and then return to FilterBlock to complete the construction of the memory part.
+**Note**: In the process of implementation, because only TableBuilder saves the entire SSTable file offset, when we generate all the filter units, we need to return to TableBuilder for persistence, get the offset and size of the filter unit from TableBuilder, and then return to FilterBlock to complete the construction of the memory part.
 
-**Node**: LevelDB uses InternalFilterPolicy to encapsulate the Bloom Filter. This filter will convert the InternalKey with the serial number and KV type into the user key passed by the user, and then insert it into the Bloom filter to build a bitmap, but in ElasticBF, We need to generate a bitmap for a set of keys, which will cause the InternalKey that has been converted to the user key to be converted again, resulting in a parsing error. The solution is to add a decision and convert only when the first filter unit is generated.
+**Note**: LevelDB uses InternalFilterPolicy to encapsulate the Bloom Filter. This filter will convert the InternalKey with the serial number and KV type into the user key passed by the user, and then insert it into the Bloom filter to build a bitmap, but in ElasticBF, We need to generate a bitmap for a set of keys, which will cause the InternalKey that has been converted to the user key to be converted again, resulting in a parsing error. The solution is to add a decision and convert only when the first filter unit is generated.
 
 ### Meta Index Block
 
@@ -151,6 +151,6 @@ When the key is passed in the KeyMayMatch in the filterblockreader, we will pars
 - Determine whether it can be adjusted: If no suitable cold reader is found, it is directly considered unadjustable. If there is, it is judged that all of these cold Readers uninstall a filter unit, and the resulting disk IO can be offset by loading a hot Reader.
 - Application adjustment: If the judgment can be adjusted, unload all the cold readers with a filter unit and load the hot reader with a filter unit.
 
-**Node**: Select the size of the filter unit of the uninstalled Cold Reader, not less than the size of the loaded Hot Reader, a little more is fine.
+**Note**: Select the size of the filter unit of the uninstalled Cold Reader, not less than the size of the loaded Hot Reader, a little more is fine.
 
-**Node**: a cold reader with only one filter unit cannot be selected, and the false positive rate without a filter unit is not easy to calculate.
+**Note**: a cold reader with only one filter unit cannot be selected, and the false positive rate without a filter unit is not easy to calculate.
