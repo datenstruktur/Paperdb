@@ -35,7 +35,6 @@ class SingleQueue {
   }
 
   ~SingleQueue() {
-    // all entry should be unref
     for (QueueHandle* e = in_use_.next; e != &in_use_;) {
       QueueHandle* next = e->next;
       FreeHandle(e);
@@ -124,7 +123,7 @@ class InternalMultiQueue : public MultiQueue {
   Handle* Insert(const Slice& key, FilterBlockReader* reader,
                  void (*deleter)(const Slice&, FilterBlockReader*)) override {
     assert(reader != nullptr);
-    int number = reader->FilterUnitsNumber();
+    size_t number = reader->FilterUnitsNumber();
     SingleQueue* queue = queues_[number];
     QueueHandle* handle = queue->Insert(key, reader, deleter);
     map_.insert(std::make_pair(key.ToString(), handle));
@@ -205,7 +204,7 @@ class InternalMultiQueue : public MultiQueue {
   SingleQueue* FindQueue(QueueHandle* handle) {
     FilterBlockReader* reader = Value(reinterpret_cast<Handle*>(handle));
     if (reader != nullptr) {
-      int number = reader->FilterUnitsNumber();
+      size_t number = reader->FilterUnitsNumber();
       SingleQueue* queue = queues_[number];
       return queue;
     }
@@ -225,7 +224,7 @@ class InternalMultiQueue : public MultiQueue {
       adjusted_ios += handle->reader->EvictIOs();
     }
     adjusted_ios += hot->reader->LoadIOs();
-    adjusted_ios += (cold.size() + 1.0);
+    adjusted_ios += (static_cast<double>(cold.size()) + 1.0);
 
     if (adjusted_ios < original_ios) {
 #ifdef USE_ADJUSTMENT_LOGGING
@@ -244,7 +243,7 @@ class InternalMultiQueue : public MultiQueue {
   }
 
   void LoadHandle(QueueHandle* handle) {
-    int number = handle->reader->FilterUnitsNumber();
+    size_t number = handle->reader->FilterUnitsNumber();
     assert(number + 1 <= filters_number);
     queues_[number]->Remove(handle);
     queues_[number + 1]->MoveToMRU(handle);
@@ -252,14 +251,14 @@ class InternalMultiQueue : public MultiQueue {
   }
 
   void EvictHandle(QueueHandle* handle) {
-    int number = handle->reader->FilterUnitsNumber();
+    size_t number = handle->reader->FilterUnitsNumber();
     assert(number - 1 >= 0);
     queues_[number]->Remove(handle);
     queues_[number - 1]->MoveToMRU(handle);
     handle->reader->EvictFilter();
   }
 
-  void ApplyAjustment(const std::vector<QueueHandle*>& colds,
+  void ApplyAdjustment(const std::vector<QueueHandle*>& colds,
                       QueueHandle* hot) {
     for (QueueHandle* cold : colds) {
       EvictHandle(cold);
@@ -273,7 +272,7 @@ class InternalMultiQueue : public MultiQueue {
       size_t memory = hot_handle->reader->OneUnitSize();
       std::vector<QueueHandle*> cold = FindColdFilter(memory, sn);
       if (!cold.empty() && CanBeAdjusted(cold, hot_handle)) {
-        ApplyAjustment(cold, hot_handle);
+        ApplyAdjustment(cold, hot_handle);
       }
     }
   }
