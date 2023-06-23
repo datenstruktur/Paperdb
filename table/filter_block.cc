@@ -216,7 +216,12 @@ Status FilterBlockReader::LoadFilter() {
 
   Status s = ReadBlock(file_, readOptions, handle, &contents);
 
-  if (!s.ok()) return s;
+  if (!s.ok()) {
+    if(contents.heap_allocated) {
+      delete[] contents.data.data();
+    }
+    return s;
+  }
 
   // if heap_allocated, delete by FilterBlockReader
   // if not, delete by mmap
@@ -233,7 +238,9 @@ Status FilterBlockReader::EvictFilter() {
   // load from left to right
   // evict from right to left
   const char* data = filter_units[size - 1];
-  delete[] data;
+  if(heap_allocated_) {
+    delete[] data;
+  }
   filter_units.pop_back();
   return Status::OK();
 }

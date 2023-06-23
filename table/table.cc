@@ -78,9 +78,7 @@ Status Table::Open(const Options& options, RandomAccessFile* file,
     rep->reader = nullptr;
     rep->footer = footer;
     *table = new Table(rep);
-    if (!options.multi_queue) {
-      (*table)->ReadFilter();
-    }
+    (*table)->ReadFilter();
   }
 
   return s;
@@ -265,7 +263,6 @@ Status Table::InternalGet(const ReadOptions& options, const Slice& k, void* arg,
   iiter->Seek(k);
   if (iiter->Valid()) {
     Slice handle_value = iiter->value();
-    ReadFilter();
     BlockHandle handle;
     bool is_decode_ok = handle.DecodeFrom(&handle_value).ok();
     if (rep_->reader && is_decode_ok &&
