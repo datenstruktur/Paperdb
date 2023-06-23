@@ -109,10 +109,4 @@ TEST_F(MultiQueueTest, TotalCharge) {
   Erase(insert_handle);  // erase from cache, but still in memory
   ASSERT_EQ(TotalCharge(), 0);
 }
-
-TEST_F(MultiQueueTest, NewId) {
-  uint64_t a = multi_queue_->NewId();
-  uint64_t b = multi_queue_->NewId();
-  ASSERT_NE(a, b);
-}
 }  // namespace leveldb

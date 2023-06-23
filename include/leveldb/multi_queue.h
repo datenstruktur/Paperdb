@@ -81,12 +81,6 @@ class LEVELDB_EXPORT MultiQueue {
   // to it have been released.
   virtual void Erase(Handle* handle) = 0;
 
-  // Return a new numeric id.  May be used by multiple clients who are
-  // sharing the same cache to partition the key space.  Typically the
-  // client will allocate a new id at startup and prepend the id to
-  // its cache keys.
-  virtual uint64_t NewId() = 0;
-
   // Return an estimate of the combined charges of all elements stored in the
   // cache.
   virtual size_t TotalCharge() const = 0;

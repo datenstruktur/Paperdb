@@ -108,7 +108,7 @@ class SingleQueue {
 
 class InternalMultiQueue : public MultiQueue {
  public:
-  explicit InternalMultiQueue() : usage_(0), last_id_(0), logger_(nullptr) {
+  explicit InternalMultiQueue() : usage_(0), logger_(nullptr) {
     queues_.resize(filters_number + 1);
     for (int i = 0; i < filters_number + 1; i++) {
       queues_[i] = new SingleQueue();
@@ -177,15 +177,12 @@ class InternalMultiQueue : public MultiQueue {
     }
   }
 
-  uint64_t NewId() override { return ++last_id_; }
-
   size_t TotalCharge() const override { return usage_; }
 
   void SetLogger(Logger* logger) override { logger_ = logger; }
 
  private:
   size_t usage_;
-  uint64_t last_id_;
   Logger* logger_;
 
   std::vector<SingleQueue*> queues_;
