@@ -8,8 +8,9 @@
 
 * Fine-grained Bloom Filter Allocation
 * Hotness Identification
-* Bloom Filter Management in Memory
-* more details see in [doc/elasticbf.md](./doc/elasticbf.md), Chinese version see in [feishu](https://o444bvn7jh.feishu.cn/docx/XlBldwKc2oOTGMxPpLlckKLunvd)
+* Bloom Filter Management in Memory 
+
+> More details see in [doc/elasticbf.md](./doc/elasticbf.md), Chinese version see in [feishu](https://o444bvn7jh.feishu.cn/docx/XlBldwKc2oOTGMxPpLlckKLunvd), If you are interested in gaining a deeper understanding of the paper, please do not hesitate to contact me. I have added extensive annotations to the original paper, and I have recorded 8 hours of lecture videos to elaborate on my interpretation of the paper.
 
 # Getting the Source
 
