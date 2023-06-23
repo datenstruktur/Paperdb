@@ -74,12 +74,13 @@ class SingleQueue {
 
   void FindColdFilter(uint64_t& memory, SequenceNumber sn,
                       std::vector<QueueHandle*>& filters) {
-    QueueHandle* e = in_use_.prev;
+    // search from LRU to MRU(in_use_->next)
+    QueueHandle* e = in_use_.next;
     do {
       if (e == nullptr || e == &in_use_) {
         break;
       }
-      QueueHandle* next = e->prev;
+      QueueHandle* next = e->next;
       if (e->reader->IsCold(sn) && e->reader->CanBeEvict()) {
         memory -= e->reader->OneUnitSize();
         filters.push_back(e);
@@ -198,6 +199,9 @@ class InternalMultiQueue : public MultiQueue {
       queue->FindColdFilter(memory, sn, filters);
     }
 
+    // if can not find cold filter reach memory byte
+    // cancel this adjustment
+    if(memory > 0) return {};
     return filters;
   }
 
