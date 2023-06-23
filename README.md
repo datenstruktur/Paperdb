@@ -61,6 +61,7 @@ cat LOG | grep "Adjustment:"
 
 # Unit test and benchmark
 
+## unit test:
 ```bash
 cd build
 
@@ -68,10 +69,22 @@ cd build
 ./env_posix_test
 ./c_test
 ```
-benchmark
+## benchmark
 ```bash
 ./db_bench
 ```
+
+## benchmark parameters:
+
+close multi_queue, use default way to get filter 
+```bash
+./db_bench --multi_queue_open=0
+```
+close info printing in FinishedSingleOp
+```bash
+./db_bench --print_process=0
+```
+
 # Main changed files
 
 * **util/bloom.cc**: Generate and read multi filter units' bitmap for a scope of keys
@@ -86,16 +99,7 @@ benchmark
 
 ### Hardware
 
-Disk:
-```
-  Vendor: ATA      Model: Samsung SSD 870  Rev: 2B6Q
-  Vendor: ATA      Model: Samsung SSD 870  Rev: 2B6Q
-```
-
-CPU
-```
-32  13th Gen Intel(R) Core(TM) i9-13900K
-```
+Todo
 
 ### parameters
 * 100GB kv in database
@@ -111,8 +115,8 @@ Todo
 Todo
 # ToDo
 - Using multi thread to speed up filter units loading in multi queue
-- Using shared hash in this paper[2] to reduce multi bloom filter look up overhead
-- Hotness inheritance after compaction in ATC version of paper[3]
+- Using shared hash in this paper[3] to reduce multi bloom filter look up overhead
+- Hotness inheritance after compaction in ATC version of paper[4]
 - Using perf tool to find code can be optimized
 
 
