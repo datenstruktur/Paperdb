@@ -1,7 +1,7 @@
 # ElasticBF
 [![ci](https://github.com/google/leveldb/actions/workflows/build.yml/badge.svg)](https://github.com/google/leveldb/actions/workflows/build.yml)
 
-**ElasticBF[1]** moves cold SSTable's bloom filter to hot SSTable's bloom filter to reduce extra disk io overhead without increasing memory overhead.
+**ElasticBF[1]** moves cold SSTable's bloom filter to hot SSTable's bloom filter to reduce extra disk io overhead without increasing memory overhead. Short introduction by paper's author can be saw in this [video](https://www.youtube.com/watch?v=8UBx3GCep3A).
 
 # Features
 ![The architecture of ElasticBF](https://github.com/WangTingZheng/Paperdb/assets/32613835/cb3278c6-9782-48b1-bda4-2051713a6a97)
