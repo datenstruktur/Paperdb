@@ -224,7 +224,6 @@ class InternalMultiQueue : public MultiQueue {
       adjusted_ios += handle->reader->EvictIOs();
     }
     adjusted_ios += hot->reader->LoadIOs();
-    adjusted_ios += (static_cast<double>(cold.size()) + 1.0);
 
     if (adjusted_ios < original_ios) {
 #ifdef USE_ADJUSTMENT_LOGGING

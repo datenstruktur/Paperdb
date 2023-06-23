@@ -16,6 +16,7 @@
 
 ```bash
 git clone --recurse-submodules https://github.com/WangTingZheng/Paperdb.git
+cd Paperdb
 git checkout elasticbf-dev
 ```
 
