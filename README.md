@@ -105,11 +105,11 @@ close info printing in FinishedSingleOp
 Todo
 
 ### parameters
-* 100GB kv in database
+* 50GB kv in database
 * 10 million point lookup
 * 4 bits per key in one filter unit
 * 6 filter units for one sstable
-* 1KByte KV
+* 1KB KV
 
 ## Write performance
 
