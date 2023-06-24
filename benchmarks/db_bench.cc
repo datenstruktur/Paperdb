@@ -300,8 +300,8 @@ class Stats {
       last_op_finish_ = now;
     }
 
-    if(FLAGS_print_process) {
       done_++;
+    if(FLAGS_print_process) {
       if (done_ >= next_report_) {
         if (next_report_ < 1000)
           next_report_ += 100;
