@@ -198,7 +198,7 @@ bool FilterBlockReader::KeyMayMatch(uint64_t block_offset, const Slice& key) {
  * filter
  */
 Status FilterBlockReader::LoadFilter() {
-  static const uint64_t kFilterSize = disk_size_ + kBlockTrailerSize;
+  const uint64_t kFilterSize = disk_size_ + kBlockTrailerSize;
   uint64_t units_index = filter_units.size();
   if (units_index >= all_units_number_)
     return Status::Corruption("all filter units were loaded");
