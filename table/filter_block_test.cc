@@ -50,7 +50,7 @@ TEST_F(FilterBlockTest, EmptyBuilder) {
   file.WriteRawFilters(builder.ReturnFilters(), &handle);
 
   Slice block = builder.Finish(handle);
-  char* filter_meta = (char*)malloc(sizeof(char) * block.size());
+  char* filter_meta = new char[block.size()];
   memcpy(filter_meta, block.data(), block.size());
   Slice filter_meta_data(filter_meta, block.size());
 
@@ -90,7 +90,7 @@ TEST_F(FilterBlockTest, SingleChunk) {
   file.WriteRawFilters(filters, &handle);
   Slice block = builder.Finish(handle);
 
-  char* filter_meta = (char*)malloc(sizeof(char) * block.size());
+  char* filter_meta = new char[block.size()];
   memcpy(filter_meta, block.data(), block.size());
   Slice filter_meta_data(filter_meta, block.size());
 
@@ -151,7 +151,7 @@ TEST_F(FilterBlockTest, MultiChunk) {
   file.WriteRawFilters(filter, &handle);
   Slice block = builder.Finish(handle);
 
-  char* filter_meta = (char*)malloc(sizeof(char) * block.size());
+  char* filter_meta = new char[block.size()];
   memcpy(filter_meta, block.data(), block.size());
   Slice filter_meta_data(filter_meta, block.size());
 
@@ -209,7 +209,7 @@ TEST_F(FilterBlockTest, LoadAndExcit) {
   file.WriteRawFilters(filter, &handle);
   Slice block = builder.Finish(handle);
 
-  char* filter_meta = (char*)malloc(sizeof(char) * block.size());
+  char* filter_meta = new char[block.size()];
   memcpy(filter_meta, block.data(), block.size());
   Slice filter_meta_data(filter_meta, block.size());
 
@@ -252,7 +252,7 @@ TEST_F(FilterBlockTest, Hotness) {
   Slice block = builder.Finish(handle);
 
   // create reader
-  char* filter_meta = (char*)malloc(sizeof(char) * block.size());
+  char* filter_meta = new char[block.size()];
   memcpy(filter_meta, block.data(), block.size());
   Slice filter_meta_data(filter_meta, block.size());
   StringSource* source = file.GetSource();
@@ -292,7 +292,7 @@ TEST_F(FilterBlockTest, Size) {
   size_t bitmap_size = handle.size();
   Slice block = builder.Finish(handle);
 
-  char* filter_meta = (char*)malloc(sizeof(char) * block.size());
+  char* filter_meta = new char[block.size()];
   memcpy(filter_meta, block.data(), block.size());
   Slice filter_meta_data(filter_meta, block.size());
 
@@ -334,7 +334,7 @@ TEST_F(FilterBlockTest, IOs) {
 
   Slice block = builder.Finish(handle);
 
-  char* filter_meta = (char*)malloc(sizeof(char) * block.size());
+  char* filter_meta = new char[block.size()];
   memcpy(filter_meta, block.data(), block.size());
   Slice filter_meta_data(filter_meta, block.size());
 

@@ -38,7 +38,7 @@ class MultiQueueTest : public testing::Test {
 
     Slice block = builder.Finish(handle);
 
-    char* filter_meta = (char*)malloc(sizeof(char) * block.size());
+    char* filter_meta = new char [block.size()];
     memcpy(filter_meta, block.data(), block.size());
     Slice filter_meta_data(filter_meta, block.size());
 

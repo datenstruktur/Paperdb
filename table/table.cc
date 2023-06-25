@@ -115,7 +115,8 @@ FilterBlockReader* Table::ReadMeta() {
     size_t filter_meta_size = filter_meta.size();
     assert(filter_meta_size >= 21);
     // meta index block will be deleted later
-    char* filter_meta_contents = (char*)malloc(sizeof(char) * filter_meta_size);
+    // malloc maybe segmentation fault
+    char* filter_meta_contents = new char[filter_meta_size];
     memcpy(filter_meta_contents, filter_meta.data(), filter_meta_size);
     // The length must be passed in, if only a char* pointer is passed in,
     // the length will be taken with strlen() and the string will

@@ -252,6 +252,6 @@ FilterBlockReader::~FilterBlockReader() {
     }
   }
 
-  free((char*)data_);
+  delete[] data_;
 }
 }  // namespace leveldb
