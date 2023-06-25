@@ -67,13 +67,13 @@ cat LOG | grep "Adjustment:"
 ## unit test:
 ```bash
 cd build
-
 ./leveldb_tests
 ./env_posix_test
 ./c_test
 ```
 ## benchmark
 ```bash
+cd build
 ./db_bench
 ```
 
@@ -102,7 +102,9 @@ close info printing in FinishedSingleOp
 
 ### Hardware
 
-Todo
+* CPU:        32 * 13th Gen Intel(R) Core(TM) i9-13900K
+* CPUCache:   36864 KB
+* SSD:        Samsung SSD 870(4TB)
 
 ### parameters
 * 50GB kv in database
@@ -110,6 +112,8 @@ Todo
 * 4 bits per key in one filter unit
 * 6 filter units for one sstable
 * 1KB KV
+* On release model
+* Snappy compression is not enabled
 
 ## Write performance
 

@@ -55,24 +55,24 @@ class MultiQueueTest : public testing::Test {
     return multi_queue_->Insert(key, NewReader(), MultiQueueTest::Deleter);
   }
 
-  MultiQueue::Handle* Lookup(const Slice& key) {
+  MultiQueue::Handle* Lookup(const Slice& key) const {
     return multi_queue_->Lookup(key);
   }
 
-  void Erase(MultiQueue::Handle* handle) { multi_queue_->Erase(handle); }
+  void Erase(MultiQueue::Handle* handle) const { multi_queue_->Erase(handle); }
 
-  FilterBlockReader* Value(MultiQueue::Handle* handle) {
+  FilterBlockReader* Value(MultiQueue::Handle* handle) const {
     return multi_queue_->Value(handle);
   }
 
-  size_t TotalCharge() { return multi_queue_->TotalCharge(); }
+  size_t TotalCharge() const { return multi_queue_->TotalCharge(); }
 
-  bool KeyMayMatchSearchExisted(MultiQueue::Handle* handle, SequenceNumber sn = 10) {
+  bool KeyMayMatchSearchExisted(MultiQueue::Handle* handle, SequenceNumber sn = 10) const {
     InternalKey key("foo", sn, kTypeValue);
     return multi_queue_->KeyMayMatch(handle, 100, key.Encode());
   }
 
-  bool KeyMayMatchSearchNotExisted(MultiQueue::Handle* handle) {
+  bool KeyMayMatchSearchNotExisted(MultiQueue::Handle* handle) const {
     InternalKey key("key", 10, kTypeValue);
     return multi_queue_->KeyMayMatch(handle, 100, key.Encode());
   }
@@ -150,6 +150,7 @@ TEST_F(MultiQueueTest, Adjustment) {
   }
 
   for(int i = 0; i < 1000000; i++){
+    // make cold_handle become cold
     KeyMayMatchSearchExisted(cold_handle, i + 10 + life_time);
   }
 
