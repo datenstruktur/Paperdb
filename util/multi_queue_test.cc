@@ -14,7 +14,7 @@ class MultiQueueTest : public testing::Test {
  public:
   MultiQueueTest() {
     multi_queue_ = NewMultiQueue();
-    policy_ = NewBloomFilterPolicy(10);
+    policy_ = new InternalFilterPolicy(NewBloomFilterPolicy(10));
   }
 
   ~MultiQueueTest() {
@@ -28,7 +28,8 @@ class MultiQueueTest : public testing::Test {
   FilterBlockReader* NewReader() {
     FilterBlockBuilder builder(policy_);
     builder.StartBlock(100);
-    builder.AddKey("foo");
+    InternalKey key("foo", 10, kTypeValue);
+    builder.AddKey(key.Encode());
 
     FileImpl* file = new FileImpl();
     BlockHandle handle;
@@ -66,6 +67,16 @@ class MultiQueueTest : public testing::Test {
 
   size_t TotalCharge() { return multi_queue_->TotalCharge(); }
 
+  bool KeyMayMatchSearchExisted(MultiQueue::Handle* handle, SequenceNumber sn = 10) {
+    InternalKey key("foo", sn, kTypeValue);
+    return multi_queue_->KeyMayMatch(handle, 100, key.Encode());
+  }
+
+  bool KeyMayMatchSearchNotExisted(MultiQueue::Handle* handle) {
+    InternalKey key("key", 10, kTypeValue);
+    return multi_queue_->KeyMayMatch(handle, 100, key.Encode());
+  }
+
   MultiQueue* multi_queue_;
   const FilterPolicy* policy_;
   std::vector<FileImpl*> file_impl_;
@@ -79,12 +90,18 @@ TEST_F(MultiQueueTest, InsertAndLookup) {
   // lookup kv from cache
   MultiQueue::Handle* lookup_handle = Lookup("key1");
   ASSERT_NE(lookup_handle, nullptr);
-
   ASSERT_EQ(lookup_handle, insert_handle);
+  ASSERT_TRUE(KeyMayMatchSearchExisted(lookup_handle));
+  ASSERT_FALSE(KeyMayMatchSearchNotExisted(lookup_handle));
+
+  MultiQueue::Handle* lookup_handle_no_found = Lookup("key2");
+  ASSERT_EQ(lookup_handle_no_found, nullptr);
+  ASSERT_TRUE(KeyMayMatchSearchExisted(lookup_handle_no_found));
+  ASSERT_TRUE(KeyMayMatchSearchNotExisted(lookup_handle_no_found));
 
   FilterBlockReader* reader = Value(lookup_handle);
   ASSERT_NE(reader, nullptr);
-  ASSERT_TRUE(reader->KeyMayMatch(100, "foo"));
+  ASSERT_TRUE(KeyMayMatchSearchExisted(lookup_handle));
 }
 
 TEST_F(MultiQueueTest, InsertAndErase) {
@@ -108,5 +125,26 @@ TEST_F(MultiQueueTest, TotalCharge) {
 
   Erase(insert_handle);  // erase from cache, but still in memory
   ASSERT_EQ(TotalCharge(), 0);
+}
+
+TEST_F(MultiQueueTest, Adjustment) {
+  MultiQueue::Handle* insert_handle_for_key1 = Insert("key1");
+  MultiQueue::Handle* insert_handle_for_key2 = Insert("key2");
+  ASSERT_NE(insert_handle_for_key1, nullptr);
+  ASSERT_NE(insert_handle_for_key2, nullptr);
+
+  for(int i = 0; i < 1000; i++){
+    KeyMayMatchSearchExisted(insert_handle_for_key2);
+  }
+
+  for(int i = 0; i < 1000000; i++){
+    KeyMayMatchSearchExisted(insert_handle_for_key1, i + 10 + life_time);
+  }
+
+  ASSERT_EQ(Value(insert_handle_for_key2)->AccessTime(), 1000);
+  ASSERT_EQ(Value(insert_handle_for_key1)->AccessTime(), 1000000);
+
+  ASSERT_EQ(Value(insert_handle_for_key2)->FilterUnitsNumber(), 1);
+  ASSERT_EQ(Value(insert_handle_for_key1)->FilterUnitsNumber(), 3);
 }
 }  // namespace leveldb

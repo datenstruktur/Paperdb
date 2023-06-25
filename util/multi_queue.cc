@@ -135,21 +135,25 @@ class InternalMultiQueue : public MultiQueue {
                    const Slice& key) override {
     FilterBlockReader* reader = Value(handle);
     QueueHandle* queue_handle = reinterpret_cast<QueueHandle*>(handle);
-    FindQueue(queue_handle)->MoveToMRU(queue_handle);
+    SingleQueue* single_queue = FindQueue(queue_handle);
+    if(single_queue){
+      single_queue->MoveToMRU(queue_handle);
+      ParsedInternalKey parsedInternalKey;
+      if (ParseInternalKey(key, &parsedInternalKey)) {
+        SequenceNumber sn = parsedInternalKey.sequence;
+        Adjustment(queue_handle, sn);
+      }
 
-    ParsedInternalKey parsedInternalKey;
-    if (ParseInternalKey(key, &parsedInternalKey)) {
-      SequenceNumber sn = parsedInternalKey.sequence;
-      Adjustment(queue_handle, sn);
+      return reader->KeyMayMatch(block_offset, key);
     }
 
-    return reader->KeyMayMatch(block_offset, key);
+    return true;
   }
 
   Handle* Lookup(const Slice& key) override {
     auto iter = map_.find(key.ToString());
     if (iter != map_.end()) {
-      QueueHandle* handle = map_.find(key.ToString())->second;
+      QueueHandle* handle = iter->second;
       return reinterpret_cast<Handle*>(handle);
     } else {
       return nullptr;
@@ -166,13 +170,17 @@ class InternalMultiQueue : public MultiQueue {
 
   void Erase(Handle* handle) override {
     QueueHandle* queue_handle = reinterpret_cast<QueueHandle*>(handle);
-    std::string key = queue_handle->key().ToString();
-    auto iter = map_.find(key);
-    if (iter != map_.end()) {
-      map_.erase(key);
-      SingleQueue* queue = FindQueue(queue_handle);
-      usage_ -= queue_handle->reader->Size();
-      queue->Erase(queue_handle);
+    if(queue_handle != nullptr) {
+      std::string key = queue_handle->key().ToString();
+      auto iter = map_.find(key);
+      if (iter != map_.end()) {
+        map_.erase(key);
+        SingleQueue* queue = FindQueue(queue_handle);
+        if(queue != nullptr) {
+          usage_ -= queue_handle->reader->Size();
+          queue->Erase(queue_handle);
+        }
+      }
     }
   }
 
@@ -190,7 +198,7 @@ class InternalMultiQueue : public MultiQueue {
   std::vector<QueueHandle*> FindColdFilter(uint64_t memory, SequenceNumber sn) {
     SingleQueue* queue = nullptr;
     std::vector<QueueHandle*> filters;
-    for (int i = filters_number; i > 1; i--) {
+    for (int i = filters_number; i > 1 && memory > 0; i--) {
       queue = queues_[i];
       queue->FindColdFilter(memory, sn, filters);
     }
@@ -214,7 +222,7 @@ class InternalMultiQueue : public MultiQueue {
   bool CanBeAdjusted(const std::vector<QueueHandle*>& cold, QueueHandle* hot) {
     double original_ios = 0;
     for (QueueHandle* handle : cold) {
-      if (!handle->reader->CanBeEvict()) return false;
+      if (handle && !handle->reader->CanBeEvict()) return false;
       original_ios += handle->reader->IOs();
     }
     original_ios += hot->reader->IOs();
@@ -267,7 +275,7 @@ class InternalMultiQueue : public MultiQueue {
   }
 
   void Adjustment(QueueHandle* hot_handle, SequenceNumber sn) {
-    if (hot_handle->reader->CanBeLoaded()) {
+    if (hot_handle && hot_handle->reader->CanBeLoaded()) {
       size_t memory = hot_handle->reader->OneUnitSize();
       std::vector<QueueHandle*> cold = FindColdFilter(memory, sn);
       if (!cold.empty() && CanBeAdjusted(cold, hot_handle)) {
