@@ -128,23 +128,39 @@ TEST_F(MultiQueueTest, TotalCharge) {
 }
 
 TEST_F(MultiQueueTest, Adjustment) {
-  MultiQueue::Handle* insert_handle_for_key1 = Insert("key1");
-  MultiQueue::Handle* insert_handle_for_key2 = Insert("key2");
-  ASSERT_NE(insert_handle_for_key1, nullptr);
-  ASSERT_NE(insert_handle_for_key2, nullptr);
+  MultiQueue::Handle* cold_handle = Insert("cold");
+  MultiQueue::Handle* hot_handle  = Insert("hot");
+  ASSERT_NE(cold_handle, nullptr);
+  ASSERT_NE(hot_handle,  nullptr);
+
+  while(Value(cold_handle)->FilterUnitsNumber() < 2){
+    if(Value(cold_handle)->LoadFilter().ok()){
+      break;
+    }
+  }
+
+  while(Value(hot_handle)->FilterUnitsNumber() < 2){
+    if(Value(hot_handle)->LoadFilter().ok()){
+      break; // if filter units number less than 2, break it
+    }
+  }
 
   for(int i = 0; i < 1000; i++){
-    KeyMayMatchSearchExisted(insert_handle_for_key2);
+    KeyMayMatchSearchExisted(hot_handle);
   }
 
   for(int i = 0; i < 1000000; i++){
-    KeyMayMatchSearchExisted(insert_handle_for_key1, i + 10 + life_time);
+    KeyMayMatchSearchExisted(cold_handle, i + 10 + life_time);
   }
 
-  ASSERT_EQ(Value(insert_handle_for_key2)->AccessTime(), 1000);
-  ASSERT_EQ(Value(insert_handle_for_key1)->AccessTime(), 1000000);
+  ASSERT_EQ(Value(hot_handle)->AccessTime(), 1000);
+  ASSERT_EQ(Value(cold_handle)->AccessTime(), 1000000);
 
-  ASSERT_EQ(Value(insert_handle_for_key2)->FilterUnitsNumber(), 1);
-  ASSERT_EQ(Value(insert_handle_for_key1)->FilterUnitsNumber(), 3);
+  if(filters_number >= 3) {
+    // cold handle evict one filter
+    // hot handle load one filter
+    ASSERT_EQ(Value(hot_handle)->FilterUnitsNumber(), 1);
+    ASSERT_EQ(Value(cold_handle)->FilterUnitsNumber(), 3);
+  }
 }
 }  // namespace leveldb
