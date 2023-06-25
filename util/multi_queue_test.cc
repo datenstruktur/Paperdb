@@ -26,6 +26,7 @@ class MultiQueueTest : public testing::Test {
   }
 
   FilterBlockReader* NewReader() {
+    if(filters_number <= 0) return nullptr;
     FilterBlockBuilder builder(policy_);
     builder.StartBlock(100);
     InternalKey key("foo", 10, kTypeValue);
@@ -83,6 +84,7 @@ class MultiQueueTest : public testing::Test {
 };
 
 TEST_F(MultiQueueTest, InsertAndLookup) {
+  if(filters_number <= 0) return ;
   // insert kv to cache
   MultiQueue::Handle* insert_handle = Insert("key1");
   ASSERT_NE(insert_handle, nullptr);
@@ -105,6 +107,7 @@ TEST_F(MultiQueueTest, InsertAndLookup) {
 }
 
 TEST_F(MultiQueueTest, InsertAndErase) {
+  if(filters_number <= 0) return ;
   MultiQueue::Handle* insert_handle = Insert("key1");
   ASSERT_NE(insert_handle, nullptr);
 
@@ -117,6 +120,7 @@ TEST_F(MultiQueueTest, InsertAndErase) {
 }
 
 TEST_F(MultiQueueTest, TotalCharge) {
+  if(filters_number <= 0) return ;
   MultiQueue::Handle* insert_handle = Insert("key1");
   ASSERT_NE(insert_handle, nullptr);
 
@@ -128,19 +132,20 @@ TEST_F(MultiQueueTest, TotalCharge) {
 }
 
 TEST_F(MultiQueueTest, Adjustment) {
+  if(filters_number <= 0) return ;
   MultiQueue::Handle* cold_handle = Insert("cold");
   MultiQueue::Handle* hot_handle  = Insert("hot");
   ASSERT_NE(cold_handle, nullptr);
   ASSERT_NE(hot_handle,  nullptr);
 
   while(Value(cold_handle)->FilterUnitsNumber() < 2){
-    if(Value(cold_handle)->LoadFilter().ok()){
+    if(!Value(cold_handle)->LoadFilter().ok()){
       break;
     }
   }
 
   while(Value(hot_handle)->FilterUnitsNumber() < 2){
-    if(Value(hot_handle)->LoadFilter().ok()){
+    if(!Value(hot_handle)->LoadFilter().ok()){
       break; // if filter units number less than 2, break it
     }
   }

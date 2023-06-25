@@ -122,7 +122,7 @@ class InternalMultiQueue : public MultiQueue {
 
   Handle* Insert(const Slice& key, FilterBlockReader* reader,
                  void (*deleter)(const Slice&, FilterBlockReader*)) override {
-    assert(reader != nullptr);
+    if(reader == nullptr) return nullptr;
     size_t number = reader->FilterUnitsNumber();
     SingleQueue* queue = queues_[number];
     QueueHandle* handle = queue->Insert(key, reader, deleter);

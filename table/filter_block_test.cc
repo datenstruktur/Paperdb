@@ -44,6 +44,7 @@ class FilterBlockTest : public testing::Test {
 };
 
 TEST_F(FilterBlockTest, EmptyBuilder) {
+  if(filters_number <= 0) return ;
   FilterBlockBuilder builder(&policy_);
   FileImpl file;
   BlockHandle handle;
@@ -74,6 +75,7 @@ TEST_F(FilterBlockTest, EmptyBuilder) {
 }
 
 TEST_F(FilterBlockTest, SingleChunk) {
+  if(filters_number <= 0) return ;
   FilterBlockBuilder builder(&policy_);
   builder.StartBlock(100);
   builder.AddKey("foo");
@@ -125,6 +127,7 @@ TEST_F(FilterBlockTest, SingleChunk) {
 }
 
 TEST_F(FilterBlockTest, MultiChunk) {
+  if(filters_number <= 0) return ;
   FilterBlockBuilder builder(&policy_);
 
   // First filter
@@ -184,6 +187,7 @@ TEST_F(FilterBlockTest, MultiChunk) {
 }
 
 TEST_F(FilterBlockTest, LoadAndExcit) {
+  if(filters_number <= 0) return ;
   FilterBlockBuilder builder(&policy_);
 
   // First filter
@@ -233,6 +237,7 @@ TEST_F(FilterBlockTest, LoadAndExcit) {
 }
 
 TEST_F(FilterBlockTest, Hotness) {
+  if(filters_number <= 0) return ;
   // to support internal key
   InternalFilterPolicy policy(&policy_);
   FilterBlockBuilder builder(&policy);
@@ -274,6 +279,7 @@ TEST_F(FilterBlockTest, Hotness) {
 }
 
 TEST_F(FilterBlockTest, Size) {
+  if(filters_number <= 0) return ;
   FilterBlockBuilder builder(&policy_);
   builder.StartBlock(100);
   builder.AddKey("foo");
@@ -316,6 +322,7 @@ TEST_F(FilterBlockTest, Size) {
 }
 
 TEST_F(FilterBlockTest, IOs) {
+  if(filters_number <= 0) return ;
   const FilterPolicy* policy = NewBloomFilterPolicy(10);
   FilterBlockBuilder builder(policy);
   builder.StartBlock(100);

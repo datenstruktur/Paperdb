@@ -29,8 +29,8 @@ class FilterPolicy;
 
 // Generate 4 filters and load 1 filter when FilterBlockReader is created
 static const size_t loaded_filters_number = 2;
-static const size_t filters_number = 6;
-static const uint64_t life_time = 30000;
+static const size_t filters_number        = 6;
+static const uint64_t life_time           = 30000;
 
 // A FilterBlockBuilder is used to construct all of the filters for a
 // particular Table.  It generates a single string which is stored as

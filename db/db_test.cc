@@ -1937,6 +1937,9 @@ TEST_F(DBTest, BloomFilter) {
   options.block_cache = NewLRUCache(0);  // Prevent cache hits
   options.multi_queue = NewMultiQueue();
 
+  if(loaded_filters_number <= 0) {
+    return ;
+  }
   int bits_per_unit = 10 / loaded_filters_number;
   options.filter_policy = NewBloomFilterPolicy(bits_per_unit);
   Reopen(&options);
