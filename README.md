@@ -38,7 +38,7 @@ Sanitizers only support of Debug mod, and you must turn it on by yourself:
 cmake -DCMAKE_BUILD_TYPE=Debug -DUSE_SAN=ON .. && cmake --build .
 ```
 
-Why google sanitizers? Google sanitizers is faste more than 10x with vaigrind[2]. We close it in order to speed up ci.
+Why google sanitizers? Google sanitizers is faster more than 10x with vaigrind[2]. We close it in order to speed up ci.
 
 ## Bloom filter adjustment logging
 
@@ -105,7 +105,7 @@ when run benchmark through bash.sh, you can pass in your own dictionary
 
 If you want to use default dictionary, just run:
 ```shell
-./bash
+./bash.sh
 ```
 
 ## Setup
@@ -143,7 +143,7 @@ Next paper to implement maybe AC-Key[5] or HotRing[6].
 # Reference
 [1] Zhang Y, Li Y, Guo F, et al. ElasticBF: Fine-grained and Elastic Bloom Filter Towards Efficient Read for LSM-tree-based KV Stores[C]//HotStorage. 2018.
 
-[2] 王留帅、徐明杰-Sanitizer 在字节跳动 C C++ 业务中的实践. https://www.bilibili.com/video/BV1YT411Q7BU
+[2] 王留帅、徐明杰-Sanitizer 在字节跳动 C C++ 业务中的实践. https://www.bilibili.com/video/BV1YT411Q7BU. 2023.
 
 [3] Zhu Z, Mun J H, Raman A, et al. Reducing bloom filter cpu overhead in lsm-trees on modern storage devices[C]//Proceedings of the 17th International Workshop on Data Management on New Hardware (DaMoN 2021). 2021: 1-10.
 
