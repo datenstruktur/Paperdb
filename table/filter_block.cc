@@ -198,6 +198,7 @@ bool FilterBlockReader::KeyMayMatch(uint64_t block_offset, const Slice& key) {
  * filter
  */
 Status FilterBlockReader::LoadFilter() {
+  static const uint64_t kFilterSize = disk_size_ + kBlockTrailerSize;
   uint64_t units_index = filter_units.size();
   if (units_index >= all_units_number_)
     return Status::Corruption("all filter units were loaded");
@@ -209,15 +210,14 @@ Status FilterBlockReader::LoadFilter() {
   BlockContents contents;
 
   // every filter has same size: disk_size_ + kBlockTrailerSize
-  uint64_t offset =
-      disk_offset_ + (disk_size_ + kBlockTrailerSize) * units_index;
+  uint64_t offset = disk_offset_ + kFilterSize * units_index;
   handle.set_offset(offset);
   handle.set_size(disk_size_);
 
   Status s = ReadBlock(file_, readOptions, handle, &contents);
 
   if (!s.ok()) {
-    if(contents.heap_allocated) {
+    if (contents.heap_allocated) {
       delete[] contents.data.data();
     }
     return s;
@@ -234,11 +234,10 @@ Status FilterBlockReader::EvictFilter() {
   if (filter_units.empty())
     return Status::Corruption("there is no filter can be  evicted");
 
-  uint32_t size = filter_units.size();
   // load from left to right
   // evict from right to left
-  const char* data = filter_units[size - 1];
-  if(heap_allocated_) {
+  const char* data = filter_units.back();
+  if (heap_allocated_) {
     delete[] data;
   }
   filter_units.pop_back();

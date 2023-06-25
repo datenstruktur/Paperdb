@@ -14,7 +14,7 @@
 
 # Getting the Source
 
-```bash
+```shell
 git clone --recurse-submodules https://github.com/WangTingZheng/Paperdb.git
 cd Paperdb
 git checkout elasticbf-dev
@@ -24,7 +24,7 @@ git checkout elasticbf-dev
 
 This project supports [CMake](https://cmake.org/) out of the box. Quick start:
 
-```bash
+```shell
 mkdir -p build && cd build
 cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build .
 ```
@@ -34,7 +34,7 @@ cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build .
 ## Google sanitizers
 
 Sanitizers only support of Debug mod, and you must turn it on by yourself:
-```bash
+```shell
 cmake -DCMAKE_BUILD_TYPE=Debug -DUSE_SAN=ON .. && cmake --build .
 ```
 
@@ -44,17 +44,17 @@ Why google sanitizers? Google sanitizers is faste more than 10x with vaigrind[2]
 
 Turn on logging by passing parameter in cmake command:
 
-```bash
+```shell
 cmake -DCMAKE_BUILD_TYPE=Debug -DUSE_ADJUSTMENT_LOGGING=ON .. && cmake --build .
 ```
 or in release mod:
 
-```bash
+```shell
 cmake -DCMAKE_BUILD_TYPE=Release -DUSE_ADJUSTMENT_LOGGING=ON .. && cmake --build .
 ```
 
 You can check out adjustment information in ``/LOG`` file in your db dictionary, in ``/tmp`` in default setting:
-```bash
+```shell
 cd /your/db/dictionary
 cat LOG | grep "Adjustment:"
 ```
@@ -65,14 +65,14 @@ cat LOG | grep "Adjustment:"
 # Unit test and benchmark
 
 ## unit test:
-```bash
+```shell
 cd build
 ./leveldb_tests
 ./env_posix_test
 ./c_test
 ```
 ## benchmark
-```bash
+```shell
 cd build
 ./db_bench
 ```
@@ -80,11 +80,11 @@ cd build
 ## benchmark parameters:
 
 close multi_queue, use default way to get filter 
-```bash
+```shell
 ./db_bench --multi_queue_open=0
 ```
 close info printing in FinishedSingleOp
-```bash
+```shell
 ./db_bench --print_process=0
 ```
 
@@ -97,6 +97,16 @@ close info printing in FinishedSingleOp
 * **util/multi_queue.cc**: Manage filter units in memory to reduce adjust overhead
 
 # Performance
+
+when run benchmark through bash.sh, you can pass in your own dictionary 
+```shell
+./bash.sh --db_path=/your/db/path
+```
+
+If you want to use default dictionary, just run:
+```shell
+./bash
+```
 
 ## Setup
 

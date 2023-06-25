@@ -2,18 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 //
-// A Cache is an interface that maps keys to values.  It has internal
-// synchronization and may be safely accessed concurrently from
-// multiple threads.  It may automatically evict entries to make room
-// for new entries.  Values have a specified charge against the cache
-// capacity.  For example, a cache where the values are variable
-// length strings, may use the length of the string as the charge for
-// the string.
-//
-// A builtin cache implementation with a least-recently-used eviction
-// policy is provided.  Clients may use their own implementations if
-// they want something more sophisticated (like scan-resistance, a
-// custom eviction policy, variable cache sizing, etc.)
 
 #ifndef STORAGE_LEVELDB_INCLUDE_MULTI_QUEUE_H_
 #define STORAGE_LEVELDB_INCLUDE_MULTI_QUEUE_H_
@@ -29,8 +17,6 @@ namespace leveldb {
 
 class LEVELDB_EXPORT MultiQueue;
 
-// Create a new cache with a fixed size capacity.  This implementation
-// of Cache uses a least-recently-used eviction policy.
 LEVELDB_EXPORT MultiQueue* NewMultiQueue();
 
 class LEVELDB_EXPORT MultiQueue {
@@ -44,47 +30,36 @@ class LEVELDB_EXPORT MultiQueue {
   // function that was passed to the constructor.
   virtual ~MultiQueue();
 
-  // Opaque handle to an entry stored in the cache.
+  // Queue handle to an entry stored in the cache.
   struct Handle {};
 
-  // Insert a mapping from key->value into the cache and assign it
-  // the specified charge against the total cache capacity.
-  //
-  // Returns a handle that corresponds to the mapping.  The caller
-  // must call this->Release(handle) when the returned mapping is no
-  // longer needed.
-  //
-  // When the inserted entry is no longer needed, the key and
-  // value will be passed to "deleter".
+  // insert a handle contains filter into multi-queue
+  // deleter will be called when handle is freed
   virtual Handle* Insert(const Slice& key, FilterBlockReader* reader,
                          void (*deleter)(const Slice& key,
                                          FilterBlockReader* value)) = 0;
 
+  // check the key if in table
+  // return true if handle is nullptr
   virtual bool KeyMayMatch(Handle* handle, uint64_t block_offset,
                            const Slice& key) = 0;
 
-  // If the cache has no mapping for "key", returns nullptr.
-  //
-  // Else return a handle that corresponds to the mapping.  The caller
-  // must call this->Release(handle) when the returned mapping is no
-  // longer needed.
+  // found a handle save in multi queue
+  // key : [filter.filter name][table file id]
   virtual Handle* Lookup(const Slice& key) = 0;
 
-  // Return the value encapsulated in a handle returned by a
-  // successful Lookup().
-  // REQUIRES: handle must not have been released yet.
-  // REQUIRES: handle must have been returned by a method on *this.
+  // get filterblock reader from handle
   virtual FilterBlockReader* Value(Handle* handle) = 0;
 
-  // If the cache contains entry for key, erase it.  Note that the
-  // underlying entry will be kept around until all existing handles
-  // to it have been released.
+  // free handle and filterblock reader saved in multi queue
   virtual void Erase(Handle* handle) = 0;
 
   // Return an estimate of the combined charges of all elements stored in the
   // cache.
   virtual size_t TotalCharge() const = 0;
 
+  // set a logger to record adjustment information
+  // in db/LOG
   virtual void SetLogger(Logger* logger) = 0;
 };
 

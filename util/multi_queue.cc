@@ -82,7 +82,7 @@ class SingleQueue {
       QueueHandle* next = e->next;
       if (e->reader->IsCold(sn) && e->reader->CanBeEvict()) {
         memory -= e->reader->OneUnitSize();
-        filters.push_back(e);
+        filters.emplace_back(e);
       }
       e = next;
     } while (memory > 0);
@@ -126,7 +126,7 @@ class InternalMultiQueue : public MultiQueue {
     size_t number = reader->FilterUnitsNumber();
     SingleQueue* queue = queues_[number];
     QueueHandle* handle = queue->Insert(key, reader, deleter);
-    map_.insert(std::make_pair(key.ToString(), handle));
+    map_.emplace(key.ToString(), handle);
     usage_ += reader->Size();
     return reinterpret_cast<Handle*>(handle);
   }
@@ -146,7 +146,6 @@ class InternalMultiQueue : public MultiQueue {
 
       return reader->KeyMayMatch(block_offset, key);
     }
-
     return true;
   }
 
