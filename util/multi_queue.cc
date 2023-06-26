@@ -10,7 +10,7 @@ struct QueueHandle {
   QueueHandle* next;
   QueueHandle* prev;
 
-  bool internal_node = false;
+  bool internal_node;
 
   size_t key_length;
   char key_data[1];  // Beginning of key
@@ -61,6 +61,7 @@ class SingleQueue {
     e->reader = reader;
     e->deleter = deleter;
     e->key_length = key.size();
+    e->internal_node = false;
     std::memcpy(e->key_data, key.data(), key.size());
     Queue_Append(e);
     return e;
@@ -85,7 +86,7 @@ class SingleQueue {
     // search from LRU to MRU
     QueueHandle* e = lru_->prev;
     do {
-      if (e == nullptr || e == mru_) {
+      if (e == nullptr || e == mru_ || e == lru_) {
         break;
       }
       if (e->reader->IsCold(sn) && e->reader->CanBeEvict()) {
