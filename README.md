@@ -94,8 +94,7 @@ close info printing in FinishedSingleOp
 * **table/filterblock.cc**: Manage multi filter units in disk, update the hotness of the SSTable. **(94% lines unit test coverage)** 
 * **table/table.cc**: Check if the key is existed using filterblock **(97% lines unit test coverage)**
 * **table/table_builder.cc**: Construct filter block **(89% lines unit test coverage)**
-* **util/multi_queue.cc**: Manage filter units in memory to reduce adjust overhead **(98% lines unit test coverag**
-
+* **util/multi_queue.cc**: Manage filter units in memory to reduce adjust overhead **(98% lines unit test coverage)**
 # Performance
 
 when run benchmark through bash.sh, you can pass in your own dictionary 
