@@ -140,6 +140,36 @@ When the key is passed in the KeyMayMatch in the filterblockreader, we will pars
 > - util/multi_queue.cc
 
 ### Main components
+Multi Queue structure just like this:
+```
+HashTable:
+
+   -----------------------
+   | key  | QueueHandle* |----
+   -----------------------   |
+   | key  | QueueHandle* |   |
+   ----------------------    |
+   | key  | QueueHandle* |   |
+   ----------------------    |
+                             |
+                             ↓
+                         QueueHandle-------
+                           ↑ ↑            ↓
+                           | |          reader  
+                           | | equal   
+                    ----->     ----->      ---->
+SingleQeueu1     mlu      node1       node2     lru
+                    <----      <-----      <----
+
+                    ----->     ----->      ---->
+SingleQeueu2     mlu      node1       node2     lru
+                    <----      <-----      <----
+                    
+                    ----->     ----->      ---->
+SingleQeueu3     mlu      node1       node2     lru
+                    <----      <-----      <----
+
+```
 
 - QueueHandle: A node in a linked list, encapsulating filterblockreader
 - SingleQueue: An LRU linked list containing filterblockreaders loaded with the same number of filter units. The accessed QueueHandle will be updated to the previous node of the header node
