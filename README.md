@@ -137,6 +137,7 @@ Todo
 - Using shared hash in this paper[3] to reduce multi bloom filter look up overhead.
 - Hotness inheritance after compaction in ATC version of paper[4], see [about implement hotness inheritance](https://github.com/WangTingZheng/Paperdb/discussions/13) in discussions.
 - Using perf tool to find code can be optimized.
+- Reimplement ElasticBF to get rid of the unit test, sanitizers and benchmark, see [about reimplement](https://github.com/WangTingZheng/Paperdb/discussions/15)
 
 # Next Paper
 
