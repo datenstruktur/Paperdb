@@ -145,6 +145,43 @@ When the key is passed in the KeyMayMatch in the filterblockreader, we will pars
 - SingleQueue: An LRU linked list containing filterblockreaders loaded with the same number of filter units. The accessed QueueHandle will be updated to the previous node of the header node
 - MultiQueue: a multi-level queue composed of multiple linked lists, from the linked list with more filter units to the linked list with fewer filter units, start querying the cold FilterBlockReader from the LRU section of the linked list, and query the required cold FilterBlockReader with minimal cost
 
+### Insert and Search
+Empty SingeQueue:
+```
+   (next)
+mlu----->lru 
+↑         ↓(prev)
+----------|
+```
+
+Insert or move a new Handle to MLU end:
+
+```
+new--------
+↓(prev)   ↓(next)
+mlu----->lru 
+↑         ↓
+----------|
+
+---------------------------------
+
+       ----------new--------
+ (next)↑ ↓(prev)   (next)↓ ↑(prev)
+ mlu                     lru 
+```
+
+Find Cold handle from lru to mru end
+
+```
+   ----->     ----->      ---->
+mlu      node1       node2     lru
+   <----      <-----      <----
+         [<--------------]
+              search
+```
+
+**Node**: Internal node mlu/lru has no key, call Key() will be crash.
+
 ### Adjustment policy
 
 - Collect Cold FilterBlockReader: Calculate how much memory is required to load the filter unit of a hot filterblockreader, from the list with more filter units to the list with less, the LRU end of the linked list to the MRU end, and judge whether a FilterBlockReader is cold through SequenceNumber. If it is cold, save it. If you can collect no less than the memory of the cold Reader loading the filter unit of a hot reader, return the reader's collection. If it is not complete, return empty.

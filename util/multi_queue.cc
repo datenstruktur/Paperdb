@@ -10,10 +10,16 @@ struct QueueHandle {
   QueueHandle* next;
   QueueHandle* prev;
 
+  bool internal_node = false;
+
   size_t key_length;
   char key_data[1];  // Beginning of key
 
   Slice key() const {
+    // internal node for linked list has no key
+    // maybe cause some fault to use internal node's key
+    assert(!internal_node);
+
     return Slice(key_data, key_length);
   }
 };
@@ -28,6 +34,9 @@ class SingleQueue {
   SingleQueue() {
     mru_ = new QueueHandle();
     lru_ = new QueueHandle();
+
+    mru_->internal_node = true;
+    lru_->internal_node = true;
 
     mru_->next = lru_;
     lru_->prev = mru_;
