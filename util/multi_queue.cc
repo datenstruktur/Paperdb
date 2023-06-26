@@ -2,6 +2,8 @@
 
 #include <unordered_map>
 
+#include "mutexlock.h"
+
 namespace leveldb {
 MultiQueue::~MultiQueue() {}
 struct QueueHandle {
@@ -25,8 +27,10 @@ struct QueueHandle {
 };
 
 void FreeHandle(QueueHandle* handle) {
-  handle->deleter(handle->key(), handle->reader);
-  free(handle);
+  if(handle) {
+    handle->deleter(handle->key(), handle->reader);
+    free(handle);
+  }
 }
 
 class SingleQueue {
@@ -39,12 +43,15 @@ class SingleQueue {
     lru_->internal_node = true;
 
     mru_->next = lru_;
+    mru_->prev = nullptr;
+
     lru_->prev = mru_;
+    lru_->next = nullptr;
   }
 
   ~SingleQueue() {
     QueueHandle* next = nullptr;
-    for (QueueHandle* e = mru_->next; e != nullptr && e != lru_;e = next) {
+    for (QueueHandle* e = mru_->next; e != nullptr && e != lru_ && e != mru_;e = next) {
       next = e->next;
       FreeHandle(e);
     }
@@ -75,6 +82,8 @@ class SingleQueue {
   }
 
   void Remove(QueueHandle* handle) { Queue_Remove(handle); }
+
+  void Append(QueueHandle* handle){ Queue_Append(handle);}
 
   void MoveToMRU(QueueHandle* handle) {
     Remove(handle);
@@ -128,11 +137,13 @@ class InternalMultiQueue : public MultiQueue {
   ~InternalMultiQueue() override {
     for (int i = 0; i < filters_number + 1; i++) {
       delete queues_[i];
+      queues_[i] = nullptr;
     }
   }
 
   Handle* Insert(const Slice& key, FilterBlockReader* reader,
                  void (*deleter)(const Slice&, FilterBlockReader*)) override {
+    MutexLock l(&mutex_);
     if(reader == nullptr) return nullptr;
     size_t number = reader->FilterUnitsNumber();
     SingleQueue* queue = queues_[number];
@@ -144,6 +155,7 @@ class InternalMultiQueue : public MultiQueue {
 
   bool KeyMayMatch(Handle* handle, uint64_t block_offset,
                    const Slice& key) override {
+    MutexLock l(&mutex_);
     FilterBlockReader* reader = Value(handle);
     QueueHandle* queue_handle = reinterpret_cast<QueueHandle*>(handle);
     SingleQueue* single_queue = FindQueue(queue_handle);
@@ -161,6 +173,7 @@ class InternalMultiQueue : public MultiQueue {
   }
 
   Handle* Lookup(const Slice& key) override {
+    MutexLock l(&mutex_);
     auto iter = map_.find(key.ToString());
     if (iter != map_.end()) {
       QueueHandle* handle = iter->second;
@@ -179,6 +192,7 @@ class InternalMultiQueue : public MultiQueue {
   }
 
   void Erase(Handle* handle) override {
+    MutexLock l(&mutex_);
     QueueHandle* queue_handle = reinterpret_cast<QueueHandle*>(handle);
     if(queue_handle != nullptr) {
       std::string key = queue_handle->key().ToString();
@@ -194,16 +208,24 @@ class InternalMultiQueue : public MultiQueue {
     }
   }
 
-  size_t TotalCharge() const override { return usage_; }
+  size_t TotalCharge() const override {
+    MutexLock l(&mutex_);
+    return usage_;
+  }
 
-  void SetLogger(Logger* logger) override { logger_ = logger; }
+  void SetLogger(Logger* logger) override {
+    MutexLock l(&mutex_);
+    logger_ = logger;
+  }
 
  private:
-  size_t usage_;
-  Logger* logger_;
+  size_t usage_ GUARDED_BY(mutex_);
+  Logger* logger_ GUARDED_BY(mutex_);
 
-  std::vector<SingleQueue*> queues_;
-  std::unordered_map<std::string, QueueHandle*> map_;
+  mutable port::Mutex mutex_;
+
+  std::vector<SingleQueue*> queues_ GUARDED_BY(mutex_);
+  std::unordered_map<std::string, QueueHandle*> map_ GUARDED_BY(mutex_);
 
   std::vector<QueueHandle*> FindColdFilter(uint64_t memory, SequenceNumber sn) {
     SingleQueue* queue = nullptr;
@@ -263,7 +285,7 @@ class InternalMultiQueue : public MultiQueue {
     size_t number = handle->reader->FilterUnitsNumber();
     assert(number + 1 <= filters_number);
     queues_[number]->Remove(handle);
-    queues_[number + 1]->MoveToMRU(handle);
+    queues_[number + 1]->Append(handle);
     handle->reader->LoadFilter();
   }
 
@@ -271,7 +293,7 @@ class InternalMultiQueue : public MultiQueue {
     size_t number = handle->reader->FilterUnitsNumber();
     assert(number - 1 >= 0);
     queues_[number]->Remove(handle);
-    queues_[number - 1]->MoveToMRU(handle);
+    queues_[number - 1]->Append(handle);
     handle->reader->EvictFilter();
   }
 
