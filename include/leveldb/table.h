@@ -75,8 +75,8 @@ class LEVELDB_EXPORT Table {
                      void (*handle_result)(void* arg, const Slice& k,
                                            const Slice& v));
 
-  FilterBlockReader* ReadMeta();
-  void ReadFilter();
+  FilterBlockReader* ReadFilter();
+  void ReadMeta();
 
   Rep* const rep_;
 };

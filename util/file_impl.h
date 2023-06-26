@@ -1,5 +1,7 @@
 //
 // Created by WangTingZheng on 2023/6/19.
+// Just wrapper for filters writing, for unit test
+// StringSink, StringSource: save file in memory
 //
 
 #ifndef LEVELDB_FILE_IMPL_H

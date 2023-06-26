@@ -138,6 +138,7 @@ Todo
 - Hotness inheritance after compaction in ATC version of paper[4], see [about implement hotness inheritance](https://github.com/WangTingZheng/Paperdb/discussions/13) in discussions.
 - Using perf tool to find code can be optimized.
 - Reimplement ElasticBF to get rid of the unit test, sanitizers and benchmark, see [about reimplement](https://github.com/WangTingZheng/Paperdb/discussions/15)
+- Support YCSB, should pay attention to [FalsePositiveRate function](https://github.com/WangTingZheng/Paperdb/blob/242b1b92cf97453d7750ea6f630cb490bb14feb7/db/c.cc#L140) in db/c.cc
 
 # Next Paper
 

@@ -16,6 +16,7 @@ static const size_t kFilterBase = 1 << kFilterBaseLg;
 
 FilterBlockBuilder::FilterBlockBuilder(const FilterPolicy* policy)
     : policy_(policy) {
+  // when filters_number small than 1, FilterBlockBuilder will not be call
   filter_units_.resize(filters_number);
 }
 
@@ -114,9 +115,9 @@ FilterBlockReader::FilterBlockReader(const FilterPolicy* policy,
       num_(0),
       base_lg_(0),
       file_(file),
-      heap_allocated_(false),
-      access_time_(0),
-      sequence_(0) {
+      heap_allocated_(false), // if false, manage data by mmap
+      access_time_(0), // the time this table be access. todo: Hotness inheritance
+      sequence_(0) { //last key's sequence's number pass in this reader, the beginning of this reader
   size_t n = contents.size();
   if (n < 25) return;  // 1 byte for base_lg_ and 21 for start of others
 

@@ -39,7 +39,7 @@ struct Table::Rep {
 
 Status Table::Open(const Options& options, RandomAccessFile* file,
                    uint64_t size, Table** table, uint64_t table_id) {
-  *table = nullptr;
+  *table = nullptr;                             //every table has unique file id
   if (size < Footer::kEncodedLength) {
     return Status::Corruption("file is too short to be an sstable");
   }
@@ -78,7 +78,7 @@ Status Table::Open(const Options& options, RandomAccessFile* file,
     rep->reader = nullptr;
     rep->footer = footer;
     *table = new Table(rep);
-    (*table)->ReadFilter();
+    (*table)->ReadMeta();
   }
 
   return s;
@@ -86,7 +86,7 @@ Status Table::Open(const Options& options, RandomAccessFile* file,
 
 // Read filter block from disk, if needed. ReadMeta maybe called
 // by ReadFilter, so, footer need saved in rep
-FilterBlockReader* Table::ReadMeta() {
+FilterBlockReader* Table::ReadFilter() {
   if (rep_->options.filter_policy == nullptr) {
     return nullptr;  // Do not need any metadata
   }
@@ -137,7 +137,7 @@ static void DeleteCacheFilter(const Slice& key, FilterBlockReader* value) {
 
 // get FilterBlockReader and saved in rep_->filter, we should return
 // cache handle and reader, so the pointer of reader passed in ReadFilter
-void Table::ReadFilter() {
+void Table::ReadMeta() {
   MultiQueue* multi_queue = rep_->options.multi_queue;
   if (rep_->options.filter_policy == nullptr || rep_->reader != nullptr) {
     return;
@@ -145,7 +145,7 @@ void Table::ReadFilter() {
 
   if (multi_queue == nullptr) {
     if (rep_->reader == nullptr) {
-      rep_->reader = ReadMeta();
+      rep_->reader = ReadFilter();
     }
     return;
   }
@@ -166,7 +166,7 @@ void Table::ReadFilter() {
 
   cache_handle = multi_queue->Lookup(key);
   if (cache_handle == nullptr) {
-    FilterBlockReader* reader = ReadMeta();
+    FilterBlockReader* reader = ReadFilter();
     if (reader != nullptr) {
       cache_handle = multi_queue->Insert(key, reader, &DeleteCacheFilter);
     }

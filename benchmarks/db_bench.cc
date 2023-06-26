@@ -104,8 +104,7 @@ static int FLAGS_block_size = 0;
 // Negative means use default settings.
 static int FLAGS_cache_size = -1;
 
-// Number of bytes to use as a cache of filter block.
-// Negative means disable caching filter block.
+// If true, use multi queue to manage filter, adjustment will be active
 static bool FLAGS_multi_queue_open = true;
 
 // Maximum number of files to keep open at the same time (use default if == 0)
@@ -113,7 +112,7 @@ static int FLAGS_open_files = 0;
 
 // Bloom filter bits per key.
 // Negative means use default settings.
-static int FLAGS_bloom_bits = 4;
+static int FLAGS_bloom_bits = -1;
 
 // Common key prefix length.
 static int FLAGS_key_prefix = 0;
@@ -138,7 +137,7 @@ static const char* FLAGS_db = nullptr;
 // ZSTD compression level to try out
 static int FLAGS_zstd_compression_level = 1;
 
-// If true, remove all bench related file
+// If true, remove all bench related file after benchmarking
 static bool FLAGS_clean_bench_file = false;
 
 namespace leveldb {

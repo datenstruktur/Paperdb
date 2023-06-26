@@ -1453,6 +1453,7 @@ bool DBImpl::GetProperty(const Slice& property, std::string* value) {
     if (imm_) {
       total_usage += imm_->ApproximateMemoryUsage();
     }
+    // easier to track multi_queue's memory overhead
     if(options_.multi_queue){
       total_usage += options_.multi_queue->TotalCharge();
     }

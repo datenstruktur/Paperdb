@@ -1940,6 +1940,8 @@ TEST_F(DBTest, BloomFilter) {
   if(loaded_filters_number <= 0) {
     return ;
   }
+  // NewBloomFilterPolicy is for one filter unit
+  // get one filter unit's bits per key
   int bits_per_unit = 10 / loaded_filters_number;
   options.filter_policy = NewBloomFilterPolicy(bits_per_unit);
   Reopen(&options);

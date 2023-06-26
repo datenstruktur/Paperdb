@@ -35,6 +35,7 @@ class TestHashFilter : public FilterPolicy {
     return false;
   }
 
+  // TestHashFilter save completely data, no false positive rate
   double FalsePositiveRate() const override { return 0; }
 };
 
@@ -356,6 +357,7 @@ TEST_F(FilterBlockTest, IOs) {
   double false_positive_rate = pow(0.6185, 10);
 
   ASSERT_EQ(reader.AccessTime(), access);
+  // get ios by myself
   ASSERT_EQ(reader.IOs(),
             pow(false_positive_rate, loaded_filters_number) * access);
 

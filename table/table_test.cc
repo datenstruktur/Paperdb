@@ -186,7 +186,7 @@ class TableConstructor : public Constructor {
     Options table_options;
     table_options.comparator = options.comparator;
     return Table::Open(table_options, source_, sink.contents().size(), &table_,
-                       0);
+                       0); //ony one table in memory, file id is no means
   }
 
   Iterator* NewIterator() const override {

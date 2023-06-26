@@ -25,8 +25,8 @@ struct TableBuilder::Rep {
         data_block(&options),
         index_block(&index_block_options),
         num_entries(0),
-        closed(false),
-        filter_block(opt.filter_policy == nullptr || filters_number == 0
+        closed(false), // filter policy or filters number is invalid, do not use bf
+        filter_block(opt.filter_policy == nullptr || filters_number <= 0
                          ? nullptr
                          : new FilterBlockBuilder(opt.filter_policy)),
         pending_index_entry(false) {
@@ -252,6 +252,8 @@ Status TableBuilder::Finish() {
 
   // Write filter block
   if (ok() && r->filter_block != nullptr) {
+    // Only TableBuilder save offset of the file
+    // so write filter by TableBuilder
     BlockHandle filters_handle;
     const std::vector<std::string>& filters = r->filter_block->ReturnFilters();
     WriteRawFilters(filters, kNoCompression, &filters_handle);

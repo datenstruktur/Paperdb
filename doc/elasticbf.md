@@ -83,7 +83,7 @@ The format of the new filterblock is as follows, divided into two parts, the dis
 
 **Note**: In the process of implementation, because only TableBuilder saves the entire SSTable file offset, when we generate all the filter units, we need to return to TableBuilder for persistence, get the offset and size of the filter unit from TableBuilder, and then return to FilterBlock to complete the construction of the memory part.
 
-**Note**: LevelDB uses InternalFilterPolicy to wrapper the Bloom Filter. This filter will convert the InternalKey with the serial number and KV type into the user key passed by the user, and then insert it into the Bloom filter to build a bitmap, but in ElasticBF, We need to generate a bitmap for a set of keys, which will cause the InternalKey that has been converted to the user key to be converted again, resulting in a parsing error. The solution is to add a flag to convert only when the first filter unit is generated.
+**Note**: LevelDB uses InternalFilterPolicy to wrapper the Bloom Filter. This filter will convert the InternalKey with the serial number and KV type into the user key passed by the user, and then insert it into the Bloom filter to build a bitmap, but in ElasticBF, We need to generate a bitmap for a set of keys, which will cause the InternalKey that has been converted to the user key to be converted again, resulting in a parsing error. The solution is to add a flag to convert only when the first filter unit is generated. Just see this [code](https://github.com/WangTingZheng/Paperdb/blob/242b1b92cf97453d7750ea6f630cb490bb14feb7/db/dbformat.cc#L108)
 
 ### Meta Index Block
 

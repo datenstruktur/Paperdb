@@ -90,6 +90,7 @@ class BloomFilterPolicy : public FilterPolicy {
     return true;
   }
 
+  // r: (0.6185)^b
   double FalsePositiveRate() const override {
     return pow(0.6185, static_cast<double>(bits_per_key_));
   }

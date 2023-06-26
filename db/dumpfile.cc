@@ -159,6 +159,7 @@ Status DumpTable(Env* env, const std::string& fname, WritableFile* dst) {
     // any comparisons.  In particular, we do not call Seek or Prev.
     uint64_t number;
     FileType type;
+    // get sstable's file id as filter block' key
     if(ParseFileName(fname, &number, &type)){
       if(type == kTableFile) {
         s = Table::Open(Options(), file, file_size, &table, number);

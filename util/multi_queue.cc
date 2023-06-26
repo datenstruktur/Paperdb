@@ -28,6 +28,7 @@ struct QueueHandle {
 
 void FreeHandle(QueueHandle* handle) {
   if(handle) {
+    // free reader, and free node
     handle->deleter(handle->key(), handle->reader);
     free(handle);
   }
@@ -39,6 +40,8 @@ class SingleQueue {
     mru_ = new QueueHandle();
     lru_ = new QueueHandle();
 
+    // mark as internal node
+    // do not call Key()
     mru_->internal_node = true;
     lru_->internal_node = true;
 
@@ -50,12 +53,14 @@ class SingleQueue {
   }
 
   ~SingleQueue() {
+    // user node created by malloc
     QueueHandle* next = nullptr;
     for (QueueHandle* e = mru_->next; e != nullptr && e != lru_ && e != mru_;e = next) {
       next = e->next;
       FreeHandle(e);
     }
 
+    // internal node created by new
     delete mru_;
     delete lru_;
   }
@@ -95,6 +100,7 @@ class SingleQueue {
     // search from LRU to MRU
     QueueHandle* e = lru_->prev;
     do {
+      // do not access internal node
       if (e == nullptr || e == mru_ || e == lru_) {
         break;
       }
@@ -103,7 +109,7 @@ class SingleQueue {
         filters.emplace_back(e);
       }
       e = e->prev;
-    } while (memory > 0);
+    } while (memory > 0); // evict cold memory can be bigger than load a hot filter
   }
 
  private:
@@ -112,9 +118,11 @@ class SingleQueue {
 
   void Queue_Append(QueueHandle* e) {
     // Make "e" newest entry by inserting just after *mru
+    // set e
     e->prev = mru_;
     e->next = mru_->next;
 
+    // set node in linked list
     mru_->next->prev = e;
     mru_->next = e;
   }
@@ -158,6 +166,7 @@ class InternalMultiQueue : public MultiQueue {
     MutexLock l(&mutex_);
     FilterBlockReader* reader = Value(handle);
     QueueHandle* queue_handle = reinterpret_cast<QueueHandle*>(handle);
+    // found queue_handle where is in by reader's filter units number
     SingleQueue* single_queue = FindQueue(queue_handle);
     if(single_queue){
       single_queue->MoveToMRU(queue_handle);
@@ -213,6 +222,7 @@ class InternalMultiQueue : public MultiQueue {
     return usage_;
   }
 
+  // logger for record adjustment information
   void SetLogger(Logger* logger) override {
     MutexLock l(&mutex_);
     logger_ = logger;

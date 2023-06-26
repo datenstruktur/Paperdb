@@ -91,6 +91,8 @@ class FilterBlockReader {
   // filter block memory overhead(Byte), use by Cache->Insert
   size_t Size() const { return filter_units.size() * disk_size_; }
 
+  // R: (r)^n
+  // IO: R*F
   double IOs() const {
     return pow(policy_->FalsePositiveRate(),
                static_cast<double>(filter_units.size())) *

@@ -23,6 +23,7 @@ class BloomTest : public testing::Test {
  public:
   BloomTest() : policy_(NewBloomFilterPolicy(10)) {}
 
+  // for test false positive rate
   void SetBloomFilter(int bits_per_key) {
     delete policy_;
     Reset();
