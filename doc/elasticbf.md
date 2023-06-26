@@ -221,3 +221,5 @@ mlu      node1       node2     lru
 **Note**: The total memory footprint of the filter unit of the evicted cold reader cannot be less than the memory footprint of a filter unit of the loaded hot reader, and a little more is fine.
 
 **Note**: A cold reader with only one filter unit cannot be selected, and the false positive rate without a filter unit is not easy to calculate.
+
+**Note**: We add a lock into multi queue to support multi threads, LevelDB's benchmark is under multi threads.
