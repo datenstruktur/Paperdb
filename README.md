@@ -100,6 +100,7 @@ close info printing in FinishedSingleOp
 
 when run benchmark through bash.sh, you can pass in your own dictionary 
 ```shell
+chmod +x bash.sh
 ./bash.sh --db_path=/your/db/path
 ```
 
@@ -138,7 +139,7 @@ Todo
 
 # Next Paper
 
-Next paper to implement maybe AC-Key[5] or HotRing[6].
+Next paper to implement maybe AC-Key[5] or HotRing[6] or **WiscKey[7]**.
 
 # Reference
 [1] Zhang Y, Li Y, Guo F, et al. ElasticBF: Fine-grained and Elastic Bloom Filter Towards Efficient Read for LSM-tree-based KV Stores[C]//HotStorage. 2018.
@@ -152,3 +153,5 @@ Next paper to implement maybe AC-Key[5] or HotRing[6].
 [5] Wu F, Yang M H, Zhang B, et al. AC-key: Adaptive caching for LSM-based key-value stores[C]//Proceedings of the 2020 USENIX Conference on Usenix Annual Technical Conference. 2020: 603-615.
 
 [6] Chen J, Chen L, Wang S, et al. HotRing: A Hotspot-Aware In-Memory Key-Value Store[C]//FAST. 2020: 239-252.
+
+[7] Lu L, Pillai T S, Gopalakrishnan H, et al. Wisckey: Separating keys from values in ssd-conscious storage[J]. ACM Transactions on Storage (TOS), 2017, 13(1): 1-28.

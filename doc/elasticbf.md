@@ -145,7 +145,7 @@ When the key is passed in the KeyMayMatch in the filterblockreader, we will pars
 - SingleQueue: An LRU linked list containing filterblockreaders loaded with the same number of filter units. The accessed QueueHandle will be updated to the previous node of the header node
 - MultiQueue: a multi-level queue composed of multiple linked lists, from the linked list with more filter units to the linked list with fewer filter units, start querying the cold FilterBlockReader from the LRU section of the linked list, and query the required cold FilterBlockReader with minimal cost
 
-### Insert and Search
+### Insert and search in SingleQueue
 Empty SingeQueue:
 ```
    (next)
