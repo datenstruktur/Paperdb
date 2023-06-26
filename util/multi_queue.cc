@@ -14,10 +14,6 @@ struct QueueHandle {
   char key_data[1];  // Beginning of key
 
   Slice key() const {
-    // next is only equal to this if the LRU handle is the list head of an
-    // empty list. List heads never have meaningful keys.
-    assert(next != this);
-
     return Slice(key_data, key_length);
   }
 };
@@ -30,16 +26,22 @@ void FreeHandle(QueueHandle* handle) {
 class SingleQueue {
  public:
   SingleQueue() {
-    in_use_.next = &in_use_;
-    in_use_.prev = &in_use_;
+    mru_ = new QueueHandle();
+    lru_ = new QueueHandle();
+
+    mru_->next = lru_;
+    lru_->prev = mru_;
   }
 
   ~SingleQueue() {
-    for (QueueHandle* e = in_use_.next; e != &in_use_;) {
-      QueueHandle* next = e->next;
+    QueueHandle* next = nullptr;
+    for (QueueHandle* e = mru_->next; e != nullptr && e != lru_;e = next) {
+      next = e->next;
       FreeHandle(e);
-      e = next;
     }
+
+    delete mru_;
+    delete lru_;
   }
 
   QueueHandle* Insert(const Slice& key, FilterBlockReader* reader,
@@ -51,9 +53,7 @@ class SingleQueue {
     e->deleter = deleter;
     e->key_length = key.size();
     std::memcpy(e->key_data, key.data(), key.size());
-
-    Queue_Append(&in_use_, e);
-
+    Queue_Append(e);
     return e;
   }
 
@@ -68,35 +68,36 @@ class SingleQueue {
 
   void MoveToMRU(QueueHandle* handle) {
     Remove(handle);
-    Queue_Append(&in_use_, handle);
+    Queue_Append(handle);
   }
 
   void FindColdFilter(uint64_t& memory, SequenceNumber sn,
                       std::vector<QueueHandle*>& filters) {
-    // search from LRU to MRU(in_use_->next)
-    QueueHandle* e = in_use_.next;
+    // search from LRU to MRU
+    QueueHandle* e = lru_->prev;
     do {
-      if (e == nullptr || e == &in_use_) {
+      if (e == nullptr || e == mru_) {
         break;
       }
-      QueueHandle* next = e->next;
       if (e->reader->IsCold(sn) && e->reader->CanBeEvict()) {
         memory -= e->reader->OneUnitSize();
         filters.emplace_back(e);
       }
-      e = next;
+      e = e->prev;
     } while (memory > 0);
   }
 
  private:
-  QueueHandle in_use_;  // ref >= 2 && in_cache == true
+  QueueHandle *mru_; // head
+  QueueHandle *lru_;
 
-  void Queue_Append(QueueHandle* list, QueueHandle* e) {
-    // Make "e" newest entry by inserting just before *list
-    e->next = list;
-    e->prev = list->prev;
-    e->prev->next = e;
-    e->next->prev = e;
+  void Queue_Append(QueueHandle* e) {
+    // Make "e" newest entry by inserting just after *mru
+    e->prev = mru_;
+    e->next = mru_->next;
+
+    mru_->next->prev = e;
+    mru_->next = e;
   }
 
   void Queue_Remove(QueueHandle* e) {
@@ -173,12 +174,12 @@ class InternalMultiQueue : public MultiQueue {
       std::string key = queue_handle->key().ToString();
       auto iter = map_.find(key);
       if (iter != map_.end()) {
-        map_.erase(key);
         SingleQueue* queue = FindQueue(queue_handle);
         if(queue != nullptr) {
           usage_ -= queue_handle->reader->Size();
           queue->Erase(queue_handle);
         }
+        map_.erase(key);
       }
     }
   }

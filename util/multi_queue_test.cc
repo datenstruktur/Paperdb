@@ -151,22 +151,21 @@ TEST_F(MultiQueueTest, Adjustment) {
   }
 
   for(int i = 0; i < 1000; i++){
-    KeyMayMatchSearchExisted(hot_handle);
+    KeyMayMatchSearchExisted(cold_handle);
   }
 
   for(int i = 0; i < 1000000; i++){
-    // make cold_handle become cold
-    KeyMayMatchSearchExisted(cold_handle, i + 10 + life_time);
+    KeyMayMatchSearchExisted(hot_handle, i + 10 + life_time);
   }
 
-  ASSERT_EQ(Value(hot_handle)->AccessTime(), 1000);
-  ASSERT_EQ(Value(cold_handle)->AccessTime(), 1000000);
+  ASSERT_EQ(Value(hot_handle)->AccessTime(), 1000000);
+  ASSERT_EQ(Value(cold_handle)->AccessTime(), 1000);
 
   if(filters_number >= 3) {
     // cold handle evict one filter
     // hot handle load one filter
-    ASSERT_EQ(Value(hot_handle)->FilterUnitsNumber(), 1);
-    ASSERT_EQ(Value(cold_handle)->FilterUnitsNumber(), 3);
+    ASSERT_EQ(Value(cold_handle)->FilterUnitsNumber(), 1);
+    ASSERT_EQ(Value(hot_handle)->FilterUnitsNumber(), 3);
   }
 }
 }  // namespace leveldb
