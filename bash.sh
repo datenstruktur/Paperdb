@@ -28,11 +28,11 @@ cmake -DCMAKE_BUILD_TYPE=Release -DUSE_ADJUSTMENT_LOGGING=ON .. && cmake --build
 
 # pass in db path
 if [[ $classify_path == true ]]; then
-  ./db_bench --multi_queue_open=0 --num=200000000 --print_process=0 --value_size=1024 --reads=10000000 --benchmarks=fillrandom,readrandom --db=$db_path
-  ./db_bench --multi_queue_open=1 --num=200000000 --print_process=0 --value_size=1024 --reads=10000000 --benchmarks=fillrandom,readrandom --db=$db_path
+  ./db_bench --multi_queue_open=0 --num=200000000 --print_process=0 --value_size=1024 --reads=10000000 --benchmarks=fillrandom,readrandom --clean_bench_file=1 --db=$db_path
+  ./db_bench --multi_queue_open=1 --num=200000000 --print_process=0 --value_size=1024 --reads=10000000 --benchmarks=fillrandom,readrandom --clean_bench_file=1 --db=$db_path
 else
-  ./db_bench --multi_queue_open=0 --num=200000000 --print_process=0 --value_size=1024 --reads=10000000 --benchmarks=fillrandom,readrandom
-  ./db_bench --multi_queue_open=1 --num=200000000 --print_process=0 --value_size=1024 --reads=10000000 --benchmarks=fillrandom,readrandom
+  ./db_bench --multi_queue_open=0 --num=200000000 --print_process=0 --value_size=1024 --reads=10000000 --benchmarks=fillrandom,readrandom --clean_bench_file=1
+  ./db_bench --multi_queue_open=1 --num=200000000 --print_process=0 --value_size=1024 --reads=10000000 --benchmarks=fillrandom,readrandom --clean_bench_file=1
 fi
 
 # clean the cmake and cmake file

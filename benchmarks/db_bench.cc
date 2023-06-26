@@ -138,6 +138,9 @@ static const char* FLAGS_db = nullptr;
 // ZSTD compression level to try out
 static int FLAGS_zstd_compression_level = 1;
 
+// If true, remove all bench related file
+static bool FLAGS_clean_bench_file = false;
+
 namespace leveldb {
 
 namespace {
@@ -558,6 +561,10 @@ class Benchmark {
 
   ~Benchmark() {
     delete db_;
+    // waiting for unlock database
+    if(FLAGS_clean_bench_file){
+      DestroyDB(FLAGS_db, Options());
+    }
     delete cache_;
     delete multi_queue_;
     delete filter_policy_;
@@ -1110,7 +1117,10 @@ int main(int argc, char** argv) {
       FLAGS_compression = n;
     }else if (sscanf(argv[i], "--print_process=%d%c", &n, &junk) == 1 &&
                (n == 0 || n == 1)) {
-        FLAGS_print_process = n;
+      FLAGS_print_process = n;
+    }else if (sscanf(argv[i], "--clean_bench_file=%d%c", &n, &junk) == 1 &&
+                 (n == 0 || n == 1)) {
+        FLAGS_clean_bench_file = n;
     } else if (sscanf(argv[i], "--num=%d%c", &n, &junk) == 1) {
       FLAGS_num = n;
     } else if (sscanf(argv[i], "--reads=%d%c", &n, &junk) == 1) {
