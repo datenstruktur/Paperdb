@@ -217,9 +217,6 @@ Status FilterBlockReader::LoadFilter() {
   Status s = ReadBlock(file_, readOptions, handle, &contents);
 
   if (!s.ok()) {
-    if (contents.heap_allocated) {
-      delete[] contents.data.data();
-    }
     return s;
   }
 
