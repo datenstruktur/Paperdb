@@ -118,10 +118,11 @@ If you want to use default dictionary, just run:
 * SSD:        Samsung SSD 870(4TB)
 
 ### parameters
-* 50GB kv in database
+* 100GB kv in database
 * 10 million point lookup
 * 4 bits per key in one filter unit
-* 6 filter units for one sstable
+* 6 filter units for one SSTable
+* Load 2 filters at the beginning
 * 1KB KV
 * On release model
 * Snappy compression is not enabled
@@ -132,14 +133,14 @@ Todo
 ## Read performance
 Todo
 # ToDo
-- Using multi thread to speed up filter units loading in multi queue
-- Using shared hash in this paper[3] to reduce multi bloom filter look up overhead
-- Hotness inheritance after compaction in ATC version of paper[4]
-- Using perf tool to find code can be optimized
+- Using multi thread to speed up filter units loading in multi queue, see [about implement multi threads](https://github.com/WangTingZheng/Paperdb/discussions/14).
+- Using shared hash in this paper[3] to reduce multi bloom filter look up overhead.
+- Hotness inheritance after compaction in ATC version of paper[4], see [about implement hotness inheritance](https://github.com/WangTingZheng/Paperdb/discussions/13) in discussions.
+- Using perf tool to find code can be optimized.
 
 # Next Paper
 
-Next paper to implement maybe AC-Key[5] or HotRing[6] or **WiscKey[7]**.
+Next paper to implement maybe AC-Key[5] or HotRing[6] or **WiscKey[7]**, see [some idea about implement Wisckey](https://github.com/WangTingZheng/Paperdb/discussions/12).
 
 # Reference
 [1] Zhang Y, Li Y, Guo F, et al. ElasticBF: Fine-grained and Elastic Bloom Filter Towards Efficient Read for LSM-tree-based KV Stores[C]//HotStorage. 2018.
