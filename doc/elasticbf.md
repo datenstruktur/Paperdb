@@ -107,9 +107,9 @@ Meta Index Block -> offset, size
 ElasticBF version:
 
 key
-↓
+↓                   (save io here)
 Meta Index Block -> FilterBlock Contents
-                    ↓  
+                    ↓ 
                     FilterBlockReader
 ```
 
@@ -158,15 +158,15 @@ HashTable:
                            | |          reader  
                            | | equal   
                     ----->     ----->      ---->
-SingleQeueu1     mlu      node1       node2     lru
+SingleQueue1     mlu      node1       node2     lru
                     <----      <-----      <----
 
                     ----->     ----->      ---->
-SingleQeueu2     mlu      node1       node2     lru
+SingleQueue2     mlu      node1       node2     lru
                     <----      <-----      <----
                     
                     ----->     ----->      ---->
-SingleQeueu3     mlu      node1       node2     lru
+SingleQueue3     mlu      node1       node2     lru
                     <----      <-----      <----
 
 ```
@@ -210,7 +210,7 @@ mlu      node1       node2     lru
               search
 ```
 
-**Node**: Internal node mlu/lru has no key, call Key() will be crash.
+**Node**: Internal node mlu/lru has no key, call Key() will be crashed.
 
 ### Adjustment policy
 
