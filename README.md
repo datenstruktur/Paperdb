@@ -90,11 +90,11 @@ close info printing in FinishedSingleOp
 
 # Main changed files
 
-* **util/bloom.cc**: Generate and read multi filter units' bitmap for a scope of keys
-* **table/filterblock.cc**: Manage multi filter units in disk, update the hotness of the SSTable. 
-* **table/table.cc**: Check if the key is existed using filterblock
-* **table/table_builder.cc**: Construct filter block
-* **util/multi_queue.cc**: Manage filter units in memory to reduce adjust overhead
+* **util/bloom.cc**: Generate and read multi filter units' bitmap for a scope of keys **(97% lines unit test coverage)**
+* **table/filterblock.cc**: Manage multi filter units in disk, update the hotness of the SSTable. **(94% lines unit test coverage)** 
+* **table/table.cc**: Check if the key is existed using filterblock **(97% lines unit test coverage)**
+* **table/table_builder.cc**: Construct filter block **(89% lines unit test coverage)**
+* **util/multi_queue.cc**: Manage filter units in memory to reduce adjust overhead **(98% lines unit test coverag**
 
 # Performance
 
