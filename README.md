@@ -88,6 +88,7 @@ close info printing in FinishedSingleOp
 ./db_bench --print_process=0
 ```
 
+**Note**: We disable FinishedSingleOp printf in CI to track error easier.
 # Main changed files
 
 * **util/bloom.cc**: Generate and read multi filter units' bitmap for a scope of keys **(97% lines unit test coverage)**
