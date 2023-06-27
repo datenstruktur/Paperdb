@@ -38,7 +38,9 @@ Sanitizers only support of Debug mod, and you must turn it on by yourself:
 cmake -DCMAKE_BUILD_TYPE=Debug -DUSE_SAN=ON .. && cmake --build .
 ```
 
-Why google sanitizers? Google sanitizers is faster more than 10x with vaigrind[2]. We close it in order to speed up ci.
+Why google sanitizers? Google sanitizers is faster more than 10x with vaigrind[2].
+
+**Note:** We close it in order to speed up CI.
 
 ## Bloom filter adjustment logging
 
@@ -139,6 +141,15 @@ Todo
 - Using perf tool to find code can be optimized.
 - Reimplement ElasticBF to get rid of the unit test, sanitizers and benchmark, see [about reimplement](https://github.com/WangTingZheng/Paperdb/discussions/15)
 - Support YCSB, should pay attention to [FalsePositiveRate function](https://github.com/WangTingZheng/Paperdb/blob/242b1b92cf97453d7750ea6f630cb490bb14feb7/db/c.cc#L140) in db/c.cc
+
+# Related PR to LevelDB
+
+I created two pr to LevelDB during implementing ElasticBF:
+
+- [[**Not merged yet**] Add a flag to close FinishedSignleOp printf in CI #1131](https://github.com/google/leveldb/pull/1131)
+- [[**Not merged yet**] fix memory leak in kyoto cabinet benchmarks #1128](https://github.com/google/leveldb/pull/1128)
+
+**Note:** Unfortunately, LevelDB is receiving very limited maintenance, so, those pr may not be merged.
 
 # Next Paper
 
