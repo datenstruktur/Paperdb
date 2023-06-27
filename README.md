@@ -10,7 +10,7 @@
 * Hotness Identification
 * Bloom Filter Management in Memory 
 
-> More details see in [doc/elasticbf.md](./doc/elasticbf.md), Chinese version see in [feishu](https://o444bvn7jh.feishu.cn/docx/XlBldwKc2oOTGMxPpLlckKLunvd), If you are interested in gaining a deeper understanding of the paper, please do not hesitate to contact me. I have added extensive annotations to the original paper, and I have recorded 8 hours of lecture videos to elaborate on my interpretation of the paper.
+> More details see in [doc/elasticbf.md](./doc/elasticbf.md), Chinese version see in [feishu](https://o444bvn7jh.feishu.cn/docx/XlBldwKc2oOTGMxPpLlckKLunvd), If you are interested in gaining a deeper understanding of the paper, please do not hesitate to contact me. I have added **extensive annotations** to the original paper, and I have recorded **8 hours** of lecture videos to elaborate on my interpretation of the paper.
 
 # Getting the Source
 
@@ -135,11 +135,11 @@ Todo
 ## Read performance
 Todo
 # ToDo
-- Using multi thread to speed up filter units loading in multi queue, see [about implement multi threads](https://github.com/WangTingZheng/Paperdb/discussions/14).
+- Using multi thread to speed up filter units loading in multi queue, see [about implementing multi threads](https://github.com/WangTingZheng/Paperdb/discussions/14).
 - Using shared hash in this paper[3] to reduce multi bloom filter look up overhead.
-- Hotness inheritance after compaction in ATC version of paper[4], see [about implement hotness inheritance](https://github.com/WangTingZheng/Paperdb/discussions/13) in discussions.
+- Hotness inheritance after compaction in ATC version of paper[4], see [about implementing hotness inheritance](https://github.com/WangTingZheng/Paperdb/discussions/13) in discussions.
 - Using perf tool to find code can be optimized.
-- Reimplement ElasticBF to get rid of the unit test, sanitizers and benchmark, see [about reimplement](https://github.com/WangTingZheng/Paperdb/discussions/15)
+- Reimplement ElasticBF to get rid of the unit test, sanitizers and benchmark, see [about reimplementing](https://github.com/WangTingZheng/Paperdb/discussions/15)
 - Support YCSB, should pay attention to [FalsePositiveRate function](https://github.com/WangTingZheng/Paperdb/blob/242b1b92cf97453d7750ea6f630cb490bb14feb7/db/c.cc#L140) in db/c.cc
 
 # Related PR to LevelDB
@@ -153,7 +153,7 @@ I created two pr to LevelDB during implementing ElasticBF:
 
 # Next Paper
 
-Next paper to implement maybe AC-Key[5] or HotRing[6] or **WiscKey[7]**, see [some idea about implement Wisckey](https://github.com/WangTingZheng/Paperdb/discussions/12).
+Next paper to implement maybe AC-Key[5] or HotRing[6] or **WiscKey[7]**, see [some ideas about implementing Wisckey](https://github.com/WangTingZheng/Paperdb/discussions/12).
 
 # Reference
 [1] Zhang Y, Li Y, Guo F, et al. ElasticBF: Fine-grained and Elastic Bloom Filter Towards Efficient Read for LSM-tree-based KV Stores[C]//HotStorage. 2018.
