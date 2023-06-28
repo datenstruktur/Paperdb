@@ -22,7 +22,7 @@ if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_EXTENSIONS OFF)
 endif(NOT CMAKE_CXX_STANDARD)
 
-option(USE_SAN "Use sanitizers to check memory leaks" OFF)
+option(USE_SAN "Use sanitizers to check memory leaks" ON)
 
 
 if (WIN32)
