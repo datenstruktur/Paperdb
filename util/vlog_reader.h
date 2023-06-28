@@ -14,7 +14,7 @@ class VlogReader {
 public:
   explicit VlogReader(RandomAccessFile* file);
 
-  static bool GetValueSize(Slice handle, uint64_t *value_size);
+  static bool GetEntrySize(Slice handle, uint64_t * entry_size);
 
   bool ReadRecond(Slice handle, Slice* value, char* buf, uint64_t value_size);
 

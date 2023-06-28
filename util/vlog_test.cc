@@ -75,13 +75,13 @@ class VlogTest : public testing::Test {
 
   void Reader(Slice* value, std::string* handle) {
     FinishAdd();
-    size_t size = 0;
+    uint64_t entry_size = 0;
     Slice handle_slice = Slice(handle->data(), handle->size());
-    reader_->GetValueSize(handle_slice, &size);
+    VlogReader::GetEntrySize(handle_slice, &entry_size);
 
-    char* buf = arena.Allocate(size);
+    char* buf = arena.Allocate(entry_size);
     reader_->ReadRecond(Slice(handle->data(), handle->size()), value, buf,
-                        size);
+                        entry_size);
   }
 
   ~VlogTest() override {

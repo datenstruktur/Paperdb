@@ -313,7 +313,7 @@ class Block::VlogIterator : public Iterator{
 
   Status EncodingValue(Slice& value) const {
     uint64_t entry_size = 0;
-    if (!VlogReader::GetValueSize(value, &entry_size)) {
+    if (!VlogReader::GetEntrySize(value, &entry_size)) {
       return Status::Corruption("get value size failed");
     }
 

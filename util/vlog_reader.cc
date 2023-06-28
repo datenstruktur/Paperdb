@@ -11,13 +11,13 @@ namespace leveldb {
 
 VlogReader::VlogReader(RandomAccessFile* file):file_(file){}
 
-bool VlogReader::GetValueSize(Slice handle, uint64_t* value_size) {
+bool VlogReader::GetEntrySize(Slice handle, uint64_t* entry_size) {
   BlockHandle block_handle;
   if(!block_handle.DecodeFrom(&handle).ok()){
     return false;
   }
 
-  *value_size = block_handle.size();
+  *entry_size = block_handle.size();
   return true;
 }
 
