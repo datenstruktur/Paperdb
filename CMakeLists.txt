@@ -22,12 +22,20 @@ if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_EXTENSIONS OFF)
 endif(NOT CMAKE_CXX_STANDARD)
 
+option(USE_SAN "Use sanitizers to check memory leaks" OFF)
+
+
 if (WIN32)
   set(LEVELDB_PLATFORM_NAME LEVELDB_PLATFORM_WINDOWS)
   # TODO(cmumford): Make UNICODE configurable for Windows.
   add_definitions(-D_UNICODE -DUNICODE)
 else (WIN32)
   set(LEVELDB_PLATFORM_NAME LEVELDB_PLATFORM_POSIX)
+  if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    if(USE_SAN)
+      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
+    endif ()
+  endif ()
 endif (WIN32)
 
 option(LEVELDB_BUILD_TESTS "Build LevelDB's unit tests" ON)
@@ -190,6 +198,10 @@ target_sources(leveldb
     "util/options.cc"
     "util/random.h"
     "util/status.cc"
+    "util/vlog_reader.cc"
+    "util/vlog_reader.h"
+    "util/vlog_writer.cc"
+    "util/vlog_writer.h"
 
   # Only CMake 3.3+ supports PUBLIC sources in targets exported by "install".
   $<$<VERSION_GREATER:CMAKE_VERSION,3.2>:PUBLIC>
@@ -348,6 +360,7 @@ if(LEVELDB_BUILD_TESTS)
         "util/crc32c_test.cc"
         "util/hash_test.cc"
         "util/logging_test.cc"
+        "util/vlog_test.cc"
     )
   endif(NOT BUILD_SHARED_LIBS)
   target_link_libraries(leveldb_tests leveldb gmock gtest gtest_main)

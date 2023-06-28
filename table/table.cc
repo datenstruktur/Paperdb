@@ -176,7 +176,7 @@ Iterator* Table::BlockReader(void* arg, const ReadOptions& options,
       } else {
         s = ReadBlock(table->rep_->file, options, handle, &contents);
         if (s.ok()) {
-          block = new Block(contents);
+          block = new Block(contents, table->rep_->options.vlog_reader);
           if (contents.cachable && options.fill_cache) {
             cache_handle = block_cache->Insert(key, block, block->size(),
                                                &DeleteCachedBlock);
@@ -186,7 +186,7 @@ Iterator* Table::BlockReader(void* arg, const ReadOptions& options,
     } else {
       s = ReadBlock(table->rep_->file, options, handle, &contents);
       if (s.ok()) {
-        block = new Block(contents);
+        block = new Block(contents, table->rep_->options.vlog_reader);
       }
     }
   }

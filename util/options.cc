@@ -6,6 +6,8 @@
 
 #include "leveldb/comparator.h"
 #include "leveldb/env.h"
+#include "util/vlog_reader.h"
+#include "util/vlog_writer.h"
 
 namespace leveldb {
 

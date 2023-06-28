@@ -122,6 +122,12 @@ TEST(FileNameTest, Construction) {
   ASSERT_TRUE(ParseFileName(fname.c_str() + 4, &number, &type));
   ASSERT_EQ(0, number);
   ASSERT_EQ(kInfoLogFile, type);
+
+  fname = VlogFileName("foo");
+  ASSERT_EQ("foo/", std::string(fname.data(), 4));
+  ASSERT_TRUE(ParseFileName(fname.c_str() + 4, &number, &type));
+  ASSERT_EQ(0, number);
+  ASSERT_EQ(kValueLogFile, type);
 }
 
 }  // namespace leveldb

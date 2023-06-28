@@ -68,6 +68,10 @@ std::string OldInfoLogFileName(const std::string& dbname) {
   return dbname + "/LOG.old";
 }
 
+std::string VlogFileName(const std::string& dbname){
+  return dbname + "/VLOG";
+}
+
 // Owned filenames have the form:
 //    dbname/CURRENT
 //    dbname/LOCK
@@ -87,6 +91,9 @@ bool ParseFileName(const std::string& filename, uint64_t* number,
   } else if (rest == "LOG" || rest == "LOG.old") {
     *number = 0;
     *type = kInfoLogFile;
+  } else if (rest == "VLOG") {
+    *number = 0;
+    *type = kValueLogFile;
   } else if (rest.starts_with("MANIFEST-")) {
     rest.remove_prefix(strlen("MANIFEST-"));
     uint64_t num;

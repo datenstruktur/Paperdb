@@ -21,6 +21,7 @@
 #include "table/format.h"
 #include "util/random.h"
 #include "util/testutil.h"
+#include "util/vlog_writer.h"
 
 namespace leveldb {
 
@@ -208,6 +209,68 @@ class BlockConstructor : public Constructor {
   BlockConstructor();
 };
 
+class BlockConstructorWithVLog : public Constructor {
+ public:
+  explicit BlockConstructorWithVLog(const Comparator* cmp)
+      : Constructor(cmp), comparator_(cmp),
+        block_(nullptr),reader_(nullptr),source_(nullptr) {}
+
+  ~BlockConstructorWithVLog() override {
+    delete block_;
+    delete source_;
+    delete reader_;
+  }
+
+  Status FinishImpl(const Options& options, const KVMap& data) override {
+    delete block_;
+    delete source_;
+    delete reader_;
+    block_ = nullptr;
+    source_ = nullptr;
+    reader_ = nullptr;
+
+    BlockBuilder builder(&options);
+    StringSink sink;
+    VlogWriter writer(&sink, 0);
+    std::vector<std::pair<std::string, std::string>> kv;
+    for (const auto& kvp : data) {
+      std::string handle;
+      writer.Add(kvp.first, kvp.second, &handle);
+      kv.emplace_back(kvp.first, handle);
+    }
+
+    for(const auto& item : kv){
+      builder.Add(item.first, item.second);
+    }
+
+    // Open the block
+    data_ = builder.Finish().ToString();
+    writer.Sync();
+
+    BlockContents contents;
+    contents.data = data_;
+    contents.cachable = false;
+    contents.heap_allocated = false;
+
+    source_ = new StringSource(sink.contents());
+    reader_ = new VlogReader(source_);
+    block_ = new Block(contents, reader_);
+    return Status::OK();
+  }
+  Iterator* NewIterator() const override {
+    return block_->NewIterator(comparator_);
+  }
+
+ private:
+  const Comparator* const comparator_;
+  std::string data_;
+  Block* block_;
+  StringSource* source_;
+  VlogReader* reader_;
+
+  BlockConstructorWithVLog();
+};
+
 class TableConstructor : public Constructor {
  public:
   TableConstructor(const Comparator* cmp)
@@ -254,6 +317,72 @@ class TableConstructor : public Constructor {
   Table* table_;
 
   TableConstructor();
+};
+
+class TableConstructorWithVLog : public Constructor {
+ public:
+  TableConstructorWithVLog(const Comparator* cmp)
+      : Constructor(cmp), source_(nullptr), vlog_(nullptr), table_(nullptr), writer_(nullptr) {}
+  ~TableConstructorWithVLog() override { Reset(); }
+  Status FinishImpl(const Options& options, const KVMap& data) override {
+    Reset();
+    StringSink sink;
+    TableBuilder builder(options, &sink);
+
+
+    StringSink vlog_sink;
+    writer_ = new VlogWriter(&vlog_sink, 0);
+
+    for (const auto& kvp : data) {
+      std::string handle;
+      writer_->Add(kvp.first, kvp.second, &handle);
+      builder.Add(kvp.first, handle);
+      EXPECT_LEVELDB_OK(builder.status());
+    }
+    Status s = builder.Finish();
+    EXPECT_LEVELDB_OK(s);
+
+    writer_->Sync();
+
+    EXPECT_EQ(sink.contents().size(), builder.FileSize());
+
+    // Open the table
+    source_ = new StringSource(sink.contents());
+    vlog_ = new StringSource(vlog_sink.contents());
+    Options table_options;
+    table_options.comparator = options.comparator;
+    table_options.vlog_reader = new VlogReader(vlog_);
+    return Table::Open(table_options, source_, sink.contents().size(), &table_);
+  }
+
+  Iterator* NewIterator() const override {
+    return table_->NewIterator(ReadOptions());
+  }
+
+  uint64_t ApproximateOffsetOf(const Slice& key) const {
+    return table_->ApproximateOffsetOf(key);
+  }
+
+ private:
+  void Reset() {
+    delete table_;
+    delete source_;
+    delete vlog_;
+    delete writer_;
+
+    table_ = nullptr;
+    source_ = nullptr;
+    vlog_ = nullptr;
+    writer_ = nullptr;
+  }
+
+  StringSource* source_;
+  StringSource* vlog_;
+
+  Table* table_;
+  VlogWriter* writer_;
+
+  TableConstructorWithVLog();
 };
 
 // A helper class that converts internal format keys into user keys
@@ -371,7 +500,8 @@ class DBConstructor : public Constructor {
   DB* db_;
 };
 
-enum TestType { TABLE_TEST, BLOCK_TEST, MEMTABLE_TEST, DB_TEST };
+enum TestType { TABLE_TEST, TABLE_TEST_WITH_VLOG, BLOCK_TEST,
+                BLOCK_TEST_WITH_VLOG, MEMTABLE_TEST, DB_TEST };
 
 struct TestArgs {
   TestType type;
@@ -386,6 +516,20 @@ static const TestArgs kTestArgList[] = {
     {TABLE_TEST, true, 16},
     {TABLE_TEST, true, 1},
     {TABLE_TEST, true, 1024},
+
+    {TABLE_TEST_WITH_VLOG, false, 16},
+    {TABLE_TEST_WITH_VLOG, false, 1},
+    {TABLE_TEST_WITH_VLOG, false, 1024},
+    {TABLE_TEST_WITH_VLOG, true, 16},
+    {TABLE_TEST_WITH_VLOG, true, 1},
+    {TABLE_TEST_WITH_VLOG, true, 1024},
+
+    {BLOCK_TEST_WITH_VLOG, false, 16},
+    {BLOCK_TEST_WITH_VLOG, false, 1},
+    {BLOCK_TEST_WITH_VLOG, false, 1024},
+    {BLOCK_TEST_WITH_VLOG, true, 16},
+    {BLOCK_TEST_WITH_VLOG, true, 1},
+    {BLOCK_TEST_WITH_VLOG, true, 1024},
 
     {BLOCK_TEST, false, 16},
     {BLOCK_TEST, false, 1},
@@ -424,8 +568,14 @@ class Harness : public testing::Test {
       case TABLE_TEST:
         constructor_ = new TableConstructor(options_.comparator);
         break;
+      case TABLE_TEST_WITH_VLOG:
+        constructor_ = new TableConstructorWithVLog(options_.comparator);
+        break;
       case BLOCK_TEST:
         constructor_ = new BlockConstructor(options_.comparator);
+        break;
+      case BLOCK_TEST_WITH_VLOG:
+        constructor_ = new BlockConstructorWithVLog(options_.comparator);
         break;
       case MEMTABLE_TEST:
         constructor_ = new MemTableConstructor(options_.comparator);
