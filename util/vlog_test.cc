@@ -104,15 +104,14 @@ class VlogTest : public testing::Test {
 class VlogTestInFS : public testing::Test {
  public:
   VlogTestInFS() : reader_(nullptr), source_(nullptr),sink_(nullptr) {
-    Status s;
     if(!Env::Default()->FileExists("/tmp/vlogtestinfs")){
-      s = Env::Default()->CreateDir("/tmp/vlogtestinfs");
-      if(!s.ok()){
+      status_ = Env::Default()->CreateDir("/tmp/vlogtestinfs");
+      if(!status_.ok()){
         return ;
       }
     }
-    s = Env::Default()->NewWritableFile("/tmp/vlogtestinfs/test_file", &sink_);
-    if(!s.ok()){
+    status_ = Env::Default()->NewWritableFile("/tmp/vlogtestinfs/test_file", &sink_);
+    if(!status_.ok()){
       return ;
     }
     writer_ = new VlogWriter(sink_, 0);
@@ -122,16 +121,15 @@ class VlogTestInFS : public testing::Test {
     writer_->Add(key, value, handle);
   }
 
-  Status FinishAdd() {
+  void FinishAdd() {
     if (reader_ == nullptr) {
       sink_->Close();
-      Status s = Env::Default()->NewRandomAccessFile("/tmp/vlogtestinfs/test_file", &source_);
-      if(!s.ok()){
-        return s;
+      status_ = Env::Default()->NewRandomAccessFile("/tmp/vlogtestinfs/test_file", &source_);
+      if(!status_.ok()){
+        return;
       }
       reader_ = new VlogReader(source_);
     }
-    return Status::OK();
   }
 
   void Reader(Slice* value, std::string* handle) {
@@ -143,6 +141,10 @@ class VlogTestInFS : public testing::Test {
     char* buf = arena.Allocate(entry_size);
     reader_->ReadRecond(Slice(handle->data(), handle->size()), value, buf,
                         entry_size);
+  }
+
+  Status status() const {
+    return status_;
   }
 
   ~VlogTestInFS() override{
@@ -158,6 +160,8 @@ class VlogTestInFS : public testing::Test {
  private:
   VlogWriter* writer_;
   VlogReader* reader_;
+
+  Status status_;
 
   RandomAccessFile* source_;
   WritableFile* sink_;
@@ -196,10 +200,14 @@ TEST_F(VlogTest, Multi) {
 }
 
 TEST_F(VlogTestInFS, Single) {
+  ASSERT_TRUE(Status().ok());
+  ASSERT_EQ(Status().ToString(), Status::OK().ToString());
   std::string handle;
   Add("key", "value", &handle);
 
   FinishAdd();
+  ASSERT_TRUE(Status().ok());
+  ASSERT_EQ(Status().ToString(), Status::OK().ToString());
 
   Slice value;
   Reader(&value, &handle);
@@ -207,6 +215,9 @@ TEST_F(VlogTestInFS, Single) {
 }
 
 TEST_F(VlogTestInFS, Multi) {
+  ASSERT_TRUE(Status().ok());
+  ASSERT_EQ(Status().ToString(), Status::OK().ToString());
+
   std::vector<std::string> handles;
   int N = 1000;
   for (int i = 0; i < N; i++) {
@@ -216,6 +227,8 @@ TEST_F(VlogTestInFS, Multi) {
   }
 
   FinishAdd();
+  ASSERT_TRUE(Status().ok());
+  ASSERT_EQ(Status().ToString(), Status::OK().ToString());
 
   for (int i = 0; i < N; i++) {
     Slice value;
