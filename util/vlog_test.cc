@@ -104,17 +104,21 @@ class VlogTest : public testing::Test {
 class VlogTestInFS : public testing::Test {
  public:
   VlogTestInFS() : reader_(nullptr), source_(nullptr),sink_(nullptr) {
+    // get test dir path, windows has it's own file path kind
     std::string default_db_path;
     Env::Default()->GetTestDirectory(&default_db_path);
     dir_path_ = default_db_path + "/vlogtestinfs";
     file_path_ = dir_path_ + "/test_file";
 
+    // create dir if not exists
     if(!Env::Default()->FileExists(dir_path_)){
       status_ = Env::Default()->CreateDir(dir_path_);
       if(!status_.ok()){
         return ;
       }
     }
+
+    // create files
     status_ = Env::Default()->NewWritableFile(file_path_, &sink_);
     if(!status_.ok()){
       return ;
@@ -128,7 +132,12 @@ class VlogTestInFS : public testing::Test {
 
   void FinishAdd() {
     if (reader_ == nullptr) {
-      sink_->Close();
+      // sync and unlink file
+      // open by reader
+      sink_->Sync();
+      delete sink_;
+      sink_ = nullptr;
+
       status_ = Env::Default()->NewRandomAccessFile(file_path_, &source_);
       if(!status_.ok()){
         return;
@@ -139,10 +148,13 @@ class VlogTestInFS : public testing::Test {
 
   void Reader(Slice* value, std::string* handle) {
       FinishAdd();
+
+      // get file size to allocate buf to hold entry data
       uint64_t entry_size = 0;
       Slice handle_slice = Slice(handle->data(), handle->size());
       VlogReader::GetEntrySize(handle_slice, &entry_size);
 
+      // buf will be managed by arena
       char* buf = arena.Allocate(entry_size);
       reader_->ReadRecond(Slice(handle->data(), handle->size()), value, buf,
                           entry_size);
@@ -153,6 +165,7 @@ class VlogTestInFS : public testing::Test {
   }
 
   ~VlogTestInFS() override{
+    // clean file
     if(Env::Default()->FileExists(file_path_)) {
       Env::Default()->RemoveDir(dir_path_);
     }
