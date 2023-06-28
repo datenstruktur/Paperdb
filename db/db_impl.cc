@@ -266,6 +266,9 @@ void DBImpl::RemoveObsoleteFiles() {
         case kInfoLogFile:
           keep = true;
           break;
+        case kValueLogFile:
+          keep = true;
+          break;
       }
 
       if (!keep) {
