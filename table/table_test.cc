@@ -322,7 +322,7 @@ class TableConstructor : public Constructor {
 class TableConstructorWithVLog : public Constructor {
  public:
   TableConstructorWithVLog(const Comparator* cmp)
-      : Constructor(cmp), source_(nullptr), vlog_(nullptr), table_(nullptr), writer_(nullptr) {}
+      : Constructor(cmp), source_(nullptr), vlog_(nullptr), table_(nullptr), writer_(nullptr),reader_(nullptr){}
   ~TableConstructorWithVLog() override { Reset(); }
   Status FinishImpl(const Options& options, const KVMap& data) override {
     Reset();
@@ -351,7 +351,8 @@ class TableConstructorWithVLog : public Constructor {
     vlog_ = new StringSource(vlog_sink.contents());
     Options table_options;
     table_options.comparator = options.comparator;
-    table_options.vlog_reader = new VlogReader(vlog_);
+    reader_ = new VlogReader(vlog_);
+    table_options.vlog_reader = reader_;
     return Table::Open(table_options, source_, sink.contents().size(), &table_);
   }
 
@@ -369,15 +370,18 @@ class TableConstructorWithVLog : public Constructor {
     delete source_;
     delete vlog_;
     delete writer_;
+    delete reader_;
 
     table_ = nullptr;
     source_ = nullptr;
     vlog_ = nullptr;
     writer_ = nullptr;
+    reader_ = nullptr;
   }
 
   StringSource* source_;
   StringSource* vlog_;
+  VlogReader* reader_;
 
   Table* table_;
   VlogWriter* writer_;

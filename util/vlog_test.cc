@@ -149,6 +149,10 @@ class VlogTestInFS : public testing::Test {
     if(!Env::Default()->FileExists("/tmp/vlogtestinfs")) {
       Env::Default()->RemoveDir("/tmp/vlogtestinfs/test_file");
     }
+    delete writer_;
+    delete reader_;
+    delete source_;
+    delete sink_;
   }
 
  private:
