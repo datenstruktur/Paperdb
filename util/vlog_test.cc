@@ -104,13 +104,18 @@ class VlogTest : public testing::Test {
 class VlogTestInFS : public testing::Test {
  public:
   VlogTestInFS() : reader_(nullptr), source_(nullptr),sink_(nullptr) {
-    if(!Env::Default()->FileExists("/tmp/vlogtestinfs")){
-      status_ = Env::Default()->CreateDir("/tmp/vlogtestinfs");
+    std::string default_db_path;
+    Env::Default()->GetTestDirectory(&default_db_path);
+    dir_path_ = default_db_path + "/vlogtestinfs";
+    file_path_ = dir_path_ + "/test_file";
+
+    if(!Env::Default()->FileExists(dir_path_)){
+      status_ = Env::Default()->CreateDir(dir_path_);
       if(!status_.ok()){
         return ;
       }
     }
-    status_ = Env::Default()->NewWritableFile("/tmp/vlogtestinfs/test_file", &sink_);
+    status_ = Env::Default()->NewWritableFile(file_path_, &sink_);
     if(!status_.ok()){
       return ;
     }
@@ -124,7 +129,7 @@ class VlogTestInFS : public testing::Test {
   void FinishAdd() {
     if (reader_ == nullptr) {
       sink_->Close();
-      status_ = Env::Default()->NewRandomAccessFile("/tmp/vlogtestinfs/test_file", &source_);
+      status_ = Env::Default()->NewRandomAccessFile(file_path_, &source_);
       if(!status_.ok()){
         return;
       }
@@ -133,14 +138,14 @@ class VlogTestInFS : public testing::Test {
   }
 
   void Reader(Slice* value, std::string* handle) {
-    FinishAdd();
-    uint64_t entry_size = 0;
-    Slice handle_slice = Slice(handle->data(), handle->size());
-    VlogReader::GetEntrySize(handle_slice, &entry_size);
+      FinishAdd();
+      uint64_t entry_size = 0;
+      Slice handle_slice = Slice(handle->data(), handle->size());
+      VlogReader::GetEntrySize(handle_slice, &entry_size);
 
-    char* buf = arena.Allocate(entry_size);
-    reader_->ReadRecond(Slice(handle->data(), handle->size()), value, buf,
-                        entry_size);
+      char* buf = arena.Allocate(entry_size);
+      reader_->ReadRecond(Slice(handle->data(), handle->size()), value, buf,
+                          entry_size);
   }
 
   Status status() const {
@@ -148,8 +153,8 @@ class VlogTestInFS : public testing::Test {
   }
 
   ~VlogTestInFS() override{
-    if(!Env::Default()->FileExists("/tmp/vlogtestinfs")) {
-      Env::Default()->RemoveDir("/tmp/vlogtestinfs/test_file");
+    if(Env::Default()->FileExists(file_path_)) {
+      Env::Default()->RemoveDir(dir_path_);
     }
     delete writer_;
     delete reader_;
@@ -162,6 +167,8 @@ class VlogTestInFS : public testing::Test {
   VlogReader* reader_;
 
   Status status_;
+  std::string dir_path_;
+  std::string file_path_;
 
   RandomAccessFile* source_;
   WritableFile* sink_;
@@ -201,13 +208,12 @@ TEST_F(VlogTest, Multi) {
 
 TEST_F(VlogTestInFS, Single) {
   ASSERT_TRUE(Status().ok());
-  ASSERT_EQ(Status().ToString(), Status::OK().ToString());
+
   std::string handle;
   Add("key", "value", &handle);
 
   FinishAdd();
   ASSERT_TRUE(Status().ok());
-  ASSERT_EQ(Status().ToString(), Status::OK().ToString());
 
   Slice value;
   Reader(&value, &handle);
@@ -216,7 +222,6 @@ TEST_F(VlogTestInFS, Single) {
 
 TEST_F(VlogTestInFS, Multi) {
   ASSERT_TRUE(Status().ok());
-  ASSERT_EQ(Status().ToString(), Status::OK().ToString());
 
   std::vector<std::string> handles;
   int N = 1000;
@@ -228,7 +233,6 @@ TEST_F(VlogTestInFS, Multi) {
 
   FinishAdd();
   ASSERT_TRUE(Status().ok());
-  ASSERT_EQ(Status().ToString(), Status::OK().ToString());
 
   for (int i = 0; i < N; i++) {
     Slice value;
