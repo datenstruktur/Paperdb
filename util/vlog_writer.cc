@@ -25,6 +25,37 @@ std::string DecodeEntry(Slice key, Slice value){
 VlogWriter::VlogWriter(WritableFile* dest, uint64_t offset)
     :dest_(dest),offset_(offset) {}
 
+class WriterHandler : public WriteBatch::Handler{
+ public:
+  explicit WriterHandler(VlogWriter* writer, WriteBatch* batch)
+      :writer_(writer), batch_(batch){
+
+  }
+
+  ~WriterHandler() override = default;
+
+  void Put(const Slice& key, const Slice& value) override {
+    std::string handle;
+    writer_->Add(key, value, &handle);
+    batch_->Put(key, handle);
+  }
+
+  void Delete(const Slice& key) override {
+    batch_->Delete(key);
+  }
+
+ private:
+  VlogWriter* writer_;
+  WriteBatch* batch_;
+};
+
+WriteBatch VlogWriter::InsertInto(const WriteBatch* b, VlogWriter* writer) {
+  WriteBatch result;
+  WriterHandler handler(writer, &result);
+  b->Iterate(&handler);
+  return result;
+}
+
 Status VlogWriter::Add(const Slice& key, const Slice& value, std::string* handle) {
   std::string entry = DecodeEntry(key, value);
 
@@ -55,7 +86,7 @@ Status VlogWriter::Close() {
 
 VlogWriter* NewVlogWriter(const std::string& dbname) {
   WritableFile* vlog_file = nullptr;
-  Env::Default()->NewWritableFile(VlogFileName(dbname), &vlog_file);
+  Status s = Env::Default()->NewAppendableFile(VlogFileName(dbname), &vlog_file);
 
   uint64_t file_size = 0;
   Env::Default()->GetFileSize(VlogFileName(dbname), &file_size);

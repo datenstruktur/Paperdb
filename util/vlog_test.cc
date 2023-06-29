@@ -97,7 +97,11 @@ class VlogTest : public testing::Test {
 
 class VlogTestInFS : public testing::Test {
  public:
-  VlogTestInFS() : reader_(nullptr), source_(nullptr),sink_(nullptr) {
+  VlogTestInFS() : reader_(nullptr),
+                   source_(nullptr),sink_(nullptr) {
+  }
+
+  Status Init(){
     // get test dir path, windows has it's own file path kind
     std::string default_db_path;
     Env::Default()->GetTestDirectory(&default_db_path);
@@ -108,16 +112,46 @@ class VlogTestInFS : public testing::Test {
     if(!Env::Default()->FileExists(dir_path_)){
       status_ = Env::Default()->CreateDir(dir_path_);
       if(!status_.ok()){
-        return ;
+        return status_;
       }
     }
 
     // create files
-    status_ = Env::Default()->NewWritableFile(file_path_, &sink_);
+    status_ = Env::Default()->NewAppendableFile(file_path_, &sink_);
     if(!status_.ok()){
-      return ;
+      return status_;
     }
-    writer_ = new VlogWriter(sink_, 0);
+    uint64_t entry_size = 0;
+    status_ = Env::Default()->GetFileSize(file_path_, &entry_size);
+    if(status_.ok()){
+      writer_ = new VlogWriter(sink_, entry_size);
+    }
+
+    return status_;
+  }
+
+  Status CleanFile(){
+    // clean file
+    Status s;
+    if(Env::Default()->FileExists(file_path_)) {
+      s = Env::Default()->DeleteFile(file_path_);
+      if(s.ok()) {
+        s = Env::Default()->RemoveDir(dir_path_);
+      }
+    }
+    return s;
+  }
+
+  void Clear(){
+    delete writer_;
+    delete reader_;
+    delete source_;
+    delete sink_;
+
+    writer_ = nullptr;
+    reader_ = nullptr;
+    source_ = nullptr;
+    sink_ = nullptr;
   }
 
   void Add(Slice key, Slice value, std::string* handle) {
@@ -150,14 +184,8 @@ class VlogTestInFS : public testing::Test {
   }
 
   ~VlogTestInFS() override{
-    // clean file
-    if(Env::Default()->FileExists(file_path_)) {
-      Env::Default()->RemoveDir(dir_path_);
-    }
-    delete writer_;
-    delete reader_;
-    delete source_;
-    delete sink_;
+    CleanFile();
+    Clear();
   }
 
  private:
@@ -205,20 +233,22 @@ TEST_F(VlogTest, Multi) {
 }
 
 TEST_F(VlogTestInFS, Single) {
+  Init();
   ASSERT_TRUE(Status().ok());
-
   std::string handle;
   Add("key", "value", &handle);
-
   FinishAdd();
   ASSERT_TRUE(Status().ok());
 
   Slice value;
   Reader(&value, handle);
   ASSERT_EQ(value.ToString(), "value");
+  Status s = CleanFile();
+  ASSERT_EQ(s.ToString(), Status::OK().ToString());
 }
 
 TEST_F(VlogTestInFS, Multi) {
+  Init();
   ASSERT_TRUE(Status().ok());
 
   std::vector<std::string> handles;
@@ -238,5 +268,35 @@ TEST_F(VlogTestInFS, Multi) {
     Reader(&value, handle);
     ASSERT_EQ(value.ToString(), "value" + std::to_string(i));
   }
+  Clear();
+}
+
+TEST_F(VlogTestInFS, ReWrite) {
+  Init();
+  ASSERT_TRUE(Status().ok());
+
+  std::string handle;
+  Add("key1", "value1", &handle);
+
+  FinishAdd();
+  ASSERT_TRUE(Status().ok());
+
+  Clear();
+  Init();
+
+  std::string handle_rw;
+  Add("key2", "value2", &handle_rw);
+
+  FinishAdd();
+
+  Slice value1;
+  Reader(&value1, handle);
+  ASSERT_EQ(value1.ToString(), "value1");
+
+  Slice value2;
+  Reader(&value2, handle_rw);
+  ASSERT_EQ(value2.ToString(), "value2");
+
+  CleanFile();
 }
 }  // namespace leveldb

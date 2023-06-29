@@ -18,6 +18,8 @@ public:
 
   Status EncodingValue(Slice handle, Slice *value, Arena *arena);
 
+  ~VlogReader() {delete file_;}
+
   static bool GetEntrySize(Slice handle, uint64_t * entry_size);
 
   bool ReadRecond(Slice handle, Slice* value, char* buf, uint64_t value_size);

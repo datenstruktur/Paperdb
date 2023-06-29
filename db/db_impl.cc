@@ -4,14 +4,6 @@
 
 #include "db/db_impl.h"
 
-#include <algorithm>
-#include <atomic>
-#include <cstdint>
-#include <cstdio>
-#include <set>
-#include <string>
-#include <vector>
-
 #include "db/builder.h"
 #include "db/db_iter.h"
 #include "db/dbformat.h"
@@ -22,11 +14,20 @@
 #include "db/table_cache.h"
 #include "db/version_set.h"
 #include "db/write_batch_internal.h"
+#include <algorithm>
+#include <atomic>
+#include <cstdint>
+#include <cstdio>
+#include <set>
+#include <string>
+#include <vector>
+
 #include "leveldb/db.h"
 #include "leveldb/env.h"
 #include "leveldb/status.h"
 #include "leveldb/table.h"
 #include "leveldb/table_builder.h"
+
 #include "port/port.h"
 #include "table/block.h"
 #include "table/merger.h"
@@ -34,6 +35,8 @@
 #include "util/coding.h"
 #include "util/logging.h"
 #include "util/mutexlock.h"
+#include "util/vlog_reader.h"
+#include "util/vlog_writer.h"
 
 namespace leveldb {
 
@@ -1093,7 +1096,9 @@ Iterator* DBImpl::NewInternalIterator(const ReadOptions& options,
   }
   Iterator* version_iterator = versions_->current()->NewIterator(options,
                                                &internal_comparator_);
-  list.push_back(version_iterator);
+  if(version_iterator) {
+    list.push_back(version_iterator);
+  }
   Iterator* internal_iter =
       NewMergingIterator(&internal_comparator_, &list[0], list.size());
   versions_->current()->Ref();
@@ -1106,10 +1111,78 @@ Iterator* DBImpl::NewInternalIterator(const ReadOptions& options,
   return internal_iter;
 }
 
+class KVSeparationIterator : public Iterator{
+ public:
+  KVSeparationIterator(Iterator* iter,  const std::string& dbname)
+      :iterator_(iter), reader_(nullptr){
+    RandomAccessFile* file;
+    status_ = Env::Default()->NewRandomAccessFile(VlogFileName(dbname), &file);
+    if(status_.ok()){
+      reader_ = new VlogReader(file);
+    }
+  }
+
+  ~KVSeparationIterator() override {
+    delete iterator_;
+    delete reader_;
+  }
+
+  bool Valid() const override {
+    return iterator_->Valid();
+  }
+
+  void SeekToFirst() override {
+    iterator_->SeekToFirst();
+    UpdateValue();
+  }
+
+  void SeekToLast() override {
+    iterator_->SeekToLast();
+    UpdateValue();
+  }
+  void Seek(const Slice& target) override {
+    iterator_->Seek(target);
+    UpdateValue();
+  }
+
+  void Next() override {
+    iterator_->Next();
+    UpdateValue();
+  }
+
+  void Prev() override {
+    iterator_->Prev();
+    UpdateValue();
+  }
+
+  Slice key() const override {
+    return iterator_->key();
+  }
+
+  Slice value() const override {
+    return value_;
+  }
+
+  Status status() const override { return iterator_->status(); }
+ private:
+  Iterator* iterator_;
+  VlogReader* reader_;
+  Arena arena_;
+  Slice value_;
+
+  Status status_;
+
+  void UpdateValue(){
+    if(Valid()) {
+      reader_->EncodingValue(iterator_->value(), &value_, &arena_);
+    }
+  }
+};
+
 Iterator* DBImpl::TEST_NewInternalIterator() {
   SequenceNumber ignored;
   uint32_t ignored_seed;
-  return NewInternalIterator(ReadOptions(), &ignored, &ignored_seed);
+  return new KVSeparationIterator(NewInternalIterator(ReadOptions(), &ignored, &ignored_seed), dbname_);
 }
 
 int64_t DBImpl::TEST_MaxNextLevelOverlappingBytes() {
@@ -1161,19 +1234,38 @@ Status DBImpl::Get(const ReadOptions& options, const Slice& key,
   mem->Unref();
   if (imm != nullptr) imm->Unref();
   current->Unref();
+
+  if(s.ok()) {
+    VlogReader* vlog_reader = NewVlogReader(dbname_);
+    uint64_t entry_size = 0;
+    Slice handle = Slice(value->data(), value->size());
+    if (!VlogReader::GetEntrySize(handle, &entry_size)) {
+      return Status::Corruption("Vlog get size failed");
+    }
+    char *buf = new char[entry_size];
+    Slice value_slice;
+    if(!vlog_reader->ReadRecond(handle, &value_slice, buf, entry_size)){
+      return Status::Corruption("Vlog read recond failed");
+    }
+
+    value->assign(value_slice.data(), value_slice.size());
+  }
+
   return s;
 }
+
+
 
 Iterator* DBImpl::NewIterator(const ReadOptions& options) {
   SequenceNumber latest_snapshot;
   uint32_t seed;
   Iterator* iter = NewInternalIterator(options, &latest_snapshot, &seed);
-  return NewDBIterator(this, user_comparator(), iter,
+  return new KVSeparationIterator(NewDBIterator(this, user_comparator(), iter,
                        (options.snapshot != nullptr
                             ? static_cast<const SnapshotImpl*>(options.snapshot)
                                   ->sequence_number()
                             : latest_snapshot),
-                       seed);
+                       seed), dbname_);
 }
 
 void DBImpl::RecordReadSample(Slice key) {
@@ -1232,7 +1324,16 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
     // into mem_.
     {
       mutex_.Unlock();
-      status = log_->AddRecord(WriteBatchInternal::Contents(write_batch));
+      VlogWriter *vlog_writer = NewVlogWriter(dbname_);
+      WriteBatch key_handle_batch = VlogWriter::InsertInto(write_batch, vlog_writer);
+      WriteBatchInternal::SetSequence(&key_handle_batch, WriteBatchInternal::Sequence(write_batch));
+      if(options.sync) {
+        vlog_writer->Sync();
+      }
+      vlog_writer->Close();
+      delete vlog_writer;
+
+      status = log_->AddRecord(WriteBatchInternal::Contents(&key_handle_batch));
       bool sync_error = false;
       if (status.ok() && options.sync) {
         status = logfile_->Sync();
@@ -1241,7 +1342,9 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
         }
       }
       if (status.ok()) {
-        status = WriteBatchInternal::InsertInto(write_batch, mem_);
+        if(status.ok()) {
+          status = WriteBatchInternal::InsertInto(&key_handle_batch, mem_);
+        }
       }
       mutex_.Lock();
       if (sync_error) {

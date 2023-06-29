@@ -9,11 +9,16 @@
 
 #include "leveldb/env.h"
 #include "leveldb/status.h"
+#include "leveldb/write_batch.h"
 
 namespace leveldb {
 class VlogWriter {
  public:
   explicit VlogWriter(WritableFile* dest, uint64_t offset);
+
+  static WriteBatch InsertInto(const WriteBatch* b, VlogWriter* writer);
+
+  ~VlogWriter(){ delete dest_;}
 
   Status Add(const Slice& key, const Slice& value, std::string *handle);
 

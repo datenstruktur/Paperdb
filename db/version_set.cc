@@ -231,6 +231,9 @@ Iterator* Version::NewIterator(const ReadOptions& options,
   std::vector<Iterator*> lists;
   AddIterators(options, &lists);
 
+  if(lists.empty()){
+    return nullptr;
+  }
   return NewMergingIterator(comparator, &lists[0], lists.size());
 }
 
