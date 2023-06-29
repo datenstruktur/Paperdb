@@ -22,11 +22,10 @@ inline uint32_t Block::NumRestarts() const {
   return DecodeFixed32(data_ + size_ - sizeof(uint32_t));
 }
 
-Block::Block(const BlockContents& contents, VlogReader* vlog_reader)
+Block::Block(const BlockContents& contents)
     : data_(contents.data.data()),
       size_(contents.data.size()),
-      owned_(contents.heap_allocated),
-      vlog_reader_(vlog_reader) {
+      owned_(contents.heap_allocated) {
   if (size_ < sizeof(uint32_t)) {
     size_ = 0;  // Error marker
   } else {
@@ -278,55 +277,6 @@ class Block::Iter : public Iterator {
   }
 };
 
-class Block::VlogIterator : public Iterator{
- public:
-  VlogIterator(Iterator* iterator, VlogReader* reader, Arena* arena)
-      :internal_iter_(iterator), vlog_reader_(reader), arena_(arena){}
-  ~VlogIterator() override {
-    delete internal_iter_;
-  }
-  bool Valid() const override { return internal_iter_->Valid(); }
-  void SeekToFirst() override {internal_iter_->SeekToFirst();}
-  void SeekToLast() override {internal_iter_->SeekToLast();}
-  void Seek(const Slice& target) override {
-    internal_iter_->Seek(target);
-  }
-  void Next() override {
-    internal_iter_->Next();
-  }
-  void Prev() override {
-    internal_iter_->Prev();
-  }
-  Slice key() const override { return internal_iter_->key(); }
-  Slice value() const override {
-    Slice value = internal_iter_->value();
-    if(!EncodingValue(value).ok()){
-
-    }
-    return value;
-  }
-  Status status() const override { return internal_iter_->status(); }
- private:
-  Iterator* internal_iter_;
-  VlogReader* vlog_reader_;
-  Arena* arena_;
-
-  Status EncodingValue(Slice& value) const {
-    uint64_t entry_size = 0;
-    if (!VlogReader::GetEntrySize(value, &entry_size)) {
-      return Status::Corruption("get value size failed");
-    }
-
-    // No need to delete
-    char* buf = arena_->Allocate(entry_size);
-    if (!vlog_reader_->ReadRecond(value, &value, buf, entry_size)) {
-      return Status::Corruption("read record failed");
-    }
-
-    return Status::OK();
-  }
-};
-
 Iterator* Block::NewIterator(const Comparator* comparator) {
   if (size_ < sizeof(uint32_t)) {
     return NewErrorIterator(Status::Corruption("bad block contents"));
@@ -335,11 +285,7 @@ Iterator* Block::NewIterator(const Comparator* comparator) {
   if (num_restarts == 0) {
     return NewEmptyIterator();
   } else {
-    Iterator *iterator = new Iter(comparator, data_, restart_offset_, num_restarts);
-    if(vlog_reader_ == nullptr){
-      return iterator;
-    }
-    return new VlogIterator(iterator , vlog_reader_, &arena_);
+    return new Iter(comparator, data_, restart_offset_, num_restarts);
   }
 }
 

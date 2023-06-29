@@ -73,15 +73,9 @@ class VlogTest : public testing::Test {
     }
   }
 
-  void Reader(Slice* value, std::string* handle) {
+  void Reader(Slice* value, std::string handle) {
     FinishAdd();
-    uint64_t entry_size = 0;
-    Slice handle_slice = Slice(handle->data(), handle->size());
-    VlogReader::GetEntrySize(handle_slice, &entry_size);
-
-    char* buf = arena.Allocate(entry_size);
-    reader_->ReadRecond(Slice(handle->data(), handle->size()), value, buf,
-                        entry_size);
+    reader_->EncodingValue(handle, value, &arena);
   }
 
   ~VlogTest() override {
@@ -146,18 +140,9 @@ class VlogTestInFS : public testing::Test {
     }
   }
 
-  void Reader(Slice* value, std::string* handle) {
-      FinishAdd();
-
-      // get file size to allocate buf to hold entry data
-      uint64_t entry_size = 0;
-      Slice handle_slice = Slice(handle->data(), handle->size());
-      VlogReader::GetEntrySize(handle_slice, &entry_size);
-
-      // buf will be managed by arena
-      char* buf = arena.Allocate(entry_size);
-      reader_->ReadRecond(Slice(handle->data(), handle->size()), value, buf,
-                          entry_size);
+  void Reader(Slice* value, std::string handle) {
+    FinishAdd();
+    reader_->EncodingValue(handle, value, &arena);
   }
 
   Status status() const {
@@ -196,7 +181,7 @@ TEST_F(VlogTest, Single) {
   FinishAdd();
 
   Slice value;
-  Reader(&value, &handle);
+  Reader(&value, handle);
   ASSERT_EQ(value.ToString(), "value");
 }
 
@@ -214,7 +199,7 @@ TEST_F(VlogTest, Multi) {
   for (int i = 0; i < N; i++) {
     Slice value;
     std::string handle = handles[i];
-    Reader(&value, &handle);
+    Reader(&value, handle);
     ASSERT_EQ(value.ToString(), "value" + std::to_string(i));
   }
 }
@@ -229,7 +214,7 @@ TEST_F(VlogTestInFS, Single) {
   ASSERT_TRUE(Status().ok());
 
   Slice value;
-  Reader(&value, &handle);
+  Reader(&value, handle);
   ASSERT_EQ(value.ToString(), "value");
 }
 
@@ -250,7 +235,7 @@ TEST_F(VlogTestInFS, Multi) {
   for (int i = 0; i < N; i++) {
     Slice value;
     std::string handle = handles[i];
-    Reader(&value, &handle);
+    Reader(&value, handle);
     ASSERT_EQ(value.ToString(), "value" + std::to_string(i));
   }
 }

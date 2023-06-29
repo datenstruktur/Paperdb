@@ -5,14 +5,18 @@
 #ifndef STORAGE_LEVELDB_UTIL_VLOG_READER_H_
 #define STORAGE_LEVELDB_UTIL_VLOG_READER_H_
 
-#include "leveldb/status.h"
 #include "leveldb/env.h"
+#include "leveldb/status.h"
+
+#include "arena.h"
 
 namespace leveldb {
 
 class VlogReader {
 public:
   explicit VlogReader(RandomAccessFile* file);
+
+  Status EncodingValue(Slice handle, Slice *value, Arena *arena);
 
   static bool GetEntrySize(Slice handle, uint64_t * entry_size);
 
