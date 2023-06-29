@@ -26,6 +26,7 @@ public:
   RandomAccessFile* file_;
 };
 
+VlogReader* NewVlogReader(const std::string& dbname);
 }  // namespace leveldb
 
 #endif  // STORAGE_LEVELDB_UTIL_VLOG_READER_H_

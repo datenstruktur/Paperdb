@@ -226,6 +226,14 @@ Iterator* Version::NewConcatenatingIterator(const ReadOptions& options,
       vset_->table_cache_, options);
 }
 
+Iterator* Version::NewIterator(const ReadOptions& options,
+                               const Comparator* comparator) {
+  std::vector<Iterator*> lists;
+  AddIterators(options, &lists);
+
+  return NewMergingIterator(comparator, &lists[0], lists.size());
+}
+
 void Version::AddIterators(const ReadOptions& options,
                            std::vector<Iterator*>* iters) {
   // Merge all level zero files together since they may overlap

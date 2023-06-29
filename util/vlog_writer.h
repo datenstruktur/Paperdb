@@ -5,15 +5,17 @@
 #ifndef STORAGE_LEVELDB_UTIL_VLOG_WRITER_H_
 #define STORAGE_LEVELDB_UTIL_VLOG_WRITER_H_
 
-#include "leveldb/status.h"
+#include "db/filename.h"
+
 #include "leveldb/env.h"
+#include "leveldb/status.h"
 
 namespace leveldb {
 class VlogWriter {
  public:
   explicit VlogWriter(WritableFile* dest, uint64_t offset);
 
-  Status Add(Slice key, Slice value, std::string *handle);
+  Status Add(const Slice& key, const Slice& value, std::string *handle);
 
   Status Sync();
 
@@ -24,6 +26,7 @@ class VlogWriter {
   uint64_t offset_;
 };
 
+VlogWriter* NewVlogWriter(const std::string& dbname);
 }  // namespace leveldb
 
 #endif  // STORAGE_LEVELDB_UTIL_VLOG_WRITER_H_

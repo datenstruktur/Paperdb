@@ -25,7 +25,7 @@ std::string DecodeEntry(Slice key, Slice value){
 VlogWriter::VlogWriter(WritableFile* dest, uint64_t offset)
     :dest_(dest),offset_(offset) {}
 
-Status VlogWriter::Add(Slice key, Slice value, std::string* handle) {
+Status VlogWriter::Add(const Slice& key, const Slice& value, std::string* handle) {
   std::string entry = DecodeEntry(key, value);
 
   BlockHandle block_handle;
@@ -51,5 +51,14 @@ Status VlogWriter::Sync() {
 
 Status VlogWriter::Close() {
   return dest_->Close();
+}
+
+VlogWriter* NewVlogWriter(const std::string& dbname) {
+  WritableFile* vlog_file = nullptr;
+  Env::Default()->NewWritableFile(VlogFileName(dbname), &vlog_file);
+
+  uint64_t file_size = 0;
+  Env::Default()->GetFileSize(VlogFileName(dbname), &file_size);
+  return new VlogWriter(vlog_file, file_size);
 }
 }  // namespace leveldb

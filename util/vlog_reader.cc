@@ -6,6 +6,7 @@
 #include "leveldb/env.h"
 #include "table/format.h"
 #include "coding.h"
+#include "db/filename.h"
 
 namespace leveldb {
 
@@ -64,5 +65,11 @@ bool VlogReader::ReadRecond(Slice handle, Slice* value, char* buf, uint64_t entr
 
   DecodingEntry(value);
   return true;
+}
+
+VlogReader* NewVlogReader(const std::string& dbname){
+  RandomAccessFile* file;
+  Env::Default()->NewRandomAccessFile(VlogFileName(dbname), &file);
+  return new VlogReader(file);
 }
 }  // namespace leveldb
