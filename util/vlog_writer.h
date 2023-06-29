@@ -17,6 +17,8 @@ class VlogWriter {
 
   Status Sync();
 
+  Status Close();
+
  private:
   WritableFile* dest_;
   uint64_t offset_;

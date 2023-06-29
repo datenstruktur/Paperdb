@@ -48,4 +48,8 @@ Status VlogWriter::Add(Slice key, Slice value, std::string* handle) {
 Status VlogWriter::Sync() {
   return dest_->Sync();
 }
+
+Status VlogWriter::Close() {
+  return dest_->Close();
+}
 }  // namespace leveldb

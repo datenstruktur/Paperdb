@@ -17,8 +17,6 @@ class Env;
 class FilterPolicy;
 class Logger;
 class Snapshot;
-class VlogWriter;
-class VlogReader;
 
 // DB contents are stored in a set of blocks, each of which holds a
 // sequence of key,value pairs.  Each block may be compressed before
@@ -71,9 +69,6 @@ struct LEVELDB_EXPORT Options {
   // in the same directory as the DB contents if info_log is null.
   Logger* info_log = nullptr;
 
-  VlogWriter* vlog_writer = nullptr;
-
-  VlogReader* vlog_reader = nullptr;
 
   // -------------------
   // Parameters that affect performance

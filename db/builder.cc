@@ -11,6 +11,7 @@
 #include "leveldb/db.h"
 #include "leveldb/env.h"
 #include "leveldb/iterator.h"
+#include "util/vlog_writer.h"
 
 namespace leveldb {
 
@@ -29,11 +30,26 @@ Status BuildTable(const std::string& dbname, Env* env, const Options& options,
     }
 
     TableBuilder* builder = new TableBuilder(options, file);
+    WritableFile* vlog_file = nullptr;
+    s = env->NewWritableFile(VlogFileName(dbname), &vlog_file);
+    if(!s.ok()){
+      return s;
+    }
+
+    uint64_t file_size = 0;
+    s = env->GetFileSize(VlogFileName(dbname), &file_size);
+    if(!s.ok()){
+      return s;
+    }
+
+    VlogWriter* writer = new VlogWriter(vlog_file, file_size);
     meta->smallest.DecodeFrom(iter->key());
     Slice key;
     for (; iter->Valid(); iter->Next()) {
       key = iter->key();
-      builder->Add(key, iter->value());
+      std::string handle;
+      writer->Add(key, iter->value(), &handle);
+      builder->Add(key, handle);
     }
     if (!key.empty()) {
       meta->largest.DecodeFrom(key);
@@ -51,9 +67,19 @@ Status BuildTable(const std::string& dbname, Env* env, const Options& options,
     if (s.ok()) {
       s = file->Sync();
     }
+
+    if(s.ok()){
+      s = writer->Sync();
+    }
+
     if (s.ok()) {
       s = file->Close();
     }
+
+    if(s.ok()){
+      delete writer;
+    }
+
     delete file;
     file = nullptr;
 
