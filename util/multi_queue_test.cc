@@ -14,11 +14,13 @@ class MultiQueueTest : public testing::Test {
  public:
   MultiQueueTest() {
     multi_queue_ = NewMultiQueue();
-    policy_ = new InternalFilterPolicy(NewBloomFilterPolicy(10));
+    policy_ = NewBloomFilterPolicy(10);
+    internal_policy_ = new InternalFilterPolicy(policy_);
   }
 
   ~MultiQueueTest() {
     delete multi_queue_;
+    delete internal_policy_;
     delete policy_;
     for (int i = 0; i < file_impl_.size(); i++) {
       delete file_impl_[i];
@@ -27,7 +29,7 @@ class MultiQueueTest : public testing::Test {
 
   FilterBlockReader* NewReader() {
     if(filters_number <= 0) return nullptr;
-    FilterBlockBuilder builder(policy_);
+    FilterBlockBuilder builder(internal_policy_);
     builder.StartBlock(100);
     InternalKey key("foo", 10, kTypeValue);
     builder.AddKey(key.Encode());
@@ -45,7 +47,7 @@ class MultiQueueTest : public testing::Test {
 
     StringSource* source = file->GetSource();
     file_impl_.push_back(file);
-    return new FilterBlockReader(policy_, filter_meta_data, source);
+    return new FilterBlockReader(internal_policy_, filter_meta_data, source);
   }
 
   static void Deleter(const Slice& key, FilterBlockReader* reader) {
@@ -79,6 +81,7 @@ class MultiQueueTest : public testing::Test {
   }
 
   MultiQueue* multi_queue_;
+  const FilterPolicy* internal_policy_;
   const FilterPolicy* policy_;
   std::vector<FileImpl*> file_impl_;
 };

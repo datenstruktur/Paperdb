@@ -40,7 +40,7 @@ cmake -DCMAKE_BUILD_TYPE=Debug -DUSE_SAN=ON .. && cmake --build .
 
 Why google sanitizers? Google sanitizers is faster more than 10x with vaigrind[2].
 
-**Note:** We close it in order to speed up CI.
+**Note:** We open it by default in order to check memory leak in CI.
 
 ## Bloom filter adjustment logging
 
