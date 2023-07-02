@@ -80,6 +80,7 @@ class MultiQueueTest : public testing::Test {
     return multi_queue_->KeyMayMatch(handle, 100, key.Encode());
   }
 
+ private:
   MultiQueue* multi_queue_;
   const FilterPolicy* internal_policy_;
   const FilterPolicy* policy_;
