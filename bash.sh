@@ -3,17 +3,17 @@
 # false: use default db path
 # true:  use user's db path
 classify_path=false
-write=false
-read=false
 # get db path from user
+if [[ $# -eq 0 ]]; then
+  echo "please entry model"
+  exit 1
+fi
+
 if [[ $# -ge 1 ]]; then
   if [[ $1 == --model=* ]]; then
-    if [[ $1 == "--model=read" ]]; then
-        read=true
-      elif [[ $1 == "--model=write" ]]; then
-        write=true
-      else
-        echo "wrong model, must be read or write"
+    model=$(echo $1 | cut -d= -f2)
+    if [[ $model != "read" ]] && [[ $model != "write" ]] && [[ $model != "clean" ]]; then
+        echo "wrong model, must be read or write or clean"
         exit 1
     fi
   else
@@ -46,14 +46,15 @@ cmake -DCMAKE_BUILD_TYPE=Release -DUSE_ADJUSTMENT_LOGGING=ON .. && cmake --build
 benchmark="./db_bench --num=200000000 --print_process=0 --value_size=1024 --reads=10000000 --bloom_bits=4"
 
 # add model prefix
-if [[ $write == true ]]; then
-  benchmark+=" --benchmarks=fillrandom"
-elif [[ $read == true ]]; then
+if [[ $model == "read" ]]; then
   benchmark+=" --benchmarks=readrandom"
-elif [ $read == true ] && [ $write == true ]; then
-  benchmark+=" --benchmarks=fillrandom,readrandom"
+  benchmark+=" --use_existing_db=1"
+elif [[ $model == "write" ]]; then
+  benchmark+=" --benchmarks=fillrandom"
+elif [[ $model == "clean" ]]; then
+  benchmark+=" --benchmarks=crc32c"
 else
-  echo "wrong model, must be read or write"
+  echo "wrong model, must be read or write or clean"
   exit 1
 fi
 

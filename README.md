@@ -110,6 +110,10 @@ pass ``read`` to bash will run readrandom benchmark:
 ```shell
 ./bash.sh --model=read --db_path=/your/db/path
 ```
+pass ``clean`` to bash will run destroy db, file will be deleted:
+```shell
+./bash.sh --model=clean --db_path=/your/db/path
+```
 
 If you want to use default dictionary, just run:
 ```shell
@@ -119,7 +123,10 @@ or
 ```shell
 ./bash.sh --model=read
 ```
-
+or
+```shell
+./bash.sh --model=clean
+```
 ## Setup
 
 ### Hardware
