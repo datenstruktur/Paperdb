@@ -100,15 +100,24 @@ close info printing in FinishedSingleOp
 * **util/multi_queue.cc**: Manage filter units in memory to reduce adjust overhead **(98% lines unit test coverage)**
 # Performance
 
-when run benchmark through bash.sh, you can pass in your own dictionary 
+when run benchmark through bash.sh, you can pass in your own dictionary, pass ``write`` to bash will run fillrandom benchmark:
 ```shell
 chmod +x bash.sh
-./bash.sh --db_path=/your/db/path
+./bash.sh --model=write --db_path=/your/db/path
+```
+pass ``read`` to bash will run readrandom benchmark:
+
+```shell
+./bash.sh --model=read --db_path=/your/db/path
 ```
 
 If you want to use default dictionary, just run:
 ```shell
-./bash.sh
+./bash.sh --model=write
+```
+or
+```shell
+./bash.sh --model=read
 ```
 
 ## Setup
