@@ -24,7 +24,6 @@ endif(NOT CMAKE_CXX_STANDARD)
 
 option(USE_SAN_ADD "Use sanitizers to check address issues" ON)
 option(USE_SAN_THE "Use sanitizers to check thread issues" OFF)
-option(USE_SAN_MEM "Use sanitizers to check memory leaks" ON)
 option(USE_SAN_UB "Use sanitizers to check undefined behaviour" ON)
 
 option(USE_ADJUSTMENT_LOGGING "Use logging to record adjustment information" OFF)
@@ -45,13 +44,6 @@ else (WIN32)
 
     if(USE_SAN_THE)
       set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=thread -fPIE -pie -g")
-    endif ()
-
-    if(USE_SAN_MEM)
-      # memory sanitize only support for clang in x86_64 linux
-      if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=memory -fPIE -pie -fno-omit-frame-pointer -g -fno-optimize-sibling-calls -O1")
-      endif ()
     endif ()
 
     if(USE_SAN_UB)

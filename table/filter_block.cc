@@ -177,6 +177,7 @@ bool FilterBlockReader::KeyMayMatch(uint64_t block_offset, const Slice& key) {
     // limit should not larger than filter size
     if (start <= limit && limit <= static_cast<size_t>(disk_size_)) {
       Slice filter;
+      MutexLock l(&mutex_);
       // every filter return true, return true
       // at least one filter return false, return false
       // bloom filter has no false negative rate, but has false positive rate
@@ -206,6 +207,7 @@ bool FilterBlockReader::KeyMayMatch(uint64_t block_offset, const Slice& key) {
  * filter
  */
 Status FilterBlockReader::LoadFilter() {
+  MutexLock l(&mutex_);
   const uint64_t kFilterSize = disk_size_ + kBlockTrailerSize;
   uint64_t units_index = filter_units.size();
   if (units_index >= all_units_number_)
@@ -236,6 +238,7 @@ Status FilterBlockReader::LoadFilter() {
 }
 
 Status FilterBlockReader::EvictFilter() {
+  MutexLock l(&mutex_);
   if (filter_units.empty())
     return Status::Corruption("there is no filter can be  evicted");
 
@@ -250,6 +253,7 @@ Status FilterBlockReader::EvictFilter() {
 }
 
 FilterBlockReader::~FilterBlockReader() {
+  MutexLock l(&mutex_);
   if (heap_allocated_) {
     for (const char* filter_unit : filter_units) {
       delete[] filter_unit;

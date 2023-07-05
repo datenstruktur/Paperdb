@@ -42,21 +42,13 @@ use this to open thread sanitizers:
 -DUSE_SAN_THR=ON
 ```
 
-use this to open memory leak sanitizers:
-
-```shell
--DUSE_SAN_MEM=ON
-```
-
 use this to open undefined behaviour sanitizers
 ```shell
 -DUSE_SAN_UB=ON
 ```
+Why google sanitizers? Google sanitizers is faster more than 10x with vaigrind[2].
 
 **Note**: Do not open Address and thread sanitizers together. 
-
-
-Why google sanitizers? Google sanitizers is faster more than 10x with vaigrind[2].
 
 **Note:** We open it by default in order to check memory leak in CI.
 

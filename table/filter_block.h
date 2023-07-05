@@ -22,6 +22,7 @@
 
 #include "table/format.h"
 #include "util/hash.h"
+#include "util/mutexlock.h"
 
 namespace leveldb {
 
@@ -74,42 +75,60 @@ class FilterBlockReader {
   Status EvictFilter();
   ~FilterBlockReader();
 
-  size_t FilterUnitsNumber() const { return filter_units.size(); }
+  size_t FilterUnitsNumber() const {
+    MutexLock l(&mutex_);
+    return filter_units.size();
+  }
 
-  uint64_t AccessTime() const EXCLUSIVE_LOCKS_REQUIRED(mutex_) { return access_time_; }
+  uint64_t AccessTime() const {
+    MutexLock l(&mutex_);
+    return access_time_;
+  }
 
-  bool IsCold(SequenceNumber now_sequence) const EXCLUSIVE_LOCKS_REQUIRED(mutex_) {
+  bool IsCold(SequenceNumber now_sequence){
+    MutexLock l(&mutex_);
     return now_sequence >= (sequence_ + life_time);
   }
 
-  size_t OneUnitSize() const { return disk_size_; }
+  size_t OneUnitSize() const {
+    return disk_size_;
+  }
 
-  bool CanBeLoaded() const { return filter_units.size() < filters_number; }
+  bool CanBeLoaded() const {
+    MutexLock l(&mutex_);
+    return filter_units.size() < filters_number;
+  }
 
-  bool CanBeEvict() const { return filter_units.size() > 1; }
+  bool CanBeEvict() const {
+    MutexLock l(&mutex_);
+    return filter_units.size() > 1;
+  }
 
   // filter block memory overhead(Byte), use by Cache->Insert
-  size_t Size() const { return filter_units.size() * disk_size_; }
+  size_t Size() const {
+    MutexLock l(&mutex_);
+    return filter_units.size() * disk_size_;
+  }
 
   // R: (r)^n
   // IO: R*F
-  double IOs() const EXCLUSIVE_LOCKS_REQUIRED(mutex_) {
-    return pow(policy_->FalsePositiveRate(),
-               static_cast<double>(filter_units.size())) *
+  double IOs() const  {
+    MutexLock l(&mutex_);
+    return pow(policy_->FalsePositiveRate(), static_cast<double>(filter_units.size())) *
            static_cast<double>(access_time_);
   }
 
-  double LoadIOs() const EXCLUSIVE_LOCKS_REQUIRED(mutex_) {
-    return pow(policy_->FalsePositiveRate(),
-               static_cast<double>(
+  double LoadIOs() const {
+    MutexLock l(&mutex_);
+    return pow(policy_->FalsePositiveRate(), static_cast<double>(
                    (static_cast<double>(filter_units.size() + 1)))) *
            static_cast<double>(access_time_);
   }
 
   double EvictIOs() const EXCLUSIVE_LOCKS_REQUIRED(mutex_) {
     assert(filter_units.size() > 1);
-    return pow(policy_->FalsePositiveRate(),
-               static_cast<double>(
+    MutexLock l(&mutex_);
+    return pow(policy_->FalsePositiveRate(), static_cast<double>(
                    (static_cast<double>(filter_units.size() - 1)))) *
            static_cast<double>(access_time_);
   }
@@ -127,13 +146,13 @@ class FilterBlockReader {
   size_t base_lg_;  // Encoding parameter (see kFilterBaseLg in .cc file)
   size_t num_;      // Number of entries in offset array
 
-  port::Mutex mutex_;
+  mutable port::Mutex mutex_;
   uint64_t access_time_ GUARDED_BY(mutex_);
   SequenceNumber sequence_ GUARDED_BY(mutex_);
 
   RandomAccessFile* file_;
 
-  std::vector<const char*> filter_units;
+  std::vector<const char*> filter_units GUARDED_BY(mutex_);
   bool heap_allocated_;
 
   void UpdateState(const Slice& key);
