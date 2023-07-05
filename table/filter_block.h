@@ -126,8 +126,8 @@ class FilterBlockReader {
   }
 
   double EvictIOs() const {
-    assert(filter_units.size() > 1);
     MutexLock l(&mutex_);
+    assert(filter_units.size() > 1);
     return pow(policy_->FalsePositiveRate(), static_cast<double>(
                    (static_cast<double>(filter_units.size() - 1)))) *
            static_cast<double>(access_time_);
