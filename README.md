@@ -35,8 +35,26 @@ cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build .
 
 Sanitizers only support of Debug mod, and you must turn it on by yourself:
 ```shell
-cmake -DCMAKE_BUILD_TYPE=Debug -DUSE_SAN=ON .. && cmake --build .
+cmake -DCMAKE_BUILD_TYPE=Debug -DUSE_SAN_ADD=ON .. && cmake --build .
 ```
+use this to open thread sanitizers:
+```shell
+-DUSE_SAN_THR=ON
+```
+
+use this to open memory leak sanitizers:
+
+```shell
+-DUSE_SAN_MEM=ON
+```
+
+use this to open undefined behaviour sanitizers
+```shell
+-DUSE_SAN_UB=ON
+```
+
+**Note**: Do not open Address and thread sanitizers together. 
+
 
 Why google sanitizers? Google sanitizers is faster more than 10x with vaigrind[2].
 
