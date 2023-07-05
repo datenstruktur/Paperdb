@@ -62,7 +62,7 @@ class MultiQueueTest : public testing::Test {
     return multi_queue_->Lookup(key);
   }
 
-  void Erase(MultiQueue::Handle* handle) const { multi_queue_->Erase(handle); }
+  void Erase(const Slice& key) const { multi_queue_->Erase(key); }
 
   FilterBlockReader* Value(MultiQueue::Handle* handle) const {
     return multi_queue_->Value(handle);
@@ -116,7 +116,7 @@ TEST_F(MultiQueueTest, InsertAndErase) {
   ASSERT_NE(insert_handle, nullptr);
 
   // erase from cache
-  Erase(insert_handle);
+  Erase("key1");
 
   // can not be found in cache
   MultiQueue::Handle* lookup_handle = Lookup("key1");
@@ -131,7 +131,7 @@ TEST_F(MultiQueueTest, TotalCharge) {
   FilterBlockReader* reader = Value(insert_handle);
   ASSERT_EQ(TotalCharge(), reader->Size());
 
-  Erase(insert_handle);  // erase from cache, but still in memory
+  Erase("key1");  // erase from cache, but still in memory
   ASSERT_EQ(TotalCharge(), 0);
 }
 

@@ -79,6 +79,8 @@ class LEVELDB_EXPORT Table {
   void ReadMeta();
 
   Rep* const rep_;
+
+  void ParseQueueKey();
 };
 
 }  // namespace leveldb

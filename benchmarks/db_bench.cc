@@ -441,7 +441,6 @@ void Uncompress(
 class Benchmark {
  private:
   Cache* cache_;
-  MultiQueue* multi_queue_;
   const FilterPolicy* filter_policy_;
   DB* db_;
   int num_;
@@ -534,7 +533,6 @@ class Benchmark {
  public:
   Benchmark()
       : cache_(FLAGS_cache_size >= 0 ? NewLRUCache(FLAGS_cache_size) : nullptr),
-        multi_queue_(FLAGS_multi_queue_open == true ? NewMultiQueue() : nullptr),
         filter_policy_(FLAGS_bloom_bits >= 0
                            ? NewBloomFilterPolicy(FLAGS_bloom_bits)
                            : nullptr),
@@ -565,7 +563,6 @@ class Benchmark {
       DestroyDB(FLAGS_db, Options());
     }
     delete cache_;
-    delete multi_queue_;
     delete filter_policy_;
   }
 
@@ -824,8 +821,8 @@ class Benchmark {
     Options options;
     options.env = g_env;
     options.create_if_missing = !FLAGS_use_existing_db;
+    options.bloom_filter_adjustment = FLAGS_multi_queue_open;
     options.block_cache = cache_;
-    options.multi_queue = multi_queue_;
     options.write_buffer_size = FLAGS_write_buffer_size;
     options.max_file_size = FLAGS_max_file_size;
     options.block_size = FLAGS_block_size;

@@ -302,9 +302,13 @@ class DBTest : public testing::Test {
         break;
       case kFilter:
         options.filter_policy = filter_policy_;
+        options.bloom_filter_adjustment = false;
         break;
       case kUncompressed:
         options.compression = kNoCompression;
+        break;
+      case kMultiQueue:
+        options.filter_policy = filter_policy_;
         break;
       default:
         break;
@@ -562,7 +566,7 @@ class DBTest : public testing::Test {
 
  private:
   // Sequence of option configurations to try
-  enum OptionConfig { kDefault, kReuse, kFilter, kUncompressed, kEnd };
+  enum OptionConfig { kDefault, kReuse, kFilter, kUncompressed, kMultiQueue, kEnd };
 
   const FilterPolicy* filter_policy_;
   int option_config_;
@@ -1612,6 +1616,7 @@ TEST_F(DBTest, CustomComparator) {
   new_options.create_if_missing = true;
   new_options.comparator = &cmp;
   new_options.filter_policy = nullptr;   // Cannot use bloom filters
+  new_options.multi_queue = nullptr;
   new_options.write_buffer_size = 1000;  // Compact more often
   DestroyAndReopen(&new_options);
   ASSERT_LEVELDB_OK(Put("[10]", "ten"));
@@ -1935,7 +1940,6 @@ TEST_F(DBTest, BloomFilter) {
   Options options = CurrentOptions();
   options.env = env_;
   options.block_cache = NewLRUCache(0);  // Prevent cache hits
-  options.multi_queue = NewMultiQueue();
 
   if(loaded_filters_number <= 0) {
     return ;
@@ -1982,7 +1986,6 @@ TEST_F(DBTest, BloomFilter) {
   env_->delay_data_sync_.store(false, std::memory_order_release);
   Close();
   delete options.block_cache;
-  delete options.multi_queue;
   delete options.filter_policy;
 }
 
@@ -2242,7 +2245,7 @@ static bool CompareIterators(int step, DB* model, DB* db,
                    "step %d: Value mismatch for key '%s': '%s' vs. '%s'\n",
                    step, EscapeString(miter->key()).c_str(),
                    EscapeString(miter->value()).c_str(),
-                   EscapeString(miter->value()).c_str());
+                   EscapeString(dbiter->value()).c_str());
       ok = false;
       break;
     }

@@ -52,7 +52,7 @@ class LEVELDB_EXPORT MultiQueue {
   virtual FilterBlockReader* Value(Handle* handle) = 0;
 
   // free handle and filterblock reader saved in multi queue
-  virtual void Erase(Handle* handle) = 0;
+  virtual void Erase(const Slice& key) = 0;
 
   // Return an estimate of the combined charges of all elements stored in the
   // cache.

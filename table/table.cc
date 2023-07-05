@@ -21,7 +21,9 @@ struct Table::Rep {
     delete reader;
     if (options.multi_queue && handle) {
       // release for this table
-      options.multi_queue->Erase(handle);
+      Slice key(multi_cache_key.data(), multi_cache_key.size());
+      options.multi_queue->Erase(key);
+      handle = nullptr;
     }
   }
 
@@ -35,7 +37,21 @@ struct Table::Rep {
   Block* index_block;
   MultiQueue::Handle* handle;
   FilterBlockReader* reader;
+  std::string multi_cache_key;
 };
+
+void Table::ParseQueueKey() {
+  std::string key;
+  Options options = rep_->options;
+  if(options.filter_policy && options.bloom_filter_adjustment) {
+    key = "filter.";
+    key.append(options.filter_policy->Name());
+    char cache_key_buffer[8];
+    EncodeFixed64(cache_key_buffer, rep_->table_id);
+    key.append(cache_key_buffer, 8);
+    rep_->multi_cache_key = std::move(key);
+  }
+}
 
 Status Table::Open(const Options& options, RandomAccessFile* file,
                    uint64_t size, Table** table, uint64_t table_id) {
@@ -78,6 +94,7 @@ Status Table::Open(const Options& options, RandomAccessFile* file,
     rep->reader = nullptr;
     rep->footer = footer;
     *table = new Table(rep);
+    (*table)->ParseQueueKey();
     (*table)->ReadMeta();
   }
 
@@ -155,11 +172,7 @@ void Table::ReadMeta() {
   }
 
   // Get filter block from cache, or read from disk and insert
-  std::string filter_key = "filter.";
-  filter_key.append(rep_->options.filter_policy->Name());
-  char cache_key_buffer[8];
-  EncodeFixed64(cache_key_buffer, rep_->table_id);
-  filter_key.append(cache_key_buffer, 8);
+  std::string filter_key = rep_->multi_cache_key;
   Slice key(filter_key.data(), filter_key.size());
 
   MultiQueue::Handle* cache_handle;

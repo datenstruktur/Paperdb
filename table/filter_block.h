@@ -127,13 +127,16 @@ class FilterBlockReader {
   size_t base_lg_;  // Encoding parameter (see kFilterBaseLg in .cc file)
   size_t num_;      // Number of entries in offset array
 
-  uint64_t access_time_;
-  SequenceNumber sequence_;
+  port::Mutex mutex_;
+  uint64_t access_time_ GUARDED_BY(mutex_);
+  SequenceNumber sequence_ GUARDED_BY(mutex_);
 
   RandomAccessFile* file_;
 
   std::vector<const char*> filter_units;
   bool heap_allocated_;
+
+  void UpdateState(const Slice& key);
 };
 
 }  // namespace leveldb

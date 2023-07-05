@@ -26,14 +26,6 @@ struct QueueHandle {
   }
 };
 
-void FreeHandle(QueueHandle* handle) {
-  if(handle) {
-    // free reader, and free node
-    handle->deleter(handle->key(), handle->reader);
-    free(handle);
-  }
-}
-
 class SingleQueue {
  public:
   SingleQueue() {
@@ -79,19 +71,23 @@ class SingleQueue {
     return e;
   }
 
-  void Erase(QueueHandle* handle) {
+  void Erase(QueueHandle* handle){
     if (handle != nullptr) {
       Queue_Remove(handle);
       FreeHandle(handle);
     }
   }
 
-  void Remove(QueueHandle* handle) { Queue_Remove(handle); }
+  void Remove(QueueHandle* handle) {
+    Queue_Remove(handle);
+  }
 
-  void Append(QueueHandle* handle){ Queue_Append(handle);}
+  void Append(QueueHandle* handle){
+    Queue_Append(handle);
+  }
 
   void MoveToMRU(QueueHandle* handle) {
-    Remove(handle);
+    Queue_Remove(handle);
     Queue_Append(handle);
   }
 
@@ -116,7 +112,15 @@ class SingleQueue {
   QueueHandle *mru_; // head
   QueueHandle *lru_;
 
-  void Queue_Append(QueueHandle* e) {
+  void FreeHandle(QueueHandle* handle){
+    if(handle) {
+      // free reader, and free node
+      handle->deleter(handle->key(), handle->reader);
+      free(handle);
+    }
+  }
+
+  void Queue_Append(QueueHandle* e){
     // Make "e" newest entry by inserting just after *mru
     // set e
     e->prev = mru_;
@@ -127,7 +131,7 @@ class SingleQueue {
     mru_->next = e;
   }
 
-  void Queue_Remove(QueueHandle* e) {
+  void Queue_Remove(QueueHandle* e){
     e->next->prev = e->prev;
     e->prev->next = e->next;
   }
@@ -200,20 +204,17 @@ class InternalMultiQueue : public MultiQueue {
     }
   }
 
-  void Erase(Handle* handle) override {
+  void Erase(const Slice& key) override {
     MutexLock l(&mutex_);
-    QueueHandle* queue_handle = reinterpret_cast<QueueHandle*>(handle);
-    if(queue_handle != nullptr) {
-      std::string key = queue_handle->key().ToString();
-      auto iter = map_.find(key);
-      if (iter != map_.end()) {
-        SingleQueue* queue = FindQueue(queue_handle);
-        if(queue != nullptr) {
-          usage_ -= queue_handle->reader->Size();
-          queue->Erase(queue_handle);
-        }
-        map_.erase(key);
+    auto iter = map_.find(key.ToString());
+    if (iter != map_.end()) {
+      QueueHandle* queue_handle = iter->second;
+      SingleQueue* queue = FindQueue(queue_handle);
+      if (queue != nullptr) {
+        usage_ -= queue_handle->reader->Size();
+        queue->Erase(queue_handle);
       }
+      map_.erase(key.ToString());
     }
   }
 

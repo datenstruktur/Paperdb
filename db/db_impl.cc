@@ -118,6 +118,10 @@ Options SanitizeOptions(const std::string& dbname,
   if (result.block_cache == nullptr) {
     result.block_cache = NewLRUCache(8 << 20);
   }
+
+  if(result.bloom_filter_adjustment && result.filter_policy){
+    result.multi_queue = NewMultiQueue();
+  }
   return result;
 }
 
@@ -178,6 +182,10 @@ DBImpl::~DBImpl() {
   }
   if (owns_cache_) {
     delete options_.block_cache;
+  }
+
+  if(options_.bloom_filter_adjustment && options_.filter_policy) {
+    delete options_.multi_queue;
   }
 }
 

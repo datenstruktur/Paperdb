@@ -60,6 +60,8 @@ struct LEVELDB_EXPORT Options {
   // become unreadable or for the entire DB to become unopenable.
   bool paranoid_checks = false;
 
+  bool bloom_filter_adjustment = true;
+
   // Use the specified object to interact with the environment,
   // e.g. to read/write files, schedule background work, etc.
   // Default: Env::Default()

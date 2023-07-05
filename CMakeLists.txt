@@ -22,7 +22,11 @@ if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_EXTENSIONS OFF)
 endif(NOT CMAKE_CXX_STANDARD)
 
-option(USE_SAN "Use sanitizers to check memory leaks" ON)
+option(USE_SAN_ADD "Use sanitizers to check address issues" ON)
+option(USE_SAN_THE "Use sanitizers to check thread issues" ON)
+option(USE_SAN_MEM "Use sanitizers to check memory leaks" ON)
+option(USE_SAN_UB "Use sanitizers to check undefined behaviour" ON)
+
 option(USE_ADJUSTMENT_LOGGING "Use logging to record adjustment information" OFF)
 
 if (WIN32)
@@ -32,9 +36,24 @@ if (WIN32)
 else (WIN32)
   set(LEVELDB_PLATFORM_NAME LEVELDB_PLATFORM_POSIX)
   if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    if(USE_SAN)
+    if(USE_SAN_ADD)
       set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
     endif ()
+
+    if(USE_SAN_THE)
+      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=thread -fPIE -pie -g")
+    endif ()
+
+    if(USE_SAN_MEM)
+      # memory sanitize only support for clang in x86_64 linux
+      if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=memory -fPIE -pie -fno-omit-frame-pointer -g -fno-optimize-sibling-calls -O1")
+      endif ()
+    endif ()
+
+    if(USE_SAN_UB)
+      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=undefined")
+    endif()
   endif ()
 endif (WIN32)
 

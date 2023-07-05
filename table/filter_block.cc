@@ -6,6 +6,8 @@
 
 #include "leveldb/filter_policy.h"
 
+#include "util/mutexlock.h"
+
 namespace leveldb {
 
 // See doc/table_format.md for an explanation of the filter block format.
@@ -156,13 +158,18 @@ FilterBlockReader::FilterBlockReader(const FilterPolicy* policy,
   }
 }
 
-bool FilterBlockReader::KeyMayMatch(uint64_t block_offset, const Slice& key) {
-  uint64_t index = block_offset >> base_lg_;
+void FilterBlockReader::UpdateState(const leveldb::Slice& key) {
+  MutexLock l(&mutex_);
   ParsedInternalKey parsedInternalKey;
   if (ParseInternalKey(key, &parsedInternalKey)) {
     sequence_ = parsedInternalKey.sequence;
   }
   access_time_++;
+}
+
+bool FilterBlockReader::KeyMayMatch(uint64_t block_offset, const Slice& key) {
+  uint64_t index = block_offset >> base_lg_;
+  UpdateState(key);
 
   if (index < num_) {
     uint32_t start = DecodeFixed32(offset_ + index * 4);
