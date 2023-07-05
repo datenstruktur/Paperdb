@@ -125,7 +125,7 @@ class FilterBlockReader {
            static_cast<double>(access_time_);
   }
 
-  double EvictIOs() const EXCLUSIVE_LOCKS_REQUIRED(mutex_) {
+  double EvictIOs() const {
     assert(filter_units.size() > 1);
     MutexLock l(&mutex_);
     return pow(policy_->FalsePositiveRate(), static_cast<double>(
