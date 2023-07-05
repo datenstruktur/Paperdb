@@ -23,7 +23,7 @@ if(NOT CMAKE_CXX_STANDARD)
 endif(NOT CMAKE_CXX_STANDARD)
 
 option(USE_SAN_ADD "Use sanitizers to check address issues" ON)
-option(USE_SAN_THE "Use sanitizers to check thread issues" ON)
+option(USE_SAN_THE "Use sanitizers to check thread issues" OFF)
 option(USE_SAN_MEM "Use sanitizers to check memory leaks" ON)
 option(USE_SAN_UB "Use sanitizers to check undefined behaviour" ON)
 
@@ -34,6 +34,9 @@ if (WIN32)
   # TODO(cmumford): Make UNICODE configurable for Windows.
   add_definitions(-D_UNICODE -DUNICODE)
 else (WIN32)
+  if(USE_SAN_ADD AND USE_SAN_THE)
+    message(FATAL_ERROR "can not open address and thread san together")
+  endif ()
   set(LEVELDB_PLATFORM_NAME LEVELDB_PLATFORM_POSIX)
   if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     if(USE_SAN_ADD)

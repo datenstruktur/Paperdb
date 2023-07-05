@@ -76,9 +76,9 @@ class FilterBlockReader {
 
   size_t FilterUnitsNumber() const { return filter_units.size(); }
 
-  uint64_t AccessTime() const { return access_time_; }
+  uint64_t AccessTime() const EXCLUSIVE_LOCKS_REQUIRED(mutex_) { return access_time_; }
 
-  bool IsCold(SequenceNumber now_sequence) const {
+  bool IsCold(SequenceNumber now_sequence) const EXCLUSIVE_LOCKS_REQUIRED(mutex_) {
     return now_sequence >= (sequence_ + life_time);
   }
 
@@ -93,20 +93,20 @@ class FilterBlockReader {
 
   // R: (r)^n
   // IO: R*F
-  double IOs() const {
+  double IOs() const EXCLUSIVE_LOCKS_REQUIRED(mutex_) {
     return pow(policy_->FalsePositiveRate(),
                static_cast<double>(filter_units.size())) *
            static_cast<double>(access_time_);
   }
 
-  double LoadIOs() const {
+  double LoadIOs() const EXCLUSIVE_LOCKS_REQUIRED(mutex_) {
     return pow(policy_->FalsePositiveRate(),
                static_cast<double>(
                    (static_cast<double>(filter_units.size() + 1)))) *
            static_cast<double>(access_time_);
   }
 
-  double EvictIOs() const {
+  double EvictIOs() const EXCLUSIVE_LOCKS_REQUIRED(mutex_) {
     assert(filter_units.size() > 1);
     return pow(policy_->FalsePositiveRate(),
                static_cast<double>(
