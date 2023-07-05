@@ -12,8 +12,8 @@ fi
 if [[ $# -ge 1 ]]; then
   if [[ $1 == --model=* ]]; then
     model=$(echo $1 | cut -d= -f2)
-    if [[ $model != "read" ]] && [[ $model != "write" ]] && [[ $model != "clean" ]]; then
-        echo "wrong model, must be read or write or clean"
+    if [[ $model != "all" ]] && [[ $model != "read" ]] && [[ $model != "write" ]] && [[ $model != "clean" ]]; then
+        echo "wrong model, must be read or write or clean, or all"
         exit 1
     fi
   else
@@ -45,26 +45,30 @@ cmake -DCMAKE_BUILD_TYPE=Release -DUSE_ADJUSTMENT_LOGGING=ON .. && cmake --build
 
 benchmark="./db_bench --num=200000000 --print_process=0 --value_size=1024 --reads=10000000 --bloom_bits=4"
 
-# add model prefix
-if [[ $model == "read" ]]; then
-  benchmark+=" --benchmarks=readrandom"
-  benchmark+=" --use_existing_db=1"
-elif [[ $model == "write" ]]; then
-  benchmark+=" --benchmarks=fillrandom"
-elif [[ $model == "clean" ]]; then
-  benchmark+=" --benchmarks=crc32c"
-else
-  echo "wrong model, must be read or write or clean"
-  exit 1
-fi
-
 # pass in db path
 if [[ $classify_path == true ]]; then
   benchmark+=" --db=$db_path"
 fi
 
-$benchmark "--multi_queue_open=0"
-$benchmark "--multi_queue_open=1"
+# add model prefix
+if [[ $model == "all" ]]; then
+  benchmark+=" --benchmarks=fillrandom, readrandom"
+  $benchmark "--multi_queue_open=0"
+  $benchmark "--multi_queue_open=1"
+elif [[ $model == "read" ]]; then
+  benchmark+=" --benchmarks=readrandom"
+  benchmark+=" --use_existing_db=1"
+  $benchmark "--multi_queue_open=0"
+  $benchmark "--multi_queue_open=1"
+elif [[ $model == "write" ]]; then
+  benchmark+=" --benchmarks=fillrandom"
+  $benchmark
+elif [[ $model == "clean" ]]; then
+  benchmark+=" --benchmarks=crc32c"
+  $benchmark
+else
+  echo "wrong model, must be read or write or clean"
+fi
 
 # clean the cmake and make file
 cd ../

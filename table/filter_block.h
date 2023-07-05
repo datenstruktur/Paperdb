@@ -153,7 +153,7 @@ class FilterBlockReader {
   RandomAccessFile* file_;
 
   std::vector<const char*> filter_units GUARDED_BY(mutex_);
-  bool heap_allocated_;
+  bool heap_allocated_ GUARDED_BY(mutex_);
 
   void UpdateState(const Slice& key);
 };
