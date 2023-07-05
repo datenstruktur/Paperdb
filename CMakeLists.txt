@@ -23,7 +23,7 @@ if(NOT CMAKE_CXX_STANDARD)
 endif(NOT CMAKE_CXX_STANDARD)
 
 option(USE_SAN_ADD "Use sanitizers to check address issues" ON)
-option(USE_SAN_THE "Use sanitizers to check thread issues" OFF)
+option(USE_SAN_THE "Use sanitizers to check thread issues" ON)
 option(USE_SAN_UB "Use sanitizers to check undefined behaviour" ON)
 
 option(USE_ADJUSTMENT_LOGGING "Use logging to record adjustment information" OFF)
