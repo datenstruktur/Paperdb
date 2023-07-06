@@ -1,7 +1,7 @@
 # ElasticBF
 [![ci](https://github.com/google/leveldb/actions/workflows/build.yml/badge.svg)](https://github.com/google/leveldb/actions/workflows/build.yml)
 
-**ElasticBF[1]** moves cold SSTable's bloom filter to hot SSTable's bloom filter to reduce extra disk io overhead without increasing memory overhead. Short introduction by paper's author can be saw in this [video](https://www.youtube.com/watch?v=8UBx3GCep3A).
+**ElasticBF[1]** moves cold SSTable's bloom filter to hot SSTable's bloom filter to reduce extra disk io overhead without increasing memory overhead. Short introduction by paper's author can be saw in this [video](https://www.youtube.com/watch?v=8UBx3GCep3A). In addition to that, we also ensure code quality by utilizing **unit test**, **google sanitizers**, and **GitHub Actions** with support for multiple operating systems and compilers.
 
 # Features
 ![The architecture of ElasticBF](https://github.com/WangTingZheng/Paperdb/assets/32613835/cb3278c6-9782-48b1-bda4-2051713a6a97)
@@ -12,47 +12,24 @@
 
 > More details see in [doc/elasticbf.md](./doc/elasticbf.md), Chinese version see in [feishu](https://o444bvn7jh.feishu.cn/docx/XlBldwKc2oOTGMxPpLlckKLunvd), If you are interested in gaining a deeper understanding of the paper, please do not hesitate to contact me. I have added **extensive annotations** to the original paper, and I have recorded **8 hours** of lecture videos to elaborate on my interpretation of the paper.
 
-# Getting the Source
 
+# Building
+
+Get the source from github, elasticbf's code is in elasticbf-dev branch:
 ```shell
 git clone --recurse-submodules https://github.com/WangTingZheng/Paperdb.git
 cd Paperdb
 git checkout elasticbf-dev
 ```
 
-# Building
-
-This project supports [CMake](https://cmake.org/) out of the box. Quick start:
+This project supports [CMake](https://cmake.org/) out of the box. Quick build:
 
 ```shell
 mkdir -p build && cd build
 cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build .
 ```
 
-# External parameters for cmake
-
-## Google sanitizers
-
-Sanitizers only support of Debug mod, and you must turn it on by yourself:
-```shell
-cmake -DCMAKE_BUILD_TYPE=Debug -DUSE_SAN_ADD=ON .. && cmake --build .
-```
-use this to open thread sanitizers:
-```shell
--DUSE_SAN_THR=ON
-```
-
-use this to open undefined behaviour sanitizers
-```shell
--DUSE_SAN_UB=ON
-```
-Why google sanitizers? Google sanitizers is faster more than 10x with vaigrind[2].
-
-**Note**: Do not open Address and thread sanitizers together. 
-
-**Note:** We open it by default in order to check memory leak in CI.
-
-## Bloom filter adjustment logging
+# Bloom filter adjustment logging
 
 Turn on logging by passing parameter in cmake command:
 
@@ -83,6 +60,11 @@ cd build
 ./env_posix_test
 ./c_test
 ```
+Only run one test:
+```shell
+./leveldb_tests --gtest_filter=DBTest.BloomFilter
+```
+
 ## benchmark
 ```shell
 cd build
@@ -99,18 +81,10 @@ close info printing in FinishedSingleOp
 ```shell
 ./db_bench --print_process=0
 ```
-
 **Note**: We disable FinishedSingleOp printf in CI to track error easier.
-# Main changed files
 
-* **util/bloom.cc**: Generate and read multi filter units' bitmap for a scope of keys **(97% lines unit test coverage)**
-* **table/filterblock.cc**: Manage multi filter units in disk, update the hotness of the SSTable. **(94% lines unit test coverage)** 
-* **table/table.cc**: Check if the key is existed using filterblock **(97% lines unit test coverage)**
-* **table/table_builder.cc**: Construct filter block **(89% lines unit test coverage)**
-* **util/multi_queue.cc**: Manage filter units in memory to reduce adjust overhead **(98% lines unit test coverage)**
-# Performance
-
-when run benchmark through bash.sh, you can pass in your own dictionary, pass ``write`` to bash will run fillrandom benchmark:
+## bash shell
+we use a bash shell to wrapper benchmark command, when run benchmark through bash.sh, you can pass in your own dictionary, pass ``write`` to bash will run fillrandom benchmark:
 ```shell
 chmod +x bash.sh
 ./bash.sh --model=write --db_path=/your/db/path
@@ -133,6 +107,49 @@ pass ``all`` to bash wll run fillrandom and readrandom together
 ```shell
 ./bash.sh --model=all
 ```
+
+# Google sanitizers
+
+Sanitizers only support of Debug mod, and you must turn it on by yourself:
+```shell
+cmake -DCMAKE_BUILD_TYPE=Debug -DUSE_SAN_ADD=ON .. && cmake --build .
+```
+use this to open thread sanitizers:
+```shell
+-DUSE_SAN_THR=ON
+```
+
+use this to open undefined behaviour sanitizers
+```shell
+-DUSE_SAN_UB=ON
+```
+Why google sanitizers? Google sanitizers is faster more than 10x with vaigrind[2].
+
+**Note**: Do not open Address and thread sanitizers together.
+
+**Note:** We open it by default in order to check memory leak in CI.
+
+# CI in Github Action
+
+We use github action to test code in different os, compiler and build type(Debug and Release), those jobs will be run in CI, all jobs will be checked by address sanitizers:
+- Run Tests: Run all test, include leveldb_tests, env_posix_test and c_test
+- Run LevelDB Benchmarks: benchmark in ```benchmarks/db_bench.cc```
+- Run SQLite Benchmarks: benchmark in ```benchamrks/db_bench_sqlite3.cc```
+- Run Kyoto Cabinet Benchmarks in ```benchmarks/db_bench_tree_db.cc```
+
+We also use thread sanitizers to check the code for the jobs mentioned above in linux debug model:
+
+- Run Tests with thread sanitizer
+- Run LevelDB Benchmarks with thread sanitizer
+
+# Main changed files
+
+* **util/bloom.cc**: Generate and read multi filter units' bitmap for a scope of keys **(97% lines unit test coverage)**
+* **table/filterblock.cc**: Manage multi filter units in disk, update the hotness of the SSTable. **(94% lines unit test coverage)** 
+* **table/table.cc**: Check if the key is existed using filterblock **(97% lines unit test coverage)**
+* **table/table_builder.cc**: Construct filter block **(89% lines unit test coverage)**
+* **util/multi_queue.cc**: Manage filter units in memory to reduce adjust overhead **(98% lines unit test coverage)**
+# Performance
 
 ## Setup
 
