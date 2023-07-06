@@ -8,10 +8,20 @@
 
 * Fine-grained Bloom Filter Allocation
 * Hotness Identification
-* Bloom Filter Management in Memory 
+* Bloom Filter Management in Memory
 
 > More details see in [doc/elasticbf.md](./doc/elasticbf.md), Chinese version see in [feishu](https://o444bvn7jh.feishu.cn/docx/XlBldwKc2oOTGMxPpLlckKLunvd), If you are interested in gaining a deeper understanding of the paper, please do not hesitate to contact me. I have added **extensive annotations** to the original paper, and I have recorded **8 hours** of lecture videos to elaborate on my interpretation of the paper.
 
+
+# Main changed files
+
+* **util/bloom.cc**: Generate and read multi filter units' bitmap for a scope of keys **(97% lines unit test coverage)**
+* **table/filterblock.cc**: Manage multi filter units in disk, update the hotness of the SSTable. **(94% lines unit test coverage)**
+* **table/table.cc**: Check if the key is existed using filterblock **(97% lines unit test coverage)**
+* **table/table_builder.cc**: Construct filter block **(89% lines unit test coverage)**
+* **util/multi_queue.cc**: Manage filter units in memory to reduce adjust overhead **(98% lines unit test coverage)**
+
+---
 
 # Building
 
@@ -141,14 +151,7 @@ We also use thread sanitizers to check the code for the jobs mentioned above in 
 
 - Run Tests with thread sanitizer
 - Run LevelDB Benchmarks with thread sanitizer
-
-# Main changed files
-
-* **util/bloom.cc**: Generate and read multi filter units' bitmap for a scope of keys **(97% lines unit test coverage)**
-* **table/filterblock.cc**: Manage multi filter units in disk, update the hotness of the SSTable. **(94% lines unit test coverage)** 
-* **table/table.cc**: Check if the key is existed using filterblock **(97% lines unit test coverage)**
-* **table/table_builder.cc**: Construct filter block **(89% lines unit test coverage)**
-* **util/multi_queue.cc**: Manage filter units in memory to reduce adjust overhead **(98% lines unit test coverage)**
+---
 # Performance
 
 ## Setup
