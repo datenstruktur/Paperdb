@@ -177,7 +177,8 @@ We also use thread sanitizers to check the code for the jobs mentioned above in 
 Todo
 ## Read performance
 Todo
-# ToDo
+
+# ToDo in ElasticBF
 - Using multi thread to speed up filter units loading in multi queue, see [about implementing multi threads](https://github.com/WangTingZheng/Paperdb/discussions/14).
 - Using shared hash in this paper[3] to reduce multi bloom filter look up overhead.
 - Hotness inheritance after compaction in ATC version of paper[4], see [about implementing hotness inheritance](https://github.com/WangTingZheng/Paperdb/discussions/13) in discussions.
@@ -185,6 +186,11 @@ Todo
 - Reimplement ElasticBF to get rid of the unit test, sanitizers and benchmark, see [about reimplementing](https://github.com/WangTingZheng/Paperdb/discussions/15)
 - Support YCSB, should pay attention to [FalsePositiveRate function](https://github.com/WangTingZheng/Paperdb/blob/242b1b92cf97453d7750ea6f630cb490bb14feb7/db/c.cc#L140) in db/c.cc
 
+# Next Paper
+
+Next paper to implement maybe AC-Key[5] or HotRing[6] or **WiscKey[7]**, see [some ideas about implementing Wisckey](https://github.com/WangTingZheng/Paperdb/discussions/12).
+
+---
 # Related PR to LevelDB
 
 I created two pr to LevelDB during implementing ElasticBF:
@@ -193,10 +199,6 @@ I created two pr to LevelDB during implementing ElasticBF:
 - [[**Not merged yet**] fix memory leak in kyoto cabinet benchmarks #1128](https://github.com/google/leveldb/pull/1128)
 
 **Note:** Unfortunately, LevelDB is receiving very limited maintenance, so, those pr may not be merged.
-
-# Next Paper
-
-Next paper to implement maybe AC-Key[5] or HotRing[6] or **WiscKey[7]**, see [some ideas about implementing Wisckey](https://github.com/WangTingZheng/Paperdb/discussions/12).
 
 # Reference
 [1] Zhang Y, Li Y, Guo F, et al. ElasticBF: Fine-grained and Elastic Bloom Filter Towards Efficient Read for LSM-tree-based KV Stores[C]//HotStorage. 2018.
