@@ -115,28 +115,25 @@ when run benchmark through bash.sh, you can pass in your own dictionary, pass ``
 chmod +x bash.sh
 ./bash.sh --model=write --db_path=/your/db/path
 ```
-pass ``read`` to bash will run readrandom benchmark:
-
-```shell
-./bash.sh --model=read --db_path=/your/db/path
-```
-pass ``clean`` to bash will run destroy db, file will be deleted:
-```shell
-./bash.sh --model=clean --db_path=/your/db/path
-```
 
 If you want to use default dictionary, just run:
 ```shell
 ./bash.sh --model=write
 ```
-or
+pass ``read`` to bash will run readrandom benchmark:
+
 ```shell
 ./bash.sh --model=read
 ```
-or
+pass ``clean`` to bash will run destroy db, file will be deleted:
 ```shell
 ./bash.sh --model=clean
 ```
+pass ``all`` to bash wll run fillrandom and readrandom together
+```shell
+./bash.sh --model=all
+```
+
 ## Setup
 
 ### Hardware
