@@ -21,6 +21,10 @@
 * **table/table_builder.cc**: Construct filter block **(89% lines unit test coverage)**
 * **util/multi_queue.cc**: Manage filter units in memory to reduce adjust overhead **(98% lines unit test coverage)**
 
+# Performance
+
+Todo
+
 ---
 
 # Building
@@ -117,6 +121,23 @@ pass ``all`` to bash wll run fillrandom and readrandom together
 ```shell
 ./bash.sh --model=all
 ```
+## benchmark setup
+
+### Hardware
+
+* CPU:        32 * 13th Gen Intel(R) Core(TM) i9-13900K
+* CPUCache:   36864 KB
+* SSD:        Samsung SSD 870(4TB)
+
+### parameters
+* 100GB kv in database
+* 10 million point lookup
+* 4 bits per key in one filter unit
+* 6 filter units for one SSTable
+* Load 2 filters at the beginning
+* 1KB KV
+* On release model
+* Snappy compression is not enabled
 
 # Google sanitizers
 
@@ -152,31 +173,6 @@ We also use thread sanitizers to check the code for the jobs mentioned above in 
 - Run Tests with thread sanitizer
 - Run LevelDB Benchmarks with thread sanitizer
 ---
-# Performance
-
-## Setup
-
-### Hardware
-
-* CPU:        32 * 13th Gen Intel(R) Core(TM) i9-13900K
-* CPUCache:   36864 KB
-* SSD:        Samsung SSD 870(4TB)
-
-### parameters
-* 100GB kv in database
-* 10 million point lookup
-* 4 bits per key in one filter unit
-* 6 filter units for one SSTable
-* Load 2 filters at the beginning
-* 1KB KV
-* On release model
-* Snappy compression is not enabled
-
-## Write performance
-
-Todo
-## Read performance
-Todo
 
 # ToDo in ElasticBF
 - Using multi thread to speed up filter units loading in multi queue, see [about implementing multi threads](https://github.com/WangTingZheng/Paperdb/discussions/14).
