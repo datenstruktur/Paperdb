@@ -101,7 +101,7 @@ class FilterBlockReader {
 
   bool CanBeEvict() const {
     MutexLock l(&mutex_);
-    return filter_units.size() > 1;
+    return filter_units.size() >= 1;
   }
 
   // filter block memory overhead(Byte), use by Cache->Insert
@@ -127,7 +127,7 @@ class FilterBlockReader {
 
   double EvictIOs() const {
     MutexLock l(&mutex_);
-    assert(filter_units.size() > 1);
+    assert(CanBeEvict());
     return pow(policy_->FalsePositiveRate(), static_cast<double>(
                    (static_cast<double>(filter_units.size() - 1)))) *
            static_cast<double>(access_time_);

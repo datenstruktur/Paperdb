@@ -120,7 +120,9 @@ TEST_F(MultiQueueTest, InsertAndErase) {
 
   // can not be found in cache
   MultiQueue::Handle* lookup_handle = Lookup("key1");
-  ASSERT_EQ(lookup_handle, nullptr);
+  ASSERT_NE(lookup_handle, nullptr);
+
+  ASSERT_EQ(Value(lookup_handle)->FilterUnitsNumber(), 0);
 }
 
 TEST_F(MultiQueueTest, TotalCharge) {

@@ -21,6 +21,7 @@ struct Table::Rep {
     delete reader;
     if (options.multi_queue && handle) {
       // release for this table
+      // save sequence and hotness in multi queue
       Slice key(multi_cache_key.data(), multi_cache_key.size());
       options.multi_queue->Erase(key);
       handle = nullptr;

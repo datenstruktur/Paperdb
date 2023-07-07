@@ -209,12 +209,10 @@ class InternalMultiQueue : public MultiQueue {
     auto iter = map_.find(key.ToString());
     if (iter != map_.end()) {
       QueueHandle* queue_handle = iter->second;
-      SingleQueue* queue = FindQueue(queue_handle);
-      if (queue != nullptr) {
-        usage_ -= queue_handle->reader->Size();
-        queue->Erase(queue_handle);
+      while(queue_handle->reader->CanBeEvict()) {
+        EvictHandle(queue_handle);
+        usage_ -= queue_handle->reader->OneUnitSize();
       }
-      map_.erase(key.ToString());
     }
   }
 
@@ -242,7 +240,7 @@ class InternalMultiQueue : public MultiQueue {
       EXCLUSIVE_LOCKS_REQUIRED(mutex_){
     SingleQueue* queue = nullptr;
     std::vector<QueueHandle*> filters;
-    for (int i = filters_number; i > 1 && memory > 0; i--) {
+    for (int i = filters_number; i >= 1 && memory > 0; i--) {
       queue = queues_[i];
       queue->FindColdFilter(memory, sn, filters);
     }
