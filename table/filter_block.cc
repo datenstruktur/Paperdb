@@ -66,6 +66,7 @@ Slice FilterBlockBuilder::Finish(const BlockHandle& handle) {
   PutFixed32(&result_, filter_units_[0].size());
 
   PutFixed64(&result_, handle.offset());
+  // Todo: Change To int64
   PutFixed32(&result_, handle.size());
   PutFixed32(&result_, loaded_filters_number);
   PutFixed32(&result_, filters_number);

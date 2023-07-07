@@ -54,6 +54,9 @@ class LEVELDB_EXPORT MultiQueue {
   // free handle and filterblock reader saved in multi queue
   virtual void Erase(const Slice& key) = 0;
 
+  // evict all filter when table is freed
+  virtual void Release(const Slice& key) = 0;
+
   // Return an estimate of the combined charges of all elements stored in the
   // cache.
   virtual size_t TotalCharge() const = 0;

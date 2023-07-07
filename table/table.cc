@@ -23,8 +23,7 @@ struct Table::Rep {
       // release for this table
       // save sequence and hotness in multi queue
       Slice key(multi_cache_key.data(), multi_cache_key.size());
-      options.multi_queue->Erase(key);
-      handle = nullptr;
+      options.multi_queue->Release(key);
     }
   }
 
@@ -41,16 +40,23 @@ struct Table::Rep {
   std::string multi_cache_key;
 };
 
-void Table::ParseQueueKey() {
+std::string Table::ParseHandleKey(const leveldb::Options& options,
+                                  uint64_t file_id) {
+  std::string key;
+  assert(options.filter_policy && options.bloom_filter_adjustment);
+  key = "filter.";
+  key.append(options.filter_policy->Name());
+  char cache_key_buffer[8];
+  EncodeFixed64(cache_key_buffer, file_id);
+  key.append(cache_key_buffer, 8);
+  return key;
+}
+
+void Table::ParseHandleKey() {
   std::string key;
   Options options = rep_->options;
   if(options.filter_policy && options.bloom_filter_adjustment) {
-    key = "filter.";
-    key.append(options.filter_policy->Name());
-    char cache_key_buffer[8];
-    EncodeFixed64(cache_key_buffer, rep_->table_id);
-    key.append(cache_key_buffer, 8);
-    rep_->multi_cache_key = std::move(key);
+    rep_->multi_cache_key = ParseHandleKey(rep_->options, rep_->table_id);
   }
 }
 
@@ -95,7 +101,7 @@ Status Table::Open(const Options& options, RandomAccessFile* file,
     rep->reader = nullptr;
     rep->footer = footer;
     *table = new Table(rep);
-    (*table)->ParseQueueKey();
+    (*table)->ParseHandleKey();
     (*table)->ReadMeta();
   }
 
@@ -183,6 +189,19 @@ void Table::ReadMeta() {
     FilterBlockReader* reader = ReadFilter();
     if (reader != nullptr) {
       cache_handle = multi_queue->Insert(key, reader, &DeleteCacheFilter);
+    }
+  } else{
+    // Released but not erased
+    // load loaded_filters_number when load to queue
+    FilterBlockReader* reader = multi_queue->Value(cache_handle);
+    while(reader->FilterUnitsNumber() < loaded_filters_number
+           && reader->CanBeLoaded()){
+      if(reader->LoadFilter().ok()){
+        // do not use bloom filter
+        multi_queue->Erase(rep_->multi_cache_key);
+        cache_handle = nullptr;
+        break ;
+      }
     }
   }
 

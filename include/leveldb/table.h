@@ -60,6 +60,8 @@ class LEVELDB_EXPORT Table {
   // be close to the file length.
   uint64_t ApproximateOffsetOf(const Slice& key) const;
 
+  static std::string ParseHandleKey(const Options& options, uint64_t file_id);
+
  private:
   friend class TableCache;
   struct Rep;
@@ -80,7 +82,7 @@ class LEVELDB_EXPORT Table {
 
   Rep* const rep_;
 
-  void ParseQueueKey();
+  void ParseHandleKey();
 };
 
 }  // namespace leveldb

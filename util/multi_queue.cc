@@ -204,15 +204,33 @@ class InternalMultiQueue : public MultiQueue {
     }
   }
 
-  void Erase(const Slice& key) override {
+  void Release(const Slice& key) override {
     MutexLock l(&mutex_);
     auto iter = map_.find(key.ToString());
     if (iter != map_.end()) {
       QueueHandle* queue_handle = iter->second;
       while(queue_handle->reader->CanBeEvict()) {
-        EvictHandle(queue_handle);
-        usage_ -= queue_handle->reader->OneUnitSize();
+        if(EvictHandle(queue_handle).ok()){
+          usage_ -= queue_handle->reader->OneUnitSize();
+        }else{
+          Erase(key);
+          break ;
+        }
       }
+    }
+  }
+
+  void Erase(const Slice& key) override {
+    MutexLock l(&mutex_);
+    auto iter = map_.find(key.ToString());
+    if (iter != map_.end()) {
+      QueueHandle* queue_handle = iter->second;
+      SingleQueue* queue = FindQueue(queue_handle);
+      if (queue != nullptr) {
+        usage_ -= queue_handle->reader->Size();
+        queue->Erase(queue_handle);
+      }
+      map_.erase(key.ToString());
     }
   }
 
@@ -292,20 +310,24 @@ class InternalMultiQueue : public MultiQueue {
     return false;
   }
 
-  void LoadHandle(QueueHandle* handle) EXCLUSIVE_LOCKS_REQUIRED(mutex_){
+  Status LoadHandle(QueueHandle* handle) EXCLUSIVE_LOCKS_REQUIRED(mutex_){
     size_t number = handle->reader->FilterUnitsNumber();
-    assert(number + 1 <= filters_number);
-    queues_[number]->Remove(handle);
-    queues_[number + 1]->Append(handle);
-    handle->reader->LoadFilter();
+    if(number + 1 <= filters_number) {
+      queues_[number]->Remove(handle);
+      queues_[number + 1]->Append(handle);
+      return handle->reader->LoadFilter();
+    }
+    return Status::Corruption("There is a full reader!");
   }
 
-  void EvictHandle(QueueHandle* handle) EXCLUSIVE_LOCKS_REQUIRED(mutex_){
+  Status EvictHandle(QueueHandle* handle) EXCLUSIVE_LOCKS_REQUIRED(mutex_){
     size_t number = handle->reader->FilterUnitsNumber();
-    assert(number - 1 >= 0);
-    queues_[number]->Remove(handle);
-    queues_[number - 1]->Append(handle);
-    handle->reader->EvictFilter();
+    if(number - 1 >= 0) {
+      queues_[number]->Remove(handle);
+      queues_[number - 1]->Append(handle);
+      return handle->reader->EvictFilter();
+    }
+    return Status::Corruption("There is not filter units to evict!");
   }
 
   void ApplyAdjustment(const std::vector<QueueHandle*>& colds,

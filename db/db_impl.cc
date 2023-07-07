@@ -112,15 +112,14 @@ Options SanitizeOptions(const std::string& dbname,
       result.info_log = nullptr;
     }
   }
-  if(result.multi_queue){
-    result.multi_queue->SetLogger(result.info_log);
-  }
+
   if (result.block_cache == nullptr) {
     result.block_cache = NewLRUCache(8 << 20);
   }
 
   if(result.bloom_filter_adjustment && result.filter_policy){
     result.multi_queue = NewMultiQueue();
+    result.multi_queue->SetLogger(result.info_log);
   }
   return result;
 }
@@ -283,6 +282,10 @@ void DBImpl::RemoveObsoleteFiles() {
         files_to_delete.push_back(std::move(filename));
         if (type == kTableFile) {
           table_cache_->Evict(number);
+          // Delete filter block read in multi queue
+          if(options_.bloom_filter_adjustment && options_.multi_queue){
+            options_.multi_queue->Erase(Table::ParseHandleKey(options_, number));
+          }
         }
         Log(options_.info_log, "Delete type=%d #%lld\n", static_cast<int>(type),
             static_cast<unsigned long long>(number));

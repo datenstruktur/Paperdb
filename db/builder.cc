@@ -75,6 +75,10 @@ Status BuildTable(const std::string& dbname, Env* env, const Options& options,
     // Keep it
   } else {
     env->RemoveFile(fname);
+    if(options.multi_queue){
+      std::string id = Table::ParseHandleKey(options, meta->number);
+      options.multi_queue->Erase(id);
+    }
   }
   return s;
 }
