@@ -97,29 +97,28 @@ close info printing in FinishedSingleOp
 ```
 **Note**: We disable FinishedSingleOp printf in CI to track error easier.
 
-## bash shell
-we use a bash shell to wrapper benchmark command, when run benchmark through bash.sh, you can pass in your own dictionary, pass ``write`` to bash will run fillrandom benchmark:
+## benchmark bash shell
+we use a bash shell to wrapper benchmark command, when run benchmark through benchmark.sh, you can pass in your own dictionary, pass ``write`` to bash will run fillrandom benchmark:
 ```shell
-chmod +x bash.sh
-./bash.sh --model=write --db_path=/your/db/path
+./benchmark.sh --model=write --db_path=/your/db/path
 ```
 
 If you want to use default dictionary, just run:
 ```shell
-./bash.sh --model=write
+./benchmark.sh --model=write
 ```
 pass ``read`` to bash will run readrandom benchmark:
 
 ```shell
-./bash.sh --model=read
+./benchmark.sh --model=read
 ```
 pass ``clean`` to bash will run destroy db, file will be deleted:
 ```shell
-./bash.sh --model=clean
+./benchamrk.sh --model=clean
 ```
 pass ``all`` to bash wll run fillrandom and readrandom together
 ```shell
-./bash.sh --model=all
+./benchmark.sh --model=all
 ```
 ## benchmark setup
 
