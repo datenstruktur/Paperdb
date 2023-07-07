@@ -177,7 +177,7 @@ We also use thread sanitizers to check the code for the jobs mentioned above in 
 - Using multi thread to speed up filter units loading in multi queue, see [about implementing multi threads](https://github.com/WangTingZheng/Paperdb/discussions/14).
 - Using shared hash in this paper[3] to reduce multi bloom filter look up overhead.
 - Hotness inheritance after compaction in ATC version of paper[4], see [about implementing hotness inheritance](https://github.com/WangTingZheng/Paperdb/discussions/13) in discussions.
-- Using perf tool to find code can be optimized.
+- Using perf tool to find code can be optimized.[8]
 - Reimplement ElasticBF to get rid of the unit test, sanitizers and benchmark, see [about reimplementing](https://github.com/WangTingZheng/Paperdb/discussions/15)
 - Support YCSB, should pay attention to [FalsePositiveRate function](https://github.com/WangTingZheng/Paperdb/blob/242b1b92cf97453d7750ea6f630cb490bb14feb7/db/c.cc#L140) in db/c.cc
 
@@ -209,3 +209,5 @@ I created two pr to LevelDB during implementing ElasticBF:
 [6] Chen J, Chen L, Wang S, et al. HotRing: A Hotspot-Aware In-Memory Key-Value Store[C]//FAST. 2020: 239-252.
 
 [7] Lu L, Pillai T S, Gopalakrishnan H, et al. Wisckey: Separating keys from values in ssd-conscious storage[J]. ACM Transactions on Storage (TOS), 2017, 13(1): 1-28.
+
+[8] Ash1n2. 差分火焰图，让你的代码优化验证事半功倍. https://zhuanlan.zhihu.com/p/639996512. 2023.
