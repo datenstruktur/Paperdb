@@ -183,7 +183,7 @@ We also use thread sanitizers to check the code for the jobs mentioned above in 
 
 # Next Paper
 
-Next paper to implement maybe AC-Key[5] or HotRing[6] or **WiscKey[7]**, see [some ideas about implementing Wisckey](https://github.com/WangTingZheng/Paperdb/discussions/12).
+Next paper to implement maybe AC-Key[5] or HotRing[6] or **WiscKey[7]**, see [some ideas about implementing Wisckey](https://github.com/WangTingZheng/Paperdb/discussions/12). For Hotring, there is a [hashtable](https://github.com/facebook/rocksdb/tree/main/utilities/persistent_cache) in RocksDB with unit test and benchmark, we can modified it to implement Hotring.
 
 ---
 # Related PR to LevelDB
