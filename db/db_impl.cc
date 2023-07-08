@@ -176,15 +176,18 @@ DBImpl::~DBImpl() {
   delete logfile_;
   delete table_cache_;
 
-  if (owns_info_log_) {
-    delete options_.info_log;
-  }
   if (owns_cache_) {
     delete options_.block_cache;
   }
 
   if(options_.bloom_filter_adjustment && options_.filter_policy) {
     delete options_.multi_queue;
+  }
+
+  // we want to log adjustment time in ~InternalMultiQueue
+  // info log must be deleted after delete multi queue
+  if (owns_info_log_) {
+    delete options_.info_log;
   }
 }
 
@@ -283,8 +286,9 @@ void DBImpl::RemoveObsoleteFiles() {
         if (type == kTableFile) {
           table_cache_->Evict(number);
           // Delete filter block read in multi queue
-          if(options_.bloom_filter_adjustment && options_.multi_queue){
-            options_.multi_queue->Erase(Table::ParseHandleKey(options_, number));
+          if(options_.multi_queue){
+            std::string key = Table::ParseHandleKey(options_, number);
+            options_.multi_queue->Erase(key);
           }
         }
         Log(options_.info_log, "Delete type=%d #%lld\n", static_cast<int>(type),

@@ -63,7 +63,7 @@ cat LOG | grep "Adjustment:"
 ```
 **Note1**: You must delete cmake cache file(such as cmake-build-debug) before switching ```USE_ADJUSTMENT_LOGGING``` parameters' value
 
-**Note2**: Adjustment only be active when db has a lot of KV(100GB in paper), and a lot of get requests(10milion in paper).
+**Note2**: We you only logging adjustment every 1000 adjustment times, but When db is destroyed, We will log sum of adjustment time.
 
 # Unit test and benchmark
 

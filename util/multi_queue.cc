@@ -139,7 +139,8 @@ class SingleQueue {
 
 class InternalMultiQueue : public MultiQueue {
  public:
-  explicit InternalMultiQueue() : usage_(0), logger_(nullptr) {
+  explicit InternalMultiQueue() : usage_(0), logger_(nullptr),
+                                  adjustment_time_(0), adjustment_loop_(0) {
     queues_.resize(filters_number + 1);
     for (int i = 0; i < filters_number + 1; i++) {
       queues_[i] = new SingleQueue();
@@ -147,6 +148,8 @@ class InternalMultiQueue : public MultiQueue {
   }
 
   ~InternalMultiQueue() override {
+    // save adjustment times last time
+    LoggingAdjustment();
     for (int i = 0; i < filters_number + 1; i++) {
       delete queues_[i];
       queues_[i] = nullptr;
@@ -248,6 +251,8 @@ class InternalMultiQueue : public MultiQueue {
  private:
   size_t usage_ GUARDED_BY(mutex_);
   Logger* logger_ GUARDED_BY(mutex_);
+  uint64_t adjustment_time_ GUARDED_BY(mutex_);
+  uint64_t adjustment_loop_ GUARDED_BY(mutex_);
 
   mutable port::Mutex mutex_;
 
@@ -295,17 +300,25 @@ class InternalMultiQueue : public MultiQueue {
     adjusted_ios += hot->reader->LoadIOs();
 
     if (adjusted_ios < original_ios) {
-#ifdef USE_ADJUSTMENT_LOGGING
-      Log(logger_,
-          "Adjustment: Cold BF Number: %zu, Filter Units number of Hot BF: "
-          "%zu, adjusted "
-          "ios: %f, original ios: %f",
-          cold.size(), hot->reader->FilterUnitsNumber(), adjusted_ios,
-          original_ios);
-#endif
+      adjustment_time_++;
+      LoggingAdjustmentEveryLoop();
       return true;
     }
     return false;
+  }
+
+  void LoggingAdjustmentEveryLoop()  EXCLUSIVE_LOCKS_REQUIRED(mutex_){
+#ifdef USE_ADJUSTMENT_LOGGING
+    // reduce logging overhead by write information every 1000 adjustments
+    if(adjustment_time_ > adjustment_loop_ * 1000){
+      adjustment_loop_ ++;
+      LoggingAdjustment();
+    }
+#endif
+  }
+
+  void LoggingAdjustment()  EXCLUSIVE_LOCKS_REQUIRED(mutex_){
+    Log(logger_, "Adjustment: apply %lu times until now", adjustment_time_);
   }
 
   Status LoadHandle(QueueHandle* handle) EXCLUSIVE_LOCKS_REQUIRED(mutex_){
