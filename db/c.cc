@@ -139,7 +139,7 @@ struct leveldb_filterpolicy_t : public FilterPolicy {
 
   // todo: false positive rate is useless for this filter?
   // maybe ycsb will use it
-  double  FalsePositiveRate() const override { return 0; }
+  double  FalsePositiveRate() const override { return false_positive_rate_(); }
 
   void* state_;
   void (*destructor_)(void*);
@@ -149,6 +149,8 @@ struct leveldb_filterpolicy_t : public FilterPolicy {
                    size_t* filter_length);
   uint8_t (*key_match_)(void*, const char* key, size_t length,
                         const char* filter, size_t filter_length);
+
+  double (*false_positive_rate_)();
 };
 
 struct leveldb_env_t {
@@ -464,13 +466,15 @@ leveldb_filterpolicy_t* leveldb_filterpolicy_create(
                            size_t* filter_length),
     uint8_t (*key_may_match)(void*, const char* key, size_t length,
                              const char* filter, size_t filter_length),
-    const char* (*name)(void*)) {
+    const char* (*name)(void*),
+    double (*false_positive_rate)()) {
   leveldb_filterpolicy_t* result = new leveldb_filterpolicy_t;
   result->state_ = state;
   result->destructor_ = destructor;
   result->create_ = create_filter;
   result->key_match_ = key_may_match;
   result->name_ = name;
+  result->false_positive_rate_ = false_positive_rate;
   return result;
 }
 
