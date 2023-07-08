@@ -296,14 +296,12 @@ class InternalMultiQueue : public MultiQueue {
 
     if (adjusted_ios < original_ios) {
 #ifdef USE_ADJUSTMENT_LOGGING
-      if (logger_ != nullptr) {
-        Log(logger_,
-            "Adjustment: Cold BF Number: %zu, Filter Units number of Hot BF: "
-            "%zu, adjusted "
-            "ios: %f, original ios: %f",
-            cold.size(), hot->reader->FilterUnitsNumber(), adjusted_ios,
-            original_ios);
-      }
+      Log(logger_,
+          "Adjustment: Cold BF Number: %zu, Filter Units number of Hot BF: "
+          "%zu, adjusted "
+          "ios: %f, original ios: %f",
+          cold.size(), hot->reader->FilterUnitsNumber(), adjusted_ios,
+          original_ios);
 #endif
       return true;
     }
