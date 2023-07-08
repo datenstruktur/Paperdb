@@ -179,7 +179,7 @@ class InternalMultiQueue : public MultiQueue {
     SingleQueue* single_queue = FindQueue(queue_handle);
     if(single_queue){
       // access time++ first
-      bool is_exist = reader->KeyMayMatch(block_offset, key);
+      bool is_existed = reader->KeyMayMatch(block_offset, key);
 
       // change to hot handle
       single_queue->MoveToMRU(queue_handle);
@@ -191,7 +191,7 @@ class InternalMultiQueue : public MultiQueue {
         Adjustment(queue_handle, sn);
       }
 
-      return is_exist;
+      return is_existed;
     }
     return true;
   }
