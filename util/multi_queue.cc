@@ -65,6 +65,8 @@ class SingleQueue {
     e->reader = reader;
     e->deleter = deleter;
     e->key_length = key.size();
+    // mark as non internal node
+    // key() can be called
     e->internal_node = false;
     std::memcpy(e->key_data, key.data(), key.size());
     Queue_Append(e);
@@ -148,7 +150,7 @@ class InternalMultiQueue : public MultiQueue {
   }
 
   ~InternalMultiQueue() override {
-    // save adjustment times last time by force
+    // save adjustment times when db is over by force
     Log(logger_, "Adjustment: Apply %zu times until now", adjustment_time_);
     for (int i = 0; i < filters_number + 1; i++) {
       delete queues_[i];
@@ -176,14 +178,20 @@ class InternalMultiQueue : public MultiQueue {
     // found queue_handle where is in by reader's filter units number
     SingleQueue* single_queue = FindQueue(queue_handle);
     if(single_queue){
+      // access time++ first
+      bool is_exist = reader->KeyMayMatch(block_offset, key);
+
+      // change to hot handle
       single_queue->MoveToMRU(queue_handle);
+
+      // try to apply adjustment
       ParsedInternalKey parsedInternalKey;
       if (ParseInternalKey(key, &parsedInternalKey)) {
         SequenceNumber sn = parsedInternalKey.sequence;
         Adjustment(queue_handle, sn);
       }
 
-      return reader->KeyMayMatch(block_offset, key);
+      return is_exist;
     }
     return true;
   }
@@ -324,7 +332,7 @@ class InternalMultiQueue : public MultiQueue {
 
   Status LoadHandle(QueueHandle* handle) EXCLUSIVE_LOCKS_REQUIRED(mutex_){
     size_t number = handle->reader->FilterUnitsNumber();
-    if(number + 1 <= filters_number) {
+    if(number < filters_number) {
       queues_[number]->Remove(handle);
       queues_[number + 1]->Append(handle);
       return handle->reader->LoadFilter();
@@ -334,7 +342,7 @@ class InternalMultiQueue : public MultiQueue {
 
   Status EvictHandle(QueueHandle* handle) EXCLUSIVE_LOCKS_REQUIRED(mutex_){
     size_t number = handle->reader->FilterUnitsNumber();
-    if(number - 1 >= 0) {
+    if(number >= 1) {
       queues_[number]->Remove(handle);
       queues_[number - 1]->Append(handle);
       return handle->reader->EvictFilter();
@@ -344,11 +352,27 @@ class InternalMultiQueue : public MultiQueue {
 
   void ApplyAdjustment(const std::vector<QueueHandle*>& colds,
                       QueueHandle* hot) EXCLUSIVE_LOCKS_REQUIRED(mutex_){
+    Status s;
     for (QueueHandle* cold : colds) {
-      EvictHandle(cold);
+      s = EvictHandle(cold);
+      if(!s.ok()){
+#ifdef USE_ADJUSTMENT_LOGGING
+        Log(logger_, "Adjustment: Evict colds handles failed, message is %s",
+            s.ToString().c_str());
+#endif
+        adjustment_time_--;
+        return ;
+      }
     }
 
-    LoadHandle(hot);
+    s = LoadHandle(hot);
+    if(!s.ok()){
+#ifdef USE_ADJUSTMENT_LOGGING
+      Log(logger_, "Adjustment: Load hot handle failed, message is %s",
+          s.ToString().c_str());
+#endif
+      adjustment_time_--;
+    }
   }
 
   void Adjustment(QueueHandle* hot_handle, SequenceNumber sn)

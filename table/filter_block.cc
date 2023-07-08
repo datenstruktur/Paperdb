@@ -159,7 +159,7 @@ FilterBlockReader::FilterBlockReader(const FilterPolicy* policy,
   }
 }
 
-void FilterBlockReader::UpdateState(const leveldb::Slice& key) {
+void FilterBlockReader::UpdateState(const Slice& key) {
   MutexLock l(&mutex_);
   ParsedInternalKey parsedInternalKey;
   if (ParseInternalKey(key, &parsedInternalKey)) {
