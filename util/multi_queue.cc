@@ -140,7 +140,7 @@ class SingleQueue {
 class InternalMultiQueue : public MultiQueue {
  public:
   explicit InternalMultiQueue() : usage_(0), logger_(nullptr),
-                                  adjustment_time_(0), adjustment_loop_(0) {
+                                  adjustment_time_(0) {
     queues_.resize(filters_number + 1);
     for (int i = 0; i < filters_number + 1; i++) {
       queues_[i] = new SingleQueue();
@@ -148,8 +148,8 @@ class InternalMultiQueue : public MultiQueue {
   }
 
   ~InternalMultiQueue() override {
-    // save adjustment times last time
-    LoggingAdjustment();
+    // save adjustment times last time by force
+    Log(logger_, "Adjustment: Apply %zu times until now", adjustment_time_);
     for (int i = 0; i < filters_number + 1; i++) {
       delete queues_[i];
       queues_[i] = nullptr;
@@ -251,8 +251,9 @@ class InternalMultiQueue : public MultiQueue {
  private:
   size_t usage_ GUARDED_BY(mutex_);
   Logger* logger_ GUARDED_BY(mutex_);
-  uint64_t adjustment_time_ GUARDED_BY(mutex_);
-  uint64_t adjustment_loop_ GUARDED_BY(mutex_);
+  // 2^32-1 at least (42,9496,7295)
+  // 2^64-1 at most  (1844,6744,0737,0955,1615)
+  size_t adjustment_time_ GUARDED_BY(mutex_);
 
   mutable port::Mutex mutex_;
 
@@ -284,45 +285,41 @@ class InternalMultiQueue : public MultiQueue {
     return nullptr;
   }
 
-  bool CanBeAdjusted(const std::vector<QueueHandle*>& cold, QueueHandle* hot)
+  bool CanBeAdjusted(const std::vector<QueueHandle*>& colds, QueueHandle* hot)
       EXCLUSIVE_LOCKS_REQUIRED(mutex_){
     double original_ios = 0;
-    for (QueueHandle* handle : cold) {
+    for (QueueHandle* handle : colds) {
       if (handle && !handle->reader->CanBeEvict()) return false;
       original_ios += handle->reader->IOs();
     }
     original_ios += hot->reader->IOs();
 
     double adjusted_ios = 0;
-    for (QueueHandle* handle : cold) {
+    for (QueueHandle* handle : colds) {
       adjusted_ios += handle->reader->EvictIOs();
     }
     adjusted_ios += hot->reader->LoadIOs();
 
     if (adjusted_ios < original_ios) {
       adjustment_time_++;
-      LoggingAdjustmentEveryLoop();
+      LoggingAdjustmentInformation(colds.size(), hot->reader->FilterUnitsNumber(),
+                                   adjusted_ios, original_ios);
       return true;
     }
     return false;
   }
 
-  void LoggingAdjustmentEveryLoop()  EXCLUSIVE_LOCKS_REQUIRED(mutex_){
+  void LoggingAdjustmentInformation(size_t cold_number, size_t hot_units_number,
+                                  double adjusted_ios, double original_ios)
+      EXCLUSIVE_LOCKS_REQUIRED(mutex_){
 #ifdef USE_ADJUSTMENT_LOGGING
-    // reduce logging overhead by write information every 1000 adjustments
-    if(adjustment_time_ > adjustment_loop_ * 1000){
-      adjustment_loop_ ++;
-      LoggingAdjustment();
-    }
+    Log(logger_,
+        "Adjustment: Cold BF Number: %zu, Filter Units number of Hot BF: "
+        "%zu, adjusted "
+        "ios: %f, original ios: %f"
+        "adjust %" PRIu64 "times now",
+        cold_number, hot_units_number, adjusted_ios, original_ios, adjustment_time_);
 #endif
-  }
-
-  void LoggingAdjustment()  EXCLUSIVE_LOCKS_REQUIRED(mutex_){
-    // uint64_t is unsigned long long in macos
-    // in windows and linux, uint64_t is unsigned long long
-    // PRIu64 int 64-bit CPU is lu, llu in 32-bit CPU
-    // Just see https://stackoverflow.com/questions/16859500/what-is-priu64-in-c
-    Log(logger_, "Adjustment: apply %" PRIu64 "times until now", adjustment_time_);
   }
 
   Status LoadHandle(QueueHandle* handle) EXCLUSIVE_LOCKS_REQUIRED(mutex_){
