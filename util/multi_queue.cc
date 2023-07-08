@@ -1,7 +1,7 @@
 #include "leveldb/multi_queue.h"
 
 #include <unordered_map>
-
+#include <cinttypes>
 #include "mutexlock.h"
 
 namespace leveldb {
@@ -320,9 +320,9 @@ class InternalMultiQueue : public MultiQueue {
   void LoggingAdjustment()  EXCLUSIVE_LOCKS_REQUIRED(mutex_){
     // uint64_t is unsigned long long in macos
     // in windows and linux, uint64_t is unsigned long long
-    // cast to unsigned long long to fix all os
-    unsigned long long times = static_cast<unsigned long long>(adjustment_time_);
-    Log(logger_, "Adjustment: apply %llu times until now", times);
+    // PRIu64 int 64-bit CPU is lu, llu in 32-bit CPU
+    // Just see https://stackoverflow.com/questions/16859500/what-is-priu64-in-c
+    Log(logger_, "Adjustment: apply %" PRIu64 "times until now", adjustment_time_);
   }
 
   Status LoadHandle(QueueHandle* handle) EXCLUSIVE_LOCKS_REQUIRED(mutex_){
