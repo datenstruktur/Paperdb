@@ -47,7 +47,7 @@ fi
 # clean and compile project
 rm -rf build
 mkdir build && cd build
-cmake -DCMAKE_BUILD_TYPE=Release -DUSE_ADJUSTMENT_LOGGING=ON .. && cmake --build .
+cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build .
 
 benchmark="./db_bench --num=$num --print_process=0 --value_size=$value_size --reads=$reads --bloom_bits=$bloom_bits"
 
