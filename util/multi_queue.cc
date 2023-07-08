@@ -318,7 +318,11 @@ class InternalMultiQueue : public MultiQueue {
   }
 
   void LoggingAdjustment()  EXCLUSIVE_LOCKS_REQUIRED(mutex_){
-    Log(logger_, "Adjustment: apply %lu times until now", adjustment_time_);
+    // uint64_t is unsigned long long in macos
+    // in windows and linux, uint64_t is unsigned long long
+    // cast to unsigned long long to fix all os
+    unsigned long long times = static_cast<unsigned long long>(adjustment_time_);
+    Log(logger_, "Adjustment: apply %llu times until now", times);
   }
 
   Status LoadHandle(QueueHandle* handle) EXCLUSIVE_LOCKS_REQUIRED(mutex_){
