@@ -228,13 +228,8 @@ Status FilterBlockReader::LoadFilterInternal() {
   return s;
 }
 
-Status FilterBlockReader::LoadFilter() {
-  MutexLock l(&mutex_);
-  return LoadFilterInternal();
-}
-
-Status FilterBlockReader::EvictFilter() {
-  MutexLock l(&mutex_);
+Status FilterBlockReader::EvictFilterInternal() {
+  mutex_.AssertHeld();
   if (filter_units.empty())
     return Status::Corruption("there is no filter can be  evicted");
 
@@ -248,14 +243,53 @@ Status FilterBlockReader::EvictFilter() {
   return Status::OK();
 }
 
-Status FilterBlockReader::InitLoadFilter(){
+Status FilterBlockReader::LoadFilter() {
+  MutexLock l(&mutex_);
+  return LoadFilterInternal();
+}
+
+Status FilterBlockReader::EvictFilter() {
+  MutexLock l(&mutex_);
+  return EvictFilterInternal();
+}
+
+Status FilterBlockReader::InitLoadFilter() {
+  MutexLock l(&mutex_);
   Status s;
-  while(FilterUnitsNumberInternal() < 2){
+  while (FilterUnitsNumberInternal() < 2) {
     s = LoadFilterInternal();
-    if(!s.ok()){
+    if (!s.ok()) {
       return s;
     }
   }
+  return s;
+}
+
+Status FilterBlockReader::GoBackToInitFilter() {
+  MutexLock l(&mutex_);
+  if (init_units_number_ < 0) {
+    return Status::Corruption("init units number is less than 0");
+  }
+
+  if (init_units_number_ > filters_number) {
+    return Status::Corruption("init units number is too much");
+  }
+
+  Status s;
+  while (filter_units.size() < init_units_number_) {
+    s = LoadFilterInternal();
+    if (!s.ok()) {
+      return s;
+    }
+  }
+
+  while (filter_units.size() > init_units_number_) {
+    s = EvictFilterInternal();
+    if (!s.ok()) {
+      return s;
+    }
+  }
+
   return s;
 }
 

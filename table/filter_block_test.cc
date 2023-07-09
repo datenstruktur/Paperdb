@@ -41,20 +41,41 @@ class TestHashFilter : public FilterPolicy {
 
 class FilterBlockTest : public testing::Test {
  public:
+  Slice FinishBuilder(FilterBlockBuilder& builder) {
+    BlockHandle handle;
+    const std::vector<std::string>& filters = builder.ReturnFilters();
+    file.WriteRawFilters(filters, &handle);
+    Slice block = builder.Finish(handle);
+    return block;
+  }
+
+  FilterBlockReader* GetReader(Slice& block,
+                               const FilterPolicy* policy = nullptr) {
+    char* filter_meta = new char[block.size()];
+    memcpy(filter_meta, block.data(), block.size());
+    Slice filter_meta_data(filter_meta, block.size());
+    StringSource* source = file.GetSource();
+    FilterBlockReader* reader = new FilterBlockReader(
+        policy == nullptr ? &policy_ : policy, filter_meta_data, source);
+    reader->InitLoadFilter();
+    return reader;
+  }
+
+  FilterBlockReader* GetReader(FilterBlockBuilder& builder,
+                               const FilterPolicy* policy = nullptr) {
+    Slice block = FinishBuilder(builder);
+    return GetReader(block, policy);
+  }
+
   TestHashFilter policy_;
+  FileImpl file;
 };
 
 TEST_F(FilterBlockTest, EmptyBuilder) {
-  if(filters_number <= 0) return ;
+  if (filters_number <= 0) return;
   FilterBlockBuilder builder(&policy_);
-  FileImpl file;
-  BlockHandle handle;
-  file.WriteRawFilters(builder.ReturnFilters(), &handle);
 
-  Slice block = builder.Finish(handle);
-  char* filter_meta = new char[block.size()];
-  memcpy(filter_meta, block.data(), block.size());
-  Slice filter_meta_data(filter_meta, block.size());
+  Slice block = FinishBuilder(builder);
 
   ASSERT_EQ(
       "\\x00\\x00\\x00\\x00"                      // bitmap len
@@ -69,15 +90,15 @@ TEST_F(FilterBlockTest, EmptyBuilder) {
           "\\x0b",           // baselg
       EscapeString(block));
 
-  StringSource* source = file.GetSource();
-  FilterBlockReader reader(&policy_, filter_meta_data, source);
-  reader.InitLoadFilter();
-  ASSERT_TRUE(reader.KeyMayMatch(0, "foo"));
-  ASSERT_TRUE(reader.KeyMayMatch(100000, "foo"));
+  FilterBlockReader* reader = GetReader(block);
+  ASSERT_TRUE(reader->KeyMayMatch(0, "foo"));
+  ASSERT_TRUE(reader->KeyMayMatch(100000, "foo"));
+
+  delete reader;
 }
 
 TEST_F(FilterBlockTest, SingleChunk) {
-  if(filters_number <= 0) return ;
+  if (filters_number <= 0) return;
   FilterBlockBuilder builder(&policy_);
   builder.StartBlock(100);
   builder.AddKey("foo");
@@ -88,15 +109,7 @@ TEST_F(FilterBlockTest, SingleChunk) {
   builder.StartBlock(300);
   builder.AddKey("hello");
 
-  FileImpl file;
-  BlockHandle handle;
-  const std::vector<std::string>& filters = builder.ReturnFilters();
-  file.WriteRawFilters(filters, &handle);
-  Slice block = builder.Finish(handle);
-
-  char* filter_meta = new char[block.size()];
-  memcpy(filter_meta, block.data(), block.size());
-  Slice filter_meta_data(filter_meta, block.size());
+  Slice block = FinishBuilder(builder);
 
   std::string escapestring = EscapeString(block);
   // remove filter's bitmap
@@ -116,21 +129,21 @@ TEST_F(FilterBlockTest, SingleChunk) {
           "\\x0b",
       escapestring);
 
-  StringSource* source = file.GetSource();
-  FilterBlockReader reader(&policy_, filter_meta_data, source);
-  reader.InitLoadFilter();
+  FilterBlockReader* reader = GetReader(block);
 
-  ASSERT_TRUE(reader.KeyMayMatch(100, "foo"));
-  ASSERT_TRUE(reader.KeyMayMatch(100, "bar"));
-  ASSERT_TRUE(reader.KeyMayMatch(100, "box"));
-  ASSERT_TRUE(reader.KeyMayMatch(100, "hello"));
-  ASSERT_TRUE(reader.KeyMayMatch(100, "foo"));
-  ASSERT_TRUE(!reader.KeyMayMatch(100, "missing"));
-  ASSERT_TRUE(!reader.KeyMayMatch(100, "other"));
+  ASSERT_TRUE(reader->KeyMayMatch(100, "foo"));
+  ASSERT_TRUE(reader->KeyMayMatch(100, "bar"));
+  ASSERT_TRUE(reader->KeyMayMatch(100, "box"));
+  ASSERT_TRUE(reader->KeyMayMatch(100, "hello"));
+  ASSERT_TRUE(reader->KeyMayMatch(100, "foo"));
+  ASSERT_TRUE(!reader->KeyMayMatch(100, "missing"));
+  ASSERT_TRUE(!reader->KeyMayMatch(100, "other"));
+
+  delete reader;
 }
 
 TEST_F(FilterBlockTest, MultiChunk) {
-  if(filters_number <= 0) return ;
+  if (filters_number <= 0) return;
   FilterBlockBuilder builder(&policy_);
 
   // First filter
@@ -151,47 +164,37 @@ TEST_F(FilterBlockTest, MultiChunk) {
   builder.AddKey("hello");
 
   // create reader
-  FileImpl file;
-  const std::vector<std::string>& filter = builder.ReturnFilters();
-  BlockHandle handle;
-  file.WriteRawFilters(filter, &handle);
-  Slice block = builder.Finish(handle);
-
-  char* filter_meta = new char[block.size()];
-  memcpy(filter_meta, block.data(), block.size());
-  Slice filter_meta_data(filter_meta, block.size());
-
-  StringSource* source = file.GetSource();
-  FilterBlockReader reader(&policy_, filter_meta_data, source);
-  reader.InitLoadFilter();
+  FilterBlockReader* reader = GetReader(builder);
 
   // Check first filter
-  ASSERT_TRUE(reader.KeyMayMatch(0, "foo"));
-  ASSERT_TRUE(reader.KeyMayMatch(2000, "bar"));
-  ASSERT_TRUE(!reader.KeyMayMatch(0, "box"));
-  ASSERT_TRUE(!reader.KeyMayMatch(0, "hello"));
+  ASSERT_TRUE(reader->KeyMayMatch(0, "foo"));
+  ASSERT_TRUE(reader->KeyMayMatch(2000, "bar"));
+  ASSERT_TRUE(!reader->KeyMayMatch(0, "box"));
+  ASSERT_TRUE(!reader->KeyMayMatch(0, "hello"));
 
   // Check second filter
-  ASSERT_TRUE(reader.KeyMayMatch(3100, "box"));
-  ASSERT_TRUE(!reader.KeyMayMatch(3100, "foo"));
-  ASSERT_TRUE(!reader.KeyMayMatch(3100, "bar"));
-  ASSERT_TRUE(!reader.KeyMayMatch(3100, "hello"));
+  ASSERT_TRUE(reader->KeyMayMatch(3100, "box"));
+  ASSERT_TRUE(!reader->KeyMayMatch(3100, "foo"));
+  ASSERT_TRUE(!reader->KeyMayMatch(3100, "bar"));
+  ASSERT_TRUE(!reader->KeyMayMatch(3100, "hello"));
 
   // Check third filter (empty)
-  ASSERT_TRUE(!reader.KeyMayMatch(4100, "foo"));
-  ASSERT_TRUE(!reader.KeyMayMatch(4100, "bar"));
-  ASSERT_TRUE(!reader.KeyMayMatch(4100, "box"));
-  ASSERT_TRUE(!reader.KeyMayMatch(4100, "hello"));
+  ASSERT_TRUE(!reader->KeyMayMatch(4100, "foo"));
+  ASSERT_TRUE(!reader->KeyMayMatch(4100, "bar"));
+  ASSERT_TRUE(!reader->KeyMayMatch(4100, "box"));
+  ASSERT_TRUE(!reader->KeyMayMatch(4100, "hello"));
 
   // Check last filter
-  ASSERT_TRUE(reader.KeyMayMatch(9000, "box"));
-  ASSERT_TRUE(reader.KeyMayMatch(9000, "hello"));
-  ASSERT_TRUE(!reader.KeyMayMatch(9000, "foo"));
-  ASSERT_TRUE(!reader.KeyMayMatch(9000, "bar"));
+  ASSERT_TRUE(reader->KeyMayMatch(9000, "box"));
+  ASSERT_TRUE(reader->KeyMayMatch(9000, "hello"));
+  ASSERT_TRUE(!reader->KeyMayMatch(9000, "foo"));
+  ASSERT_TRUE(!reader->KeyMayMatch(9000, "bar"));
+
+  delete reader;
 }
 
 TEST_F(FilterBlockTest, LoadAndExcit) {
-  if(filters_number <= 0) return ;
+  if (filters_number <= 0) return;
   FilterBlockBuilder builder(&policy_);
 
   // First filter
@@ -211,38 +214,26 @@ TEST_F(FilterBlockTest, LoadAndExcit) {
   builder.AddKey("box");
   builder.AddKey("hello");
 
-  FileImpl file;
-  const std::vector<std::string>& filter = builder.ReturnFilters();
-  BlockHandle handle;
-  file.WriteRawFilters(filter, &handle);
-  Slice block = builder.Finish(handle);
-
-  char* filter_meta = new char[block.size()];
-  memcpy(filter_meta, block.data(), block.size());
-  Slice filter_meta_data(filter_meta, block.size());
-
-  StringSource* source = file.GetSource();
-  FilterBlockReader reader(&policy_, filter_meta_data, source);
-  reader.InitLoadFilter();
-
+  FilterBlockReader* reader = GetReader(builder);
   // todo can automatically adapt to different parameters
   for (int i = loaded_filters_number; i > 0; i--) {
-    ASSERT_EQ(reader.FilterUnitsNumber(), i);
-    ASSERT_TRUE(reader.EvictFilter().ok());
+    ASSERT_EQ(reader->FilterUnitsNumber(), i);
+    ASSERT_TRUE(reader->EvictFilter().ok());
   }
 
-  ASSERT_FALSE(reader.EvictFilter().ok());
+  ASSERT_FALSE(reader->EvictFilter().ok());
 
   for (int i = 0; i < filters_number; i++) {
-    ASSERT_EQ(reader.FilterUnitsNumber(), i);
-    ASSERT_TRUE(reader.LoadFilter().ok());
+    ASSERT_EQ(reader->FilterUnitsNumber(), i);
+    ASSERT_TRUE(reader->LoadFilter().ok());
   }
 
-  ASSERT_FALSE(reader.LoadFilter().ok());
+  ASSERT_FALSE(reader->LoadFilter().ok());
+  delete reader;
 }
 
 TEST_F(FilterBlockTest, Hotness) {
-  if(filters_number <= 0) return ;
+  if (filters_number <= 0) return;
   // to support internal key
   InternalFilterPolicy policy(&policy_);
   FilterBlockBuilder builder(&policy);
@@ -254,20 +245,7 @@ TEST_F(FilterBlockTest, Hotness) {
   AppendInternalKey(&add_result, add_key);
   builder.AddKey(add_result);
 
-  // write bitmap, create builder
-  FileImpl file;
-  BlockHandle handle;
-  const std::vector<std::string>& filters = builder.ReturnFilters();
-  file.WriteRawFilters(filters, &handle);
-  Slice block = builder.Finish(handle);
-
-  // create reader
-  char* filter_meta = new char[block.size()];
-  memcpy(filter_meta, block.data(), block.size());
-  Slice filter_meta_data(filter_meta, block.size());
-  StringSource* source = file.GetSource();
-  FilterBlockReader reader(&policy, filter_meta_data, source);
-  reader.InitLoadFilter();
+  FilterBlockReader* reader = GetReader(builder, &policy);
 
   // check
   for (uint64_t sn = 1; sn < 30000; sn++) {
@@ -275,17 +253,19 @@ TEST_F(FilterBlockTest, Hotness) {
     std::string check_result;
     AppendInternalKey(&check_result, check_key);
     // sequence number is sn
-    ASSERT_TRUE(reader.KeyMayMatch(0, check_result));
-    ASSERT_EQ(reader.AccessTime(), sn);
+    ASSERT_TRUE(reader->KeyMayMatch(0, check_result));
+    ASSERT_EQ(reader->AccessTime(), sn);
 
     // reader died in sn + 30000
-    ASSERT_FALSE(reader.IsCold(30000 + sn - 1));
-    ASSERT_TRUE(reader.IsCold(30000 + sn));
+    ASSERT_FALSE(reader->IsCold(30000 + sn - 1));
+    ASSERT_TRUE(reader->IsCold(30000 + sn));
   }
+
+  delete reader;
 }
 
 TEST_F(FilterBlockTest, Size) {
-  if(filters_number <= 0) return ;
+  if (filters_number <= 0) return;
   FilterBlockBuilder builder(&policy_);
   builder.StartBlock(100);
   builder.AddKey("foo");
@@ -329,7 +309,7 @@ TEST_F(FilterBlockTest, Size) {
 }
 
 TEST_F(FilterBlockTest, IOs) {
-  if(filters_number <= 0) return ;
+  if (filters_number <= 0) return;
   const FilterPolicy* policy = NewBloomFilterPolicy(10);
   FilterBlockBuilder builder(policy);
   builder.StartBlock(100);
@@ -341,44 +321,75 @@ TEST_F(FilterBlockTest, IOs) {
   builder.StartBlock(300);
   builder.AddKey("hello");
 
-  FileImpl file;
-  BlockHandle handle;
-  const std::vector<std::string>& filters = builder.ReturnFilters();
-  file.WriteRawFilters(filters, &handle);
-
-  Slice block = builder.Finish(handle);
-
-  char* filter_meta = new char[block.size()];
-  memcpy(filter_meta, block.data(), block.size());
-  Slice filter_meta_data(filter_meta, block.size());
-
-  StringSource* source = file.GetSource();
-  FilterBlockReader reader(policy, filter_meta_data, source);
-  reader.InitLoadFilter();
+  FilterBlockReader* reader = GetReader(builder, policy);
 
   int access = 1000;
   for (int i = 0; i < access; i++) {
-    ASSERT_TRUE(reader.KeyMayMatch(100, "foo"));
+    ASSERT_TRUE(reader->KeyMayMatch(100, "foo"));
   }
 
   double false_positive_rate = pow(0.6185, 10);
 
-  ASSERT_EQ(reader.AccessTime(), access);
+  ASSERT_EQ(reader->AccessTime(), access);
   // get ios by myself
-  ASSERT_EQ(reader.IOs(),
+  ASSERT_EQ(reader->IOs(),
             pow(false_positive_rate, loaded_filters_number) * access);
 
   if (loaded_filters_number < filters_number) {
-    ASSERT_EQ(reader.LoadIOs(),
+    ASSERT_EQ(reader->LoadIOs(),
               pow(false_positive_rate, loaded_filters_number + 1) * access);
   }
 
   if (loaded_filters_number > 1) {
-    ASSERT_EQ(reader.EvictIOs(),
+    ASSERT_EQ(reader->EvictIOs(),
               pow(false_positive_rate, loaded_filters_number - 1) * access);
   }
 
   delete policy;
+  delete reader;
+}
+
+TEST_F(FilterBlockTest, GoBackToInitFilter) {
+  if (filters_number <= 0) return;
+  FilterBlockBuilder builder(&policy_);
+
+  // First filter
+  builder.StartBlock(0);
+  builder.AddKey("foo");
+  builder.StartBlock(2000);
+  builder.AddKey("bar");
+
+  // Second filter
+  builder.StartBlock(3100);
+  builder.AddKey("box");
+
+  // Third filter is empty
+
+  // Last filter
+  builder.StartBlock(9000);
+  builder.AddKey("box");
+  builder.AddKey("hello");
+
+  FilterBlockReader* reader = GetReader(builder);
+
+  ASSERT_TRUE(reader->GoBackToInitFilter().ok());
+  ASSERT_EQ(reader->FilterUnitsNumber(), reader->LoadFilterNumber());
+
+  if (reader->CanBeEvict()) {
+    ASSERT_TRUE(reader->EvictFilter().ok());
+  }
+
+  ASSERT_TRUE(reader->GoBackToInitFilter().ok());
+  ASSERT_EQ(reader->FilterUnitsNumber(), reader->LoadFilterNumber());
+
+  if (reader->CanBeLoaded()) {
+    ASSERT_TRUE(reader->LoadFilter().ok());
+  }
+
+  ASSERT_TRUE(reader->GoBackToInitFilter().ok());
+  ASSERT_EQ(reader->FilterUnitsNumber(), reader->LoadFilterNumber());
+
+  delete reader;
 }
 
 }  // namespace leveldb

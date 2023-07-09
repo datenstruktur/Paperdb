@@ -19,12 +19,14 @@ struct Table::Rep {
   ~Rep() {
     delete index_block;
     delete reader;
-    if (options.multi_queue && handle) {
+    MultiQueue* multi_queue = options.multi_queue;
+    if (multi_queue && handle) {
       // release for this table
       // save sequence and hotness in multi queue
       // just evict all filter units
       Slice key(multi_cache_key.data(), multi_cache_key.size());
-      options.multi_queue->Release(key);
+      multi_queue->Release(key);
+      assert(multi_queue->Value(handle)->FilterUnitsNumber() == 0);
     }
   }
 
@@ -195,11 +197,10 @@ void Table::ReadMeta() {
       cache_handle = multi_queue->Insert(key, reader, &DeleteCacheFilter);
     }
   } else{
-    // Released but not erased
-    // load loaded_filters_number when load to queue
     reader = multi_queue->Value(cache_handle);
-    assert(reader->FilterUnitsNumber() == 0);
-    reader->InitLoadFilter();
+    // check filter unit number
+    assert(reader->GoBackToInitFilter().ok());
+    assert(reader->FilterUnitsNumber() == reader->LoadFilterNumber());
   }
 
   rep_->handle = cache_handle;

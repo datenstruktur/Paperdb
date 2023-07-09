@@ -224,7 +224,9 @@ class InternalMultiQueue : public MultiQueue {
         if(EvictHandle(queue_handle).ok()){
           usage_ -= queue_handle->reader->OneUnitSize();
         }else{
+          mutex_.Unlock();
           Erase(key);
+          mutex_.Lock();
           break ;
         }
       }
