@@ -1,7 +1,6 @@
 #include "leveldb/multi_queue.h"
 
 #include <unordered_map>
-#include <cinttypes>
 #include "mutexlock.h"
 
 namespace leveldb {
