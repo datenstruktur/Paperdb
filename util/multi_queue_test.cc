@@ -47,7 +47,8 @@ class MultiQueueTest : public testing::Test {
 
     StringSource* source = file->GetSource();
     file_impl_.push_back(file);
-    return new FilterBlockReader(internal_policy_, filter_meta_data, source);
+    FilterBlockReader* reader = new FilterBlockReader(internal_policy_, filter_meta_data, source);
+    return reader;
   }
 
   static void Deleter(const Slice& key, FilterBlockReader* reader) {

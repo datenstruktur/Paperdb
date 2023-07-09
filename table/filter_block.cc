@@ -147,16 +147,6 @@ FilterBlockReader::FilterBlockReader(const FilterPolicy* policy,
   offset_ = contents.data();
 
   num_ = (n - 25) / 4;
-
-  // todo: design multi units load
-  // todo: use multi thread to speed up loading
-  Status status;
-  for (int i = 0; i < init_units_number_; i++) {
-    status = LoadFilter();
-    if (!status.ok()) {
-      return;
-    }
-  }
 }
 
 void FilterBlockReader::UpdateState(const Slice& key) {
@@ -207,8 +197,8 @@ bool FilterBlockReader::KeyMayMatch(uint64_t block_offset, const Slice& key) {
  * trailer type(kNoCompression) CRC
  * filter
  */
-Status FilterBlockReader::LoadFilter() {
-  MutexLock l(&mutex_);
+Status FilterBlockReader::LoadFilterInternal() {
+  mutex_.AssertHeld();
   const uint64_t kFilterSize = disk_size_ + kBlockTrailerSize;
   uint64_t units_index = filter_units.size();
   if (units_index >= all_units_number_)
@@ -238,6 +228,11 @@ Status FilterBlockReader::LoadFilter() {
   return s;
 }
 
+Status FilterBlockReader::LoadFilter() {
+  MutexLock l(&mutex_);
+  return LoadFilterInternal();
+}
+
 Status FilterBlockReader::EvictFilter() {
   MutexLock l(&mutex_);
   if (filter_units.empty())
@@ -251,6 +246,17 @@ Status FilterBlockReader::EvictFilter() {
   }
   filter_units.pop_back();
   return Status::OK();
+}
+
+Status FilterBlockReader::InitLoadFilter(){
+  Status s;
+  while(FilterUnitsNumberInternal() < 2){
+    s = LoadFilterInternal();
+    if(!s.ok()){
+      return s;
+    }
+  }
+  return s;
 }
 
 FilterBlockReader::~FilterBlockReader() {

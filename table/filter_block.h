@@ -73,10 +73,20 @@ class FilterBlockReader {
   bool KeyMayMatch(uint64_t block_offset, const Slice& key);
   Status LoadFilter();
   Status EvictFilter();
+  Status InitLoadFilter();
   ~FilterBlockReader();
 
-  size_t FilterUnitsNumber() const {
+  size_t LoadFilterNumber() const{
+      return init_units_number_;
+  }
+
+  size_t FilterUnitsNumber() const{
     MutexLock l(&mutex_);
+    return FilterUnitsNumberInternal();
+  }
+
+  size_t FilterUnitsNumberInternal() const{
+    mutex_.AssertHeld();
     return filter_units.size();
   }
 
@@ -96,40 +106,40 @@ class FilterBlockReader {
 
   bool CanBeLoaded() const {
     MutexLock l(&mutex_);
-    return filter_units.size() < filters_number;
+    return FilterUnitsNumberInternal() < filters_number;
   }
 
-  bool CanBeEvict() const {
+  bool CanBeEvict() const{
     MutexLock l(&mutex_);
-    return !filter_units.empty();
+    return FilterUnitsNumberInternal() > 0;
   }
 
   // filter block memory overhead(Byte), use by Cache->Insert
   size_t Size() const {
     MutexLock l(&mutex_);
-    return filter_units.size() * disk_size_;
+    return FilterUnitsNumberInternal() * disk_size_;
   }
 
   // R: (r)^n
   // IO: R*F
-  double IOs() const  {
+  double IOs() const{
     MutexLock l(&mutex_);
-    return pow(policy_->FalsePositiveRate(), static_cast<double>(filter_units.size())) *
+    return pow(policy_->FalsePositiveRate(), static_cast<double>(FilterUnitsNumberInternal())) *
            static_cast<double>(access_time_);
   }
 
-  double LoadIOs() const {
+  double LoadIOs() const{
     MutexLock l(&mutex_);
     return pow(policy_->FalsePositiveRate(), static_cast<double>(
-                   (static_cast<double>(filter_units.size() + 1)))) *
+                   (static_cast<double>(FilterUnitsNumberInternal() + 1)))) *
            static_cast<double>(access_time_);
   }
 
-  double EvictIOs() const {
+  double EvictIOs() const{
     MutexLock l(&mutex_);
     assert(!filter_units.empty());
     return pow(policy_->FalsePositiveRate(), static_cast<double>(
-                   (static_cast<double>(filter_units.size() - 1)))) *
+                   (static_cast<double>(FilterUnitsNumberInternal() - 1)))) *
            static_cast<double>(access_time_);
   }
 
@@ -156,6 +166,7 @@ class FilterBlockReader {
   bool heap_allocated_ GUARDED_BY(mutex_);
 
   void UpdateState(const Slice& key);
+  Status LoadFilterInternal();
 };
 
 }  // namespace leveldb

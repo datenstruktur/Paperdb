@@ -162,6 +162,7 @@ class InternalMultiQueue : public MultiQueue {
                  void (*deleter)(const Slice&, FilterBlockReader*)) override {
     MutexLock l(&mutex_);
     if(reader == nullptr) return nullptr;
+    reader->InitLoadFilter();
     size_t number = reader->FilterUnitsNumber();
     SingleQueue* queue = queues_[number];
     QueueHandle* handle = queue->Insert(key, reader, deleter);
@@ -325,7 +326,7 @@ class InternalMultiQueue : public MultiQueue {
         "Adjustment: Cold BF Number: %zu, Filter Units number of Hot BF: "
         "%zu, adjusted "
         "ios: %f, original ios: %f"
-        "adjust %" PRIu64 "times now",
+        "adjust %zu times now",
         cold_number, hot_units_number, adjusted_ios, original_ios, adjustment_time_);
 #endif
   }

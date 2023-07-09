@@ -163,6 +163,8 @@ Status DumpTable(Env* env, const std::string& fname, WritableFile* dst) {
     if(ParseFileName(fname, &number, &type)){
       if(type == kTableFile) {
         s = Table::Open(Options(), file, file_size, &table, number);
+        // just new Iter, bloom filter is useless
+        // not call ReadMeta
       }
     }
   }

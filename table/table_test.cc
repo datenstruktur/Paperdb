@@ -185,6 +185,7 @@ class TableConstructor : public Constructor {
     source_ = new StringSource(sink.contents());
     Options table_options;
     table_options.comparator = options.comparator;
+    // no need to ReadMeta
     return Table::Open(table_options, source_, sink.contents().size(), &table_,
                        0); //ony one table in memory, file id is no means
   }

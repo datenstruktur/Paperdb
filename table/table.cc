@@ -22,6 +22,7 @@ struct Table::Rep {
     if (options.multi_queue && handle) {
       // release for this table
       // save sequence and hotness in multi queue
+      // just evict all filter units
       Slice key(multi_cache_key.data(), multi_cache_key.size());
       options.multi_queue->Release(key);
     }
@@ -40,10 +41,10 @@ struct Table::Rep {
   std::string multi_cache_key;
 };
 
-std::string Table::ParseHandleKey(const leveldb::Options& options,
+std::string Table::ParseHandleKey(const Options& options,
                                   uint64_t file_id) {
   std::string key;
-  assert(options.filter_policy && options.bloom_filter_adjustment);
+  assert(options.filter_policy);
   key = "filter.";
   key.append(options.filter_policy->Name());
   char cache_key_buffer[8];
@@ -55,7 +56,7 @@ std::string Table::ParseHandleKey(const leveldb::Options& options,
 void Table::ParseHandleKey() {
   std::string key;
   Options options = rep_->options;
-  if(options.filter_policy && options.bloom_filter_adjustment) {
+  if(options.filter_policy) {
     rep_->multi_cache_key = ParseHandleKey(rep_->options, rep_->table_id);
   }
 }
@@ -170,6 +171,7 @@ void Table::ReadMeta() {
   if (multi_queue == nullptr) {
     if (rep_->reader == nullptr) {
       rep_->reader = ReadFilter();
+      rep_->reader->InitLoadFilter();
     }
     return;
   }
@@ -177,6 +179,8 @@ void Table::ReadMeta() {
   if (rep_->handle) {
     return;
   }
+
+  FilterBlockReader* reader = nullptr;
 
   // Get filter block from cache, or read from disk and insert
   std::string filter_key = rep_->multi_cache_key;
@@ -186,23 +190,16 @@ void Table::ReadMeta() {
 
   cache_handle = multi_queue->Lookup(key);
   if (cache_handle == nullptr) {
-    FilterBlockReader* reader = ReadFilter();
+    reader = ReadFilter();
     if (reader != nullptr) {
       cache_handle = multi_queue->Insert(key, reader, &DeleteCacheFilter);
     }
   } else{
     // Released but not erased
     // load loaded_filters_number when load to queue
-    FilterBlockReader* reader = multi_queue->Value(cache_handle);
-    while(reader->FilterUnitsNumber() < loaded_filters_number
-           && reader->CanBeLoaded()){
-      if(reader->LoadFilter().ok()){
-        // do not use bloom filter
-        multi_queue->Erase(rep_->multi_cache_key);
-        cache_handle = nullptr;
-        break ;
-      }
-    }
+    reader = multi_queue->Value(cache_handle);
+    assert(reader->FilterUnitsNumber() == 0);
+    reader->InitLoadFilter();
   }
 
   rep_->handle = cache_handle;

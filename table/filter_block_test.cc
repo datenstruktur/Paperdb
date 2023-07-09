@@ -71,6 +71,7 @@ TEST_F(FilterBlockTest, EmptyBuilder) {
 
   StringSource* source = file.GetSource();
   FilterBlockReader reader(&policy_, filter_meta_data, source);
+  reader.InitLoadFilter();
   ASSERT_TRUE(reader.KeyMayMatch(0, "foo"));
   ASSERT_TRUE(reader.KeyMayMatch(100000, "foo"));
 }
@@ -117,6 +118,7 @@ TEST_F(FilterBlockTest, SingleChunk) {
 
   StringSource* source = file.GetSource();
   FilterBlockReader reader(&policy_, filter_meta_data, source);
+  reader.InitLoadFilter();
 
   ASSERT_TRUE(reader.KeyMayMatch(100, "foo"));
   ASSERT_TRUE(reader.KeyMayMatch(100, "bar"));
@@ -161,6 +163,7 @@ TEST_F(FilterBlockTest, MultiChunk) {
 
   StringSource* source = file.GetSource();
   FilterBlockReader reader(&policy_, filter_meta_data, source);
+  reader.InitLoadFilter();
 
   // Check first filter
   ASSERT_TRUE(reader.KeyMayMatch(0, "foo"));
@@ -220,6 +223,7 @@ TEST_F(FilterBlockTest, LoadAndExcit) {
 
   StringSource* source = file.GetSource();
   FilterBlockReader reader(&policy_, filter_meta_data, source);
+  reader.InitLoadFilter();
 
   // todo can automatically adapt to different parameters
   for (int i = loaded_filters_number; i > 0; i--) {
@@ -263,6 +267,7 @@ TEST_F(FilterBlockTest, Hotness) {
   Slice filter_meta_data(filter_meta, block.size());
   StringSource* source = file.GetSource();
   FilterBlockReader reader(&policy, filter_meta_data, source);
+  reader.InitLoadFilter();
 
   // check
   for (uint64_t sn = 1; sn < 30000; sn++) {
@@ -305,6 +310,7 @@ TEST_F(FilterBlockTest, Size) {
 
   StringSource* source = file.GetSource();
   FilterBlockReader reader(&policy_, filter_meta_data, source);
+  reader.InitLoadFilter();
 
   // evict all filter units
   while (reader.EvictFilter().ok()) {
@@ -348,6 +354,7 @@ TEST_F(FilterBlockTest, IOs) {
 
   StringSource* source = file.GetSource();
   FilterBlockReader reader(policy, filter_meta_data, source);
+  reader.InitLoadFilter();
 
   int access = 1000;
   for (int i = 0; i < access; i++) {
