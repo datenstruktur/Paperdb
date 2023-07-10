@@ -197,7 +197,6 @@ I created two pr to LevelDB during implementing ElasticBF:
 
 **Note:** Unfortunately, LevelDB is receiving very limited maintenance, so, those pr may not be merged.
 
-# Reference
 [1]: https://www.usenix.org/conference/hotstorage18/presentation/zhang "Zhang Y, Li Y, Guo F, et al. ElasticBF: Fine-grained and Elastic Bloom Filter Towards Efficient Read for LSM-tree-based KV Stores[C]//HotStorage. 2018."
 
 [2]: https://www.bilibili.com/video/BV1YT411Q7BU "王留帅、徐明杰-Sanitizer 在字节跳动 C C++ 业务中的实践.BiliBili. 2023."
