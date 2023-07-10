@@ -1,8 +1,8 @@
 //
 // Created by WangTingZheng on 2023/7/10.
-// Just copy for util/env_posix.cc for multi queue background thread
+// Just copy from util/env_posix.cc for multi queue background thread
 // Call env->Schedule in env->Schedule in Compaction thread will cause deadlock
-// depend Schedule for Env to multi queue
+// take part of Schedule from Env to multi queue
 //
 
 #include "mq_schedule.h"
@@ -107,6 +107,7 @@ using DefaultSchedule = SingletonEnv<MQSchedule>;
 
 }  // namespace
 
+// create singleton no destruction object
 MQSchedule* MQSchedule::Default() {
   static DefaultSchedule env_container;
   return env_container.env();

@@ -175,6 +175,7 @@ class InternalMultiQueue : public MultiQueue {
     map_.emplace(key.ToString(), handle);
     usage_ += reader->LoadFilterNumber() * reader->OneUnitSize();
 
+    // loading filter in background thread
     scheduler_->Schedule(BGWork, reader);
 
     return reinterpret_cast<Handle*>(handle);

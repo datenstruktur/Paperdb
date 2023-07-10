@@ -212,6 +212,38 @@ mlu      node1       node2     lru
 
 **Node**: Internal node mlu/lru has no key, call Key() will be crashed.
 
+### Background thread 
+
+We use a background thread created by MQSchedule in ``until/mq_schedule.cc`` to load filters when filterblock reader is just created.
+
+other thread maybe use filterblockreader which is not loaded, so, we use a flag done and a condition variable to make other thread wait before background thread finish loading.
+
+
+```
+                                                             |-------------------------|
+                                 --------------------        |  using reader mutually  |
+[main thread]                    |                  |        |   with other thread     |
+---------------------------------|want to use reader|--------|-------------------------|
+      | schedule a               |                  |         ↑ wake up                |
+      | background thread        --------------------         |                        |
+      | to loading filter                |                 |-------------------|       |
+      ↓----------------------------------------------------|  finished loading |       |
+         [background thread]             |                 |-------------------|       |
+                                         |                             |               |-----------------------
+                                         |                             |               | start to use reader  |
+                                         |                             |             --------------------------
+[other thread]                           |                             |             |want to use reader|
+-------------------------------------------------------------------------------------|flag done is false|-------
+                                         |                             |             |      waiting     |         
+                                         |                             |             --------------------  
+                                         |                             |                     |
+                         done is false,main thread waiting      done is set true             |
+                                                         sigal main thread at same time      |
+                                                                                          done is true now
+                                                                                           will not wait
+                                                                                       use reader directly
+```
+
 ### Adjustment policy
 
 - Collect Cold FilterBlockReader: Calculate how much memory is required to load the filter unit of a hot filterblockreader, from the list with more filter units to the list with less, the LRU end of the linked list to the MRU end, and judge whether a FilterBlockReader is cold through SequenceNumber. If it is cold, save it. If you can collect no less than the memory of the cold Reader loading the filter unit of a hot reader, return the reader's collection. If it is not complete, return empty.
