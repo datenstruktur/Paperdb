@@ -179,7 +179,8 @@ We also use thread sanitizers to check the code for the jobs mentioned above in 
 - Hotness inheritance after compaction in ATC version of paper[4], see [about implementing hotness inheritance](https://github.com/WangTingZheng/Paperdb/discussions/13) in discussions.
 - Using perf tool to find code can be optimized.[8]
 - Reimplement ElasticBF to get rid of the unit test, sanitizers and benchmark, see [about reimplementing](https://github.com/WangTingZheng/Paperdb/discussions/15)
-- Support YCSB, should pay attention to [FalsePositiveRate function](https://github.com/WangTingZheng/Paperdb/blob/242b1b92cf97453d7750ea6f630cb490bb14feb7/db/c.cc#L140) in db/c.cc
+- ~~Support YCSB, should pay attention to [FalsePositiveRate function](https://github.com/WangTingZheng/Paperdb/blob/242b1b92cf97453d7750ea6f630cb490bb14feb7/db/c.cc#L140) in db/c.cc~~
+- Fork a [YCSB-CPP](https://github.com/ls4154/YCSB-cpp) to fit ElasticBF
 
 # Next Paper
 
