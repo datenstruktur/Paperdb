@@ -192,6 +192,7 @@ I created two pr to LevelDB during implementing ElasticBF:
 
 - [[**Not merged yet**] Add a flag to close FinishedSignleOp printf in CI #1131](https://github.com/google/leveldb/pull/1131)
 - [[**Not merged yet**] fix memory leak in kyoto cabinet benchmarks #1128](https://github.com/google/leveldb/pull/1128)
+- [[**Not merged yet**] fix nullptr ub in hash function #1136](https://github.com/google/leveldb/pull/1136)
 
 **Note:** Unfortunately, LevelDB is receiving very limited maintenance, so, those pr may not be merged.
 
