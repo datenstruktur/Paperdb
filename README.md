@@ -1,7 +1,7 @@
 # ElasticBF
 [![ci](https://github.com/google/leveldb/actions/workflows/build.yml/badge.svg)](https://github.com/google/leveldb/actions/workflows/build.yml)
 
-**ElasticBF[1]** moves cold SSTable's bloom filter to hot SSTable's bloom filter to reduce extra disk io overhead without increasing memory overhead. Short introduction by paper's author can be saw in this [video](https://www.youtube.com/watch?v=8UBx3GCep3A). In addition to that, we also ensure code quality by utilizing **unit test**, **google sanitizers**, and **GitHub Actions** with support for multiple operating systems and compilers.
+**[ElasticBF][1]** moves cold SSTable's bloom filter to hot SSTable's bloom filter to reduce extra disk io overhead without increasing memory overhead. Short introduction by paper's author can be saw in this [video](https://www.youtube.com/watch?v=8UBx3GCep3A). In addition to that, we also ensure code quality by utilizing **unit test**, **google sanitizers**, and **GitHub Actions** with support for multiple operating systems and compilers.
 
 # Features
 ![The architecture of ElasticBF](https://github.com/WangTingZheng/Paperdb/assets/32613835/cb3278c6-9782-48b1-bda4-2051713a6a97)
@@ -28,16 +28,16 @@ Todo
 ---
 # ToDo in ElasticBF
 - Using multi thread to speed up filter units loading in multi queue, see [about implementing multi threads](https://github.com/WangTingZheng/Paperdb/discussions/14).
-- Using shared hash in this paper[3] to reduce multi bloom filter look up overhead.
-- Hotness inheritance after compaction in ATC version of paper[4], see [about implementing hotness inheritance](https://github.com/WangTingZheng/Paperdb/discussions/13) in discussions.
-- Using perf tool to find code can be optimized.[8]
+- Using shared hash in this [paper][3] to reduce multi bloom filter look up overhead.
+- Hotness inheritance after compaction in [ATC version of paper][4], see [about implementing hotness inheritance](https://github.com/WangTingZheng/Paperdb/discussions/13) in discussions.
+- Using [perf][8] tool to find code can be optimized.
 - Reimplement ElasticBF to get rid of the unit test, sanitizers and benchmark, see [about reimplementing](https://github.com/WangTingZheng/Paperdb/discussions/15)
 - ~~Support YCSB, should pay attention to [FalsePositiveRate function](https://github.com/WangTingZheng/Paperdb/blob/242b1b92cf97453d7750ea6f630cb490bb14feb7/db/c.cc#L140) in db/c.cc~~
 - Fork a [YCSB-CPP](https://github.com/ls4154/YCSB-cpp) to fit ElasticBF
 
 # Next Paper
 
-Next paper to implement maybe AC-Key[5] or HotRing[6] or **WiscKey[7]**, see [some ideas about implementing Wisckey](https://github.com/WangTingZheng/Paperdb/discussions/12). For Hotring, there is a [hashtable](https://github.com/facebook/rocksdb/tree/main/utilities/persistent_cache) in RocksDB with unit test and benchmark, we can modified it to implement Hotring.
+Next paper to implement maybe [AC-Key][5] or [HotRing][6] or [WiscKey][7], see [some ideas about implementing Wisckey](https://github.com/WangTingZheng/Paperdb/discussions/12). For Hotring, there is a [hashtable](https://github.com/facebook/rocksdb/tree/main/utilities/persistent_cache) in RocksDB with unit test and benchmark, we can modified it to implement Hotring.
 
 
 ---
@@ -168,7 +168,7 @@ use this to open undefined behaviour sanitizers
 ```shell
 -DUSE_SAN_UB=ON
 ```
-Why google sanitizers? Google sanitizers is faster more than 10x with vaigrind[2].
+Why google sanitizers? [Google sanitizers is faster more than 10x with vaigrind][2].
 
 **Note**: Do not open Address and thread sanitizers together.
 
@@ -198,18 +198,18 @@ I created two pr to LevelDB during implementing ElasticBF:
 **Note:** Unfortunately, LevelDB is receiving very limited maintenance, so, those pr may not be merged.
 
 # Reference
-[1] Zhang Y, Li Y, Guo F, et al. ElasticBF: Fine-grained and Elastic Bloom Filter Towards Efficient Read for LSM-tree-based KV Stores[C]//HotStorage. 2018.
+[1]: https://www.usenix.org/conference/hotstorage18/presentation/zhang "Zhang Y, Li Y, Guo F, et al. ElasticBF: Fine-grained and Elastic Bloom Filter Towards Efficient Read for LSM-tree-based KV Stores[C]//HotStorage. 2018."
 
-[2] 王留帅、徐明杰-Sanitizer 在字节跳动 C C++ 业务中的实践. https://www.bilibili.com/video/BV1YT411Q7BU. 2023.
+[2]: https://www.bilibili.com/video/BV1YT411Q7BU "王留帅、徐明杰-Sanitizer 在字节跳动 C C++ 业务中的实践.BiliBili. 2023."
 
-[3] Zhu Z, Mun J H, Raman A, et al. Reducing bloom filter cpu overhead in lsm-trees on modern storage devices[C]//Proceedings of the 17th International Workshop on Data Management on New Hardware (DaMoN 2021). 2021: 1-10.
+[3]: https://dl.acm.org/doi/10.1145/3465998.3466002 "Zhu Z, Mun J H, Raman A, et al. Reducing bloom filter cpu overhead in lsm-trees on modern storage devices[C]//Proceedings of the 17th International Workshop on Data Management on New Hardware (DaMoN 2021). 2021: 1-10."
 
-[4] Li Y, Tian C, Guo F, et al. ElasticBF: Elastic Bloom Filter with Hotness Awareness for Boosting Read Performance in Large Key-Value Stores[C]//USENIX Annual Technical Conference. 2019: 739-752.
+[4]: https://www.usenix.org/conference/atc19/presentation/li-yongkun "Li Y, Tian C, Guo F, et al. ElasticBF: Elastic Bloom Filter with Hotness Awareness for Boosting Read Performance in Large Key-Value Stores[C]//USENIX Annual Technical Conference. 2019: 739-752."
 
-[5] Wu F, Yang M H, Zhang B, et al. AC-key: Adaptive caching for LSM-based key-value stores[C]//Proceedings of the 2020 USENIX Conference on Usenix Annual Technical Conference. 2020: 603-615.
+[5]: https://www.usenix.org/conference/atc20/presentation/wu-fenggang "Wu F, Yang M H, Zhang B, et al. AC-key: Adaptive caching for LSM-based key-value stores[C]//Proceedings of the 2020 USENIX Conference on Usenix Annual Technical Conference. 2020: 603-615."
 
-[6] Chen J, Chen L, Wang S, et al. HotRing: A Hotspot-Aware In-Memory Key-Value Store[C]//FAST. 2020: 239-252.
+[6]: https://www.usenix.org/conference/fast20/presentation/chen-jiqiang "Chen J, Chen L, Wang S, et al. HotRing: A Hotspot-Aware In-Memory Key-Value Store[C]//FAST. 2020: 239-252."
 
-[7] Lu L, Pillai T S, Gopalakrishnan H, et al. Wisckey: Separating keys from values in ssd-conscious storage[J]. ACM Transactions on Storage (TOS), 2017, 13(1): 1-28.
+[7]: https://dl.acm.org/doi/10.1145/3033273 "Lu L, Pillai T S, Gopalakrishnan H, et al. Wisckey: Separating keys from values in ssd-conscious storage[J]. ACM Transactions on Storage (TOS), 2017, 13(1): 1-28."
 
-[8] Ash1n2. 差分火焰图，让你的代码优化验证事半功倍. https://zhuanlan.zhihu.com/p/639996512. 2023.
+[8]: https://zhuanlan.zhihu.com/p/639996512 "Ash1n2. 差分火焰图，让你的代码优化验证事半功倍. Zhihu. 2023."
