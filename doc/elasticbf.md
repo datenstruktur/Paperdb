@@ -214,7 +214,7 @@ mlu      node1       node2     lru
 
 ### Background thread 
 
-We use a background thread created by MQSchedule in ``until/mq_schedule.cc`` to load filters when filterblock reader is just created. Other thread maybe use filterblockreader which is not loaded, so, we use a flag [``done``](https://github.com/WangTingZheng/Paperdb/blob/f9f83f2fb70d039e2b6943b9bbd0c34a9142bf30/table/filter_block.h#L191) and a [``condition variable``](https://github.com/WangTingZheng/Paperdb/blob/f9f83f2fb70d039e2b6943b9bbd0c34a9142bf30/table/filter_block.h#L192) to make other thread wait before background thread finish loading.
+We use a background thread created by MQSchedule in ``until/mq_schedule.cc`` to load filters when filterblock reader is just created. Other thread maybe use filterblockreader which is not loaded, so, we use a flag [``done``](https://github.com/WangTingZheng/Paperdb/blob/f9f83f2fb70d039e2b6943b9bbd0c34a9142bf30/table/filter_block.h#L191) and a [``condition variable``](https://github.com/WangTingZheng/Paperdb/blob/f9f83f2fb70d039e2b6943b9bbd0c34a9142bf30/table/filter_block.h#L192) to make other thread wait before background thread finish loading. More detail just see this [``comment``](https://github.com/WangTingZheng/Paperdb/commit/db7e954df35fc93e98c99ddd89aad13bef37762f)
 
 
 ```
