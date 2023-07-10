@@ -26,6 +26,21 @@
 Todo
 
 ---
+# ToDo in ElasticBF
+- Using multi thread to speed up filter units loading in multi queue, see [about implementing multi threads](https://github.com/WangTingZheng/Paperdb/discussions/14).
+- Using shared hash in this paper[3] to reduce multi bloom filter look up overhead.
+- Hotness inheritance after compaction in ATC version of paper[4], see [about implementing hotness inheritance](https://github.com/WangTingZheng/Paperdb/discussions/13) in discussions.
+- Using perf tool to find code can be optimized.[8]
+- Reimplement ElasticBF to get rid of the unit test, sanitizers and benchmark, see [about reimplementing](https://github.com/WangTingZheng/Paperdb/discussions/15)
+- ~~Support YCSB, should pay attention to [FalsePositiveRate function](https://github.com/WangTingZheng/Paperdb/blob/242b1b92cf97453d7750ea6f630cb490bb14feb7/db/c.cc#L140) in db/c.cc~~
+- Fork a [YCSB-CPP](https://github.com/ls4154/YCSB-cpp) to fit ElasticBF
+
+# Next Paper
+
+Next paper to implement maybe AC-Key[5] or HotRing[6] or **WiscKey[7]**, see [some ideas about implementing Wisckey](https://github.com/WangTingZheng/Paperdb/discussions/12). For Hotring, there is a [hashtable](https://github.com/facebook/rocksdb/tree/main/utilities/persistent_cache) in RocksDB with unit test and benchmark, we can modified it to implement Hotring.
+
+
+---
 
 # Building
 
@@ -171,21 +186,6 @@ We also use thread sanitizers to check the code for the jobs mentioned above in 
 
 - Run Tests with thread sanitizer
 - Run LevelDB Benchmarks with thread sanitizer
----
-
-# ToDo in ElasticBF
-- Using multi thread to speed up filter units loading in multi queue, see [about implementing multi threads](https://github.com/WangTingZheng/Paperdb/discussions/14).
-- Using shared hash in this paper[3] to reduce multi bloom filter look up overhead.
-- Hotness inheritance after compaction in ATC version of paper[4], see [about implementing hotness inheritance](https://github.com/WangTingZheng/Paperdb/discussions/13) in discussions.
-- Using perf tool to find code can be optimized.[8]
-- Reimplement ElasticBF to get rid of the unit test, sanitizers and benchmark, see [about reimplementing](https://github.com/WangTingZheng/Paperdb/discussions/15)
-- ~~Support YCSB, should pay attention to [FalsePositiveRate function](https://github.com/WangTingZheng/Paperdb/blob/242b1b92cf97453d7750ea6f630cb490bb14feb7/db/c.cc#L140) in db/c.cc~~
-- Fork a [YCSB-CPP](https://github.com/ls4154/YCSB-cpp) to fit ElasticBF
-
-# Next Paper
-
-Next paper to implement maybe AC-Key[5] or HotRing[6] or **WiscKey[7]**, see [some ideas about implementing Wisckey](https://github.com/WangTingZheng/Paperdb/discussions/12). For Hotring, there is a [hashtable](https://github.com/facebook/rocksdb/tree/main/utilities/persistent_cache) in RocksDB with unit test and benchmark, we can modified it to implement Hotring.
-
 ---
 # Related PR to LevelDB
 
