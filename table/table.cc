@@ -199,7 +199,8 @@ void Table::ReadMeta() {
   } else{
     reader = multi_queue->Value(cache_handle);
     // check filter unit number
-    assert(reader->GoBackToInitFilter().ok());
+    Status s = reader->GoBackToInitFilter();
+    assert(s.ok());
     assert(reader->FilterUnitsNumber() == reader->LoadFilterNumber());
   }
 

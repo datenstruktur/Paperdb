@@ -123,7 +123,7 @@ Table adapts to two situations, one is that we use the default way of LevelDB to
 
 When the option of the multi_queue is nullptr, we will open the Table, directly from the disk to read data to create filterblockreader object, if not nullptr, indicating the need to filterblockreader by the multi_queue management, then we open the Table, from disk to create filterblockreader read data object is inserted into the multi_queue, while returning a handle containing the reader for query use.
 
-When the table is released due to program exit or TableCache replacement policy, the reader saved in the table or the handle saved multi_queue will be released.
+When the table is released due to program exit or TableCache replacement policy, the reader saved in the table will be freed, but the handle saved multi_queue only will be release which mean all filter units will be evicted but meta data(hotness etc) will be saved in multi queue.
 
 ## Hotness Identification
 

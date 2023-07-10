@@ -154,6 +154,7 @@ TEST_F(MultiQueueTest, Adjustment) {
   ASSERT_NE(cold_handle, nullptr);
   ASSERT_NE(hot_handle,  nullptr);
 
+  // init filter number may not be 2
   while(Value(cold_handle)->FilterUnitsNumber() < 2){
     if(!Value(cold_handle)->LoadFilter().ok()){
       break;
