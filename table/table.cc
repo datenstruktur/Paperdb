@@ -26,7 +26,8 @@ struct Table::Rep {
       // just evict all filter units
       Slice key(multi_cache_key.data(), multi_cache_key.size());
       multi_queue->Release(key);
-      assert(multi_queue->Value(handle)->FilterUnitsNumber() == 0);
+      size_t filter_numbers = multi_queue->Value(handle)->FilterUnitsNumber();
+      assert(filter_numbers == 0);
     }
   }
 

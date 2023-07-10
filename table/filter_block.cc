@@ -3,10 +3,7 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "table/filter_block.h"
-
 #include "leveldb/filter_policy.h"
-
-#include "util/mutexlock.h"
 
 namespace leveldb {
 
@@ -120,7 +117,9 @@ FilterBlockReader::FilterBlockReader(const FilterPolicy* policy,
       file_(file),
       heap_allocated_(false), // if false, manage data by mmap
       access_time_(0), // the time this table be access. todo: Hotness inheritance
-      sequence_(0) { //last key's sequence's number pass in this reader, the beginning of this reader
+      sequence_(0),
+      init_done(false),
+      init_signal(&mutex_){ //last key's sequence's number pass in this reader, the beginning of this reader
   size_t n = contents.size();
   if (n < 25) return;  // 1 byte for base_lg_ and 21 for start of others
 
@@ -169,6 +168,7 @@ bool FilterBlockReader::KeyMayMatch(uint64_t block_offset, const Slice& key) {
     if (start <= limit && limit <= static_cast<size_t>(disk_size_)) {
       Slice filter;
       MutexLock l(&mutex_);
+      WaitForLoading();
       // every filter return true, return true
       // at least one filter return false, return false
       // bloom filter has no false negative rate, but has false positive rate
@@ -256,12 +256,15 @@ Status FilterBlockReader::EvictFilter() {
 Status FilterBlockReader::InitLoadFilter() {
   MutexLock l(&mutex_);
   Status s;
-  while (FilterUnitsNumberInternal() < 2) {
+  // can not use FilterUnitsNumberInternal()
+  while (filter_units.size() < 2) {
     s = LoadFilterInternal();
     if (!s.ok()) {
+      FinishLoading();
       return s;
     }
   }
+  FinishLoading();
   return s;
 }
 
@@ -295,6 +298,7 @@ Status FilterBlockReader::GoBackToInitFilter() {
 
 FilterBlockReader::~FilterBlockReader() {
   MutexLock l(&mutex_);
+  WaitForLoading();
   if (heap_allocated_) {
     for (const char* filter_unit : filter_units) {
       delete[] filter_unit;

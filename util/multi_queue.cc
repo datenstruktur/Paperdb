@@ -1,6 +1,7 @@
 #include "leveldb/multi_queue.h"
 
 #include <unordered_map>
+#include "mq_schedule.h"
 #include "mutexlock.h"
 
 namespace leveldb {
@@ -140,8 +141,10 @@ class SingleQueue {
 
 class InternalMultiQueue : public MultiQueue {
  public:
-  explicit InternalMultiQueue() : usage_(0), logger_(nullptr),
-                                  adjustment_time_(0) {
+  explicit InternalMultiQueue() : usage_(0),
+                                  logger_(nullptr),
+                                  adjustment_time_(0),
+                                  env_(MQSchedule::Default()) {
     queues_.resize(filters_number + 1);
     for (int i = 0; i < filters_number + 1; i++) {
       queues_[i] = new SingleQueue();
@@ -157,16 +160,23 @@ class InternalMultiQueue : public MultiQueue {
     }
   }
 
+  static void BGWork(void * arg){
+    FilterBlockReader* loader = static_cast<FilterBlockReader*>(arg);
+    loader->InitLoadFilter();
+  }
+
   Handle* Insert(const Slice& key, FilterBlockReader* reader,
                  void (*deleter)(const Slice&, FilterBlockReader*)) override {
     MutexLock l(&mutex_);
     if(reader == nullptr) return nullptr;
-    reader->InitLoadFilter();
-    size_t number = reader->FilterUnitsNumber();
+    size_t number = reader->LoadFilterNumber();
     SingleQueue* queue = queues_[number];
     QueueHandle* handle = queue->Insert(key, reader, deleter);
     map_.emplace(key.ToString(), handle);
-    usage_ += reader->Size();
+    usage_ += reader->LoadFilterNumber() * reader->OneUnitSize();
+
+    env_->Schedule(BGWork, reader);
+
     return reinterpret_cast<Handle*>(handle);
   }
 
@@ -264,6 +274,7 @@ class InternalMultiQueue : public MultiQueue {
   // 2^32-1 at least (42,9496,7295)
   // 2^64-1 at most  (1844,6744,0737,0955,1615)
   size_t adjustment_time_ GUARDED_BY(mutex_);
+  MQSchedule* env_; // no destruction object, create when process down
 
   mutable port::Mutex mutex_;
 

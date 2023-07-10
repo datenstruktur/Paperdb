@@ -208,6 +208,8 @@ target_sources(leveldb
     "util/hash.h"
     "util/logging.cc"
     "util/logging.h"
+    "util/mq_schedule.cc"
+    "util/mq_schedule.h"
     "util/multi_queue.cc"
     "util/mutexlock.h"
     "util/no_destructor.h"
@@ -376,6 +378,7 @@ if(LEVELDB_BUILD_TESTS)
         "util/crc32c_test.cc"
         "util/hash_test.cc"
         "util/logging_test.cc"
+        "util/mq_schedule_test.cc"
     )
   endif(NOT BUILD_SHARED_LIBS)
   target_link_libraries(leveldb_tests leveldb gmock gtest gtest_main)

@@ -79,13 +79,14 @@ class FilterBlockReader {
 
   size_t LoadFilterNumber() const { return init_units_number_; }
 
-  size_t FilterUnitsNumber() const {
+  size_t FilterUnitsNumber()  {
     MutexLock l(&mutex_);
     return FilterUnitsNumberInternal();
   }
 
-  size_t FilterUnitsNumberInternal() const {
+  size_t FilterUnitsNumberInternal() {
     mutex_.AssertHeld();
+    WaitForLoading();
     return filter_units.size();
   }
 
@@ -101,32 +102,32 @@ class FilterBlockReader {
 
   size_t OneUnitSize() const { return disk_size_; }
 
-  bool CanBeLoaded() const {
+  bool CanBeLoaded() {
     MutexLock l(&mutex_);
     return FilterUnitsNumberInternal() < filters_number;
   }
 
-  bool CanBeEvict() const {
+  bool CanBeEvict() {
     MutexLock l(&mutex_);
     return FilterUnitsNumberInternal() > 0;
   }
 
   // filter block memory overhead(Byte), use by Cache->Insert
-  size_t Size() const {
+  size_t Size() {
     MutexLock l(&mutex_);
     return FilterUnitsNumberInternal() * disk_size_;
   }
 
   // R: (r)^n
   // IO: R*F
-  double IOs() const {
+  double IOs() {
     MutexLock l(&mutex_);
     return pow(policy_->FalsePositiveRate(),
                static_cast<double>(FilterUnitsNumberInternal())) *
            static_cast<double>(access_time_);
   }
 
-  double LoadIOs() const {
+  double LoadIOs() {
     MutexLock l(&mutex_);
     return pow(policy_->FalsePositiveRate(),
                static_cast<double>(
@@ -134,7 +135,7 @@ class FilterBlockReader {
            static_cast<double>(access_time_);
   }
 
-  double EvictIOs() const {
+  double EvictIOs() {
     MutexLock l(&mutex_);
     assert(!filter_units.empty());
     return pow(policy_->FalsePositiveRate(),
@@ -160,7 +161,7 @@ class FilterBlockReader {
   uint64_t access_time_ GUARDED_BY(mutex_);
   SequenceNumber sequence_ GUARDED_BY(mutex_);
 
-  RandomAccessFile* file_;
+  RandomAccessFile* file_ GUARDED_BY(mutex_);
 
   std::vector<const char*> filter_units GUARDED_BY(mutex_);
   bool heap_allocated_ GUARDED_BY(mutex_);
@@ -168,6 +169,27 @@ class FilterBlockReader {
   void UpdateState(const Slice& key);
   Status LoadFilterInternal();
   Status EvictFilterInternal();
+
+  // main thread maybe read unloaded filterblockreader
+  // when background thread does not finish
+  // waiting for background thread signal
+  void WaitForLoading(){
+    mutex_.AssertHeld();
+    while (!init_done){
+      init_signal.Wait();
+    }
+  }
+
+  // Call after back ground thread finished loading
+  // signal main thread to use filterblock reader
+  void FinishLoading(){
+    mutex_.AssertHeld();
+    init_done = true;
+    init_signal.SignalAll();
+  }
+
+  bool init_done GUARDED_BY(mutex_);
+  port::CondVar init_signal GUARDED_BY(mutex_);
 };
 
 }  // namespace leveldb

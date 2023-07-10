@@ -27,7 +27,7 @@ Todo
 
 ---
 # ToDo in ElasticBF
-- Using multi thread to speed up filter units loading in multi queue, see [about implementing multi threads](https://github.com/WangTingZheng/Paperdb/discussions/14).
+- ~~Using multi thread to speed up filter units loading in multi queue, see [about implementing multi threads](https://github.com/WangTingZheng/Paperdb/discussions/14).~~
 - Using shared hash in this [paper][3] to reduce multi bloom filter look up overhead.
 - Hotness inheritance after compaction in [ATC version of paper][4], see [about implementing hotness inheritance](https://github.com/WangTingZheng/Paperdb/discussions/13) in discussions.
 - Using [perf][8] tool to find code can be optimized.
