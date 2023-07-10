@@ -242,6 +242,8 @@ We use a background thread created by MQSchedule in ``until/mq_schedule.cc`` to 
                                                                                        use reader directly
 ```
 
+**Note:** Call env->Schedule() in env->Schedule() when Compaction thread want to insert a reader into multi queue will meet a deadlock, so we use an independent Schedule call MQSchedule to load filter in background thread.
+
 ### Adjustment policy
 
 - Collect Cold FilterBlockReader: Calculate how much memory is required to load the filter unit of a hot filterblockreader, from the list with more filter units to the list with less, the LRU end of the linked list to the MRU end, and judge whether a FilterBlockReader is cold through SequenceNumber. If it is cold, save it. If you can collect no less than the memory of the cold Reader loading the filter unit of a hot reader, return the reader's collection. If it is not complete, return empty.
