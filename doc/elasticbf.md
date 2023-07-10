@@ -220,18 +220,18 @@ We use a background thread created by MQSchedule in ``until/mq_schedule.cc`` to 
 ```
                                                              |-------------------------|
                                  --------------------        |  using reader mutually  |
-[main thread]                    |                  |        |   with other thread     |
----------------------------------|want to use reader|--------|-------------------------|
+[main thread lifeline]           |                  |        |   with other thread     |
+---------------------------------|want to use reader|--------|-------------------------|----------------------→
       | schedule a               |                  |         ↑ wake up                |
       | background thread        --------------------         |                        |
       | to loading filter                |                 |-------------------|       |
-      ↓----------------------------------------------------|  finished loading |       |
-         [background thread]             |                 |-------------------|       |
+      ↓----------------------------------------------------|  finished loading |------------------------------→
+         [background thread lifeline]    |                 |-------------------|       |
                                          |                             |               |-----------------------
                                          |                             |               | start to use reader  |
                                          |                             |             --------------------------
-[other thread]                           |                             |             |want to use reader|
--------------------------------------------------------------------------------------|flag done is false|-------
+[other thread thread lifeline]           |                             |             |want to use reader|
+-------------------------------------------------------------------------------------|flag done is false|------→
                                          |                             |             |      waiting     |         
                                          |                             |             --------------------  
                                          |                             |                     |
