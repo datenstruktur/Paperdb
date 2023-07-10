@@ -218,15 +218,15 @@ We use a background thread created by MQSchedule in ``until/mq_schedule.cc`` to 
 
 
 ```
-                                                             |-------------------------|
-                                 --------------------        |  using reader mutually  |
-[main thread lifeline]           |                  |        |   with other thread     |
+                                         |                   |-------------------------|    |
+                                 --------------------        |  using reader mutually  |    |
+[main thread lifeline]           |                  |        |   with other thread     |    |
 ---------------------------------|want to use reader|--------|-------------------------|----------------------→
-      | schedule a               |                  |         ↑ wake up                |
-      | background thread        --------------------         |                        |
-      | to loading filter                |                 |-------------------|       |
+      | schedule a               |                  |         ↑ wake up|               |    |
+      | background thread        --------------------         |        |               |    |
+      | to loading filter                |                 |-------------------|       |    |
       ↓----------------------------------------------------|  finished loading |------------------------------→
-         [background thread lifeline]    |                 |-------------------|       |
+         [background thread lifeline]    |                 |-------------------|       |    |
                                          |                             |               |-----------------------
                                          |                             |               | start to use reader  |
                                          |                             |             --------------------------
