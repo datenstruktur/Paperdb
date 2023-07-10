@@ -230,9 +230,9 @@ We use a background thread created by MQSchedule in ``until/mq_schedule.cc`` to 
                                          |                             |               |-----------------------
                                          |                             |               | start to use reader  |
                                          |                             |             --------------------------
-[other thread thread lifeline]           |                             |             |want to use reader|
--------------------------------------------------------------------------------------|flag done is false|------→
-                                         |                             |             |      waiting     |         
+[other thread thread lifeline]           |                             |             |                  |
+-------------------------------------------------------------------------------------|want to use reader|------→
+                                         |                             |             |                  |         
                                          |                             |             --------------------  
                                          |                             |                     |
                          done is false,main thread waiting      done is set true             |
