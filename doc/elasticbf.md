@@ -214,9 +214,7 @@ mlu      node1       node2     lru
 
 ### Background thread 
 
-We use a background thread created by MQSchedule in ``until/mq_schedule.cc`` to load filters when filterblock reader is just created.
-
-other thread maybe use filterblockreader which is not loaded, so, we use a flag done and a condition variable to make other thread wait before background thread finish loading.
+We use a background thread created by MQSchedule in ``until/mq_schedule.cc`` to load filters when filterblock reader is just created. Other thread maybe use filterblockreader which is not loaded, so, we use a flag done and a condition variable to make other thread wait before background thread finish loading.
 
 
 ```
