@@ -4,6 +4,7 @@
 
 #include "table/filter_block.h"
 #include "leveldb/filter_policy.h"
+#include "util/condvar_signal.h"
 
 namespace leveldb {
 
@@ -168,11 +169,10 @@ bool FilterBlockReader::KeyMayMatch(uint64_t block_offset, const Slice& key) {
     if (start <= limit && limit <= static_cast<size_t>(disk_size_)) {
       Slice filter;
       MutexLock l(&mutex_);
-      WaitForLoading();
       // every filter return true, return true
       // at least one filter return false, return false
       // bloom filter has no false negative rate, but has false positive rate
-      for (int i = 0; i < filter_units.size(); i++) {
+      for (int i = 0; i < FilterUnitsNumberInternal(); i++) {
         filter = Slice(filter_units[i] + start, limit - start);
         if (!policy_->KeyMayMatch(key, filter, i)) {
           return false;
@@ -254,17 +254,18 @@ Status FilterBlockReader::EvictFilter() {
 }
 
 Status FilterBlockReader::InitLoadFilter() {
-  MutexLock l(&mutex_);
+  // unlock and signal all thread to use filter
+  // when c is destroyed what ever function exit
+  CondVarSignal c(&mutex_, &init_done, &init_signal);
   Status s;
   // can not use FilterUnitsNumberInternal()
   while (filter_units.size() < 2) {
     s = LoadFilterInternal();
     if (!s.ok()) {
-      FinishLoading();
+      // todo: error handle
       return s;
     }
   }
-  FinishLoading();
   return s;
 }
 

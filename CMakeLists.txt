@@ -212,6 +212,7 @@ target_sources(leveldb
     "util/mq_schedule.h"
     "util/multi_queue.cc"
     "util/mutexlock.h"
+    "util/condvar_signal.h"
     "util/no_destructor.h"
     "util/options.cc"
     "util/random.h"
@@ -379,6 +380,7 @@ if(LEVELDB_BUILD_TESTS)
         "util/hash_test.cc"
         "util/logging_test.cc"
         "util/mq_schedule_test.cc"
+        "util/condvar_signal_test.cc"
     )
   endif(NOT BUILD_SHARED_LIBS)
   target_link_libraries(leveldb_tests leveldb gmock gtest gtest_main)

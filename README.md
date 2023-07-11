@@ -20,6 +20,7 @@
 * **table/table.cc**: Check if the key is existed using filterblock **(97% lines unit test coverage)**
 * **table/table_builder.cc**: Construct filter block **(89% lines unit test coverage)**
 * **util/multi_queue.cc**: Manage filter units in memory to reduce adjust overhead **(98% lines unit test coverage)**
+* **util/condvar_signal.h** : A wrapper for signal all threads waiting for using filterblock reader by condvar using RAII, similar to unique_ptr
 
 # Performance
 

@@ -122,26 +122,24 @@ class FilterBlockReader {
   // IO: R*F
   double IOs() {
     MutexLock l(&mutex_);
-    return pow(policy_->FalsePositiveRate(),
-               static_cast<double>(FilterUnitsNumberInternal())) *
-           static_cast<double>(access_time_);
+    double fpr = pow(policy_->FalsePositiveRate(),
+                     static_cast<double>(FilterUnitsNumberInternal()));
+    return fpr * static_cast<double>(access_time_);
   }
 
   double LoadIOs() {
     MutexLock l(&mutex_);
-    return pow(policy_->FalsePositiveRate(),
-               static_cast<double>(
-                   (static_cast<double>(FilterUnitsNumberInternal() + 1)))) *
-           static_cast<double>(access_time_);
+    double fpr = pow(policy_->FalsePositiveRate(),
+                     static_cast<double>(FilterUnitsNumberInternal() + 1));
+    return fpr * static_cast<double>(access_time_);
   }
 
   double EvictIOs() {
     MutexLock l(&mutex_);
     assert(!filter_units.empty());
-    return pow(policy_->FalsePositiveRate(),
-               static_cast<double>(
-                   (static_cast<double>(FilterUnitsNumberInternal() - 1)))) *
-           static_cast<double>(access_time_);
+    double fpr = pow(policy_->FalsePositiveRate(),
+                     static_cast<double>(FilterUnitsNumberInternal() - 1));
+    return fpr * static_cast<double>(access_time_);
   }
 
  private:
@@ -170,6 +168,9 @@ class FilterBlockReader {
   Status LoadFilterInternal();
   Status EvictFilterInternal();
 
+  bool init_done GUARDED_BY(mutex_);
+  port::CondVar init_signal GUARDED_BY(mutex_);
+
   // main thread maybe read unloaded filterblockreader
   // when background thread does not finish
   // waiting for background thread signal
@@ -179,17 +180,6 @@ class FilterBlockReader {
       init_signal.Wait();
     }
   }
-
-  // Call after back ground thread finished loading
-  // signal main thread to use filterblock reader
-  void FinishLoading(){
-    mutex_.AssertHeld();
-    init_done = true;
-    init_signal.SignalAll();
-  }
-
-  bool init_done GUARDED_BY(mutex_);
-  port::CondVar init_signal GUARDED_BY(mutex_);
 };
 
 }  // namespace leveldb
