@@ -219,6 +219,7 @@ class InternalMultiQueue : public MultiQueue {
   }
 
   void GoBackToInitFilter(Handle* handle) override {
+    MutexLock l(&mutex_);
     if(handle != nullptr){
       QueueHandle* queue_handle = reinterpret_cast<QueueHandle*>(handle);
       FilterBlockReader* reader = queue_handle->reader;
