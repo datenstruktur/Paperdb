@@ -118,5 +118,6 @@ TEST_F(MQScheduleTest, DeadlockInMQ) {
   while (!compaction_done) {
     compaction_cv.Wait();
   }
+  compaction_mutex.Unlock();
 }
 }

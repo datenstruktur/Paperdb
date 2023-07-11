@@ -43,6 +43,7 @@ TEST(CondvarSignalTest, Base){
   while (!done){
     cv.Wait();
   }
+  mutex.Unlock();
 }
 
 //TODO : multi thread test
