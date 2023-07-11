@@ -218,6 +218,20 @@ class InternalMultiQueue : public MultiQueue {
     }
   }
 
+  void GoBackToInitFilter(Handle* handle) override {
+    if(handle != nullptr){
+      QueueHandle* queue_handle = reinterpret_cast<QueueHandle*>(handle);
+      FilterBlockReader* reader = queue_handle->reader;
+      size_t filter_number = reader->FilterUnitsNumber();
+      size_t init_filter_number  = reader->LoadFilterNumber();
+
+      queues_[filter_number]->Remove(queue_handle);
+      queues_[init_filter_number]->Append(queue_handle);
+
+      reader->GoBackToInitFilter();
+    }
+  }
+
   FilterBlockReader* Value(Handle* handle) override {
     if (handle) {
       return reinterpret_cast<QueueHandle*>(handle)->reader;
@@ -229,17 +243,13 @@ class InternalMultiQueue : public MultiQueue {
   void Release(const Slice& key) override {
     MutexLock l(&mutex_);
     auto iter = map_.find(key.ToString());
+    Status s;
     if (iter != map_.end()) {
       QueueHandle* queue_handle = iter->second;
       while(queue_handle->reader->CanBeEvict()) {
-        if(EvictHandle(queue_handle).ok()){
-          usage_ -= queue_handle->reader->OneUnitSize();
-        }else{
-          mutex_.Unlock();
-          Erase(key);
-          mutex_.Lock();
-          break ;
-        }
+        s = EvictHandle(queue_handle);
+        assert(s.ok());
+        usage_ -= queue_handle->reader->OneUnitSize();
       }
     }
   }

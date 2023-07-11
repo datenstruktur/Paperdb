@@ -60,6 +60,7 @@ void Table::ParseHandleKey() {
   std::string key;
   Options options = rep_->options;
   if(options.filter_policy) {
+    // todo: use std::move?
     rep_->multi_cache_key = ParseHandleKey(rep_->options, rep_->table_id);
   }
 }
@@ -200,8 +201,7 @@ void Table::ReadMeta() {
   } else{
     reader = multi_queue->Value(cache_handle);
     // check filter unit number
-    Status s = reader->GoBackToInitFilter();
-    assert(s.ok());
+    multi_queue->GoBackToInitFilter(cache_handle);
     assert(reader->FilterUnitsNumber() == reader->LoadFilterNumber());
   }
 

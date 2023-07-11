@@ -57,6 +57,9 @@ class LEVELDB_EXPORT MultiQueue {
   // evict all filter when table is freed
   virtual void Release(const Slice& key) = 0;
 
+  // re init filter which be released
+  virtual void GoBackToInitFilter(Handle* handle) = 0;
+
   // Return an estimate of the combined charges of all elements stored in the
   // cache.
   virtual size_t TotalCharge() const = 0;

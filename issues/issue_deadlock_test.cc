@@ -12,15 +12,19 @@ namespace leveldb {
     Env* env;
     bool* done;
     port::CondVar* cv;
+    port::Mutex* mutex;
 
+    port::Mutex* compaction_mutex;
     bool* compaction_done;
     port::CondVar* compaction_cv;
   };
 
   static void LoadFilter(void* arg) {
     Controller* controller = static_cast<Controller*>(arg);
+    controller->mutex->Lock();
     *controller->done = true;
     controller->cv->SignalAll();
+    controller->mutex->Unlock();
   }
 
   static void Compaction(void* arg) {
@@ -31,13 +35,16 @@ namespace leveldb {
     // finished after LoadingFilter done
     controller->env->Schedule(LoadFilter, controller);
 
+    controller->mutex->Lock();
     while (!*(controller->done)) {
       controller->cv->Wait();
     }
 
+    controller->compaction_mutex->Lock();
     // wake up main thread if compaction is done
     *controller->compaction_done = true;
     controller->compaction_cv->SignalAll();
+    controller->compaction_mutex->Unlock();
   }
 
   TEST(EnvTest, DeadlockInMQ) {
@@ -60,6 +67,7 @@ namespace leveldb {
 
     env->Schedule(Compaction, &controller);
 
+    compaction_mutex.Lock();
     // compaction thread never wake up
     while (!compaction_done) {
       compaction_cv.Wait();

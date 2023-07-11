@@ -83,6 +83,10 @@ class MultiQueueTest : public testing::Test {
     return multi_queue_->KeyMayMatch(handle, 100, key.Encode());
   }
 
+  void GoBackToInitFilter(MultiQueue::Handle* handle) const {
+    multi_queue_->GoBackToInitFilter(handle);
+  }
+
  private:
   MultiQueue* multi_queue_;
   const FilterPolicy* internal_policy_;
@@ -146,6 +150,24 @@ TEST_F(MultiQueueTest, TotalCharge) {
   Erase("key1");
   ASSERT_EQ(TotalCharge(), 0);
 }
+
+TEST_F(MultiQueueTest, GoBackToInitFilter) {
+  if(filters_number <= 0) return ;
+  // insert kv to cache
+  MultiQueue::Handle* insert_handle = Insert("key1");
+  ASSERT_NE(insert_handle, nullptr);
+  ASSERT_EQ(Value(insert_handle)->FilterUnitsNumber(), loaded_filters_number);
+
+  Release("key1");
+  ASSERT_NE(insert_handle, nullptr);
+  ASSERT_EQ(Value(insert_handle)->FilterUnitsNumber(), 0);
+
+  GoBackToInitFilter(insert_handle);
+  ASSERT_NE(insert_handle, nullptr);
+  ASSERT_EQ(Value(insert_handle)->FilterUnitsNumber(), loaded_filters_number);
+
+}
+
 
 TEST_F(MultiQueueTest, Adjustment) {
   if(filters_number <= 0) return ;

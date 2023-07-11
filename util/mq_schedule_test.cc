@@ -45,19 +45,23 @@ TEST_F(MQScheduleTest, RunImmediately) {
 }
 
 struct Manager {
+  port::Mutex *mutex;
   MQSchedule* env;
   bool* done;
   port::CondVar* cv;
 
   bool* compaction_done;
   port::CondVar* compaction_cv;
+  port::Mutex *compaction_mutex;
 };
 
 static void LoadFilter(void* arg) {
   Manager* manager = static_cast<Manager*>(arg);
   // wake up compaction thread to use filer
+  manager->mutex->Lock(); // protect done and cv
   *manager->done = true;
   manager->cv->SignalAll();
+  manager->mutex->Unlock();
 }
 
 static void Compaction(void* arg) {
@@ -68,14 +72,20 @@ static void Compaction(void* arg) {
   // finished after LoadingFilter done
   manager->env->Schedule(LoadFilter, manager);
 
+  // protect done and cv
+  manager->mutex->Lock();
   //waiting for using reader
   while (!*(manager->done)) {
     manager->cv->Wait();
   }
+  manager->mutex->Unlock();
 
+  // protect compaction_done and compaction cv
+  manager->compaction_mutex->Lock();
   // wake up main thread if compaction is done
   *manager->compaction_done = true;
   manager->compaction_cv->SignalAll();
+  manager->compaction_mutex->Unlock();
 }
 
 TEST_F(MQScheduleTest, DeadlockInMQ) {
@@ -85,20 +95,25 @@ TEST_F(MQScheduleTest, DeadlockInMQ) {
   port::CondVar cv(&mutex);
 
   MQSchedule* mq_env = MQSchedule::Default();
+  manager.mutex = &mutex;
   manager.done = &done;
   manager.env = mq_env;
   manager.cv = &cv;
 
-  bool compaction_done = false;
   port::Mutex compaction_mutex;
+  compaction_mutex.Lock();
+  bool compaction_done = false;
   port::CondVar compaction_cv(&compaction_mutex);
+  compaction_mutex.Unlock();
 
   manager.compaction_done = &compaction_done;
   manager.compaction_cv = &compaction_cv;
+  manager.compaction_mutex = &compaction_mutex;
 
   Env* env = Env::Default();
   env->Schedule(Compaction, &manager);
 
+  compaction_mutex.Lock();
   // compaction thread never wake up
   while (!compaction_done) {
     compaction_cv.Wait();

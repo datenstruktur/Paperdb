@@ -38,6 +38,7 @@ TEST(CondvarSignalTest, Base){
   // make done true, and signal all thread waiting for cv
   env->Schedule(&BGWork, &controller);
 
+  mutex.Lock();
   // waiting background thread done
   while (!done){
     cv.Wait();

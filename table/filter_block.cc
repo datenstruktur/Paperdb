@@ -280,14 +280,14 @@ Status FilterBlockReader::GoBackToInitFilter() {
   }
 
   Status s;
-  while (filter_units.size() < init_units_number_) {
+  while (FilterUnitsNumberInternal() < init_units_number_) {
     s = LoadFilterInternal();
     if (!s.ok()) {
       return s;
     }
   }
 
-  while (filter_units.size() > init_units_number_) {
+  while (FilterUnitsNumberInternal() > init_units_number_) {
     s = EvictFilterInternal();
     if (!s.ok()) {
       return s;
