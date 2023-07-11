@@ -14,8 +14,9 @@ class SCOPED_LOCKABLE CondVarSignal {
   explicit CondVarSignal(port::Mutex* mu, bool *done,
                          port::CondVar* condVar) EXCLUSIVE_LOCK_FUNCTION(mu)
       :mu_(mu), done_(done), condVar_(condVar){
-    *this->done_ = false;
+    // lock first to protect done_ and cv in multi thread
     this->mu_->Lock();
+    *this->done_ = false;
   }
 
   CondVarSignal(const CondVarSignal& ) = delete;
@@ -23,8 +24,9 @@ class SCOPED_LOCKABLE CondVarSignal {
 
   ~CondVarSignal()UNLOCK_FUNCTION(){
     *this->done_ = true;
-    this->mu_->Unlock();
     this->condVar_->SignalAll();
+    // unlock last to protect done_ and cv in multi thread
+    this->mu_->Unlock();
   }
 
  private:
