@@ -58,7 +58,7 @@ class LEVELDB_EXPORT MultiQueue {
   virtual void Release(const Slice& key) = 0;
 
   // re init filter which be released
-  virtual void GoBackToInitFilter(Handle* handle) = 0;
+  virtual void GoBackToInitFilter(Handle* handle, RandomAccessFile* file) = 0;
 
   // Return an estimate of the combined charges of all elements stored in the
   // cache.

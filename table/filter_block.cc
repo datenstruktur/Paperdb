@@ -269,8 +269,17 @@ Status FilterBlockReader::InitLoadFilter() {
   return s;
 }
 
-Status FilterBlockReader::GoBackToInitFilter() {
+void FilterBlockReader::UpdateFile(RandomAccessFile* file) {
+  mutex_.AssertHeld();
+  if(file != nullptr) {
+    // file_ will be freed by table cache
+    file_ = file;
+  }
+}
+
+Status FilterBlockReader::GoBackToInitFilter(RandomAccessFile* file) {
   MutexLock l(&mutex_);
+  UpdateFile(file);
   if (init_units_number_ < 0) {
     return Status::Corruption("init units number is less than 0");
   }

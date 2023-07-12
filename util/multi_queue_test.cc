@@ -84,7 +84,7 @@ class MultiQueueTest : public testing::Test {
   }
 
   void GoBackToInitFilter(MultiQueue::Handle* handle) const {
-    multi_queue_->GoBackToInitFilter(handle);
+    multi_queue_->GoBackToInitFilter(handle, nullptr);
   }
 
  private:

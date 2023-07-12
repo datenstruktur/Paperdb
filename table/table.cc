@@ -201,7 +201,9 @@ void Table::ReadMeta() {
   } else{
     reader = multi_queue->Value(cache_handle);
     // check filter unit number
-    multi_queue->GoBackToInitFilter(cache_handle);
+    // prev file will be free, update new file object
+    // todo: add unit test
+    multi_queue->GoBackToInitFilter(cache_handle, rep_->file);
     assert(reader->FilterUnitsNumber() == reader->LoadFilterNumber());
   }
 

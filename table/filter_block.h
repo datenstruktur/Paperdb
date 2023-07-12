@@ -74,7 +74,7 @@ class FilterBlockReader {
   Status LoadFilter();
   Status EvictFilter();
   Status InitLoadFilter();
-  Status GoBackToInitFilter();
+  Status GoBackToInitFilter(RandomAccessFile* file);
   ~FilterBlockReader();
 
   size_t LoadFilterNumber() const { return init_units_number_; }
@@ -167,6 +167,8 @@ class FilterBlockReader {
   void UpdateState(const Slice& key);
   Status LoadFilterInternal();
   Status EvictFilterInternal();
+
+  void UpdateFile(RandomAccessFile* file);
 
   bool init_done GUARDED_BY(mutex_);
   port::CondVar init_signal GUARDED_BY(mutex_);

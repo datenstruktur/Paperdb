@@ -218,7 +218,7 @@ class InternalMultiQueue : public MultiQueue {
     }
   }
 
-  void GoBackToInitFilter(Handle* handle) override {
+  void GoBackToInitFilter(Handle* handle, RandomAccessFile* file) override {
     MutexLock l(&mutex_);
     if(handle != nullptr){
       QueueHandle* queue_handle = reinterpret_cast<QueueHandle*>(handle);
@@ -229,7 +229,7 @@ class InternalMultiQueue : public MultiQueue {
       queues_[filter_number]->Remove(queue_handle);
       queues_[init_filter_number]->Append(queue_handle);
 
-      reader->GoBackToInitFilter();
+      reader->GoBackToInitFilter(file);
     }
   }
 
