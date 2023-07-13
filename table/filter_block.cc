@@ -259,7 +259,7 @@ Status FilterBlockReader::InitLoadFilter() {
   CondVarSignal c(&mutex_, &init_done, &init_signal);
   Status s;
   // can not use FilterUnitsNumberInternal()
-  while (filter_units.size() < 2) {
+  while (filter_units.size() < init_units_number_) {
     s = LoadFilterInternal();
     if (!s.ok()) {
       // todo: error handle

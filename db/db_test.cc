@@ -266,7 +266,7 @@ class DBTest : public testing::Test {
   Options last_options_;
 
   DBTest() : env_(new SpecialEnv(Env::Default())), option_config_(kDefault) {
-    filter_policy_ = NewBloomFilterPolicy(10);
+    filter_policy_ = NewBloomFilterPolicy(10 / loaded_filters_number);
     dbname_ = testing::TempDir() + "db_test";
     DestroyDB(dbname_, Options());
     db_ = nullptr;
@@ -1936,57 +1936,60 @@ TEST_F(DBTest, FilesDeletedAfterCompaction) {
 }
 
 TEST_F(DBTest, BloomFilter) {
-  env_->count_random_reads_ = true;
-  Options options = CurrentOptions();
-  options.env = env_;
-  options.block_cache = NewLRUCache(0);  // Prevent cache hits
+  do {
+    env_->count_random_reads_ = true;
+    Options options = CurrentOptions();
+    if(options.filter_policy == nullptr){
+      continue ;
+    }
+    std::fprintf(stderr, "\nstart to read\n");
 
-  if(loaded_filters_number <= 0) {
-    return ;
-  }
-  // NewBloomFilterPolicy is for one filter unit
-  // get one filter unit's bits per key
-  int bits_per_unit = 10 / loaded_filters_number;
-  options.filter_policy = NewBloomFilterPolicy(bits_per_unit);
-  Reopen(&options);
+    options.env = env_;
+    options.block_cache = NewLRUCache(0);  // Prevent cache hits
 
-  // Populate multiple layers
-  const int N = 10000;
-  for (int i = 0; i < N; i++) {
-    ASSERT_LEVELDB_OK(Put(Key(i), Key(i)));
-  }
-  Compact("a", "z");
-  for (int i = 0; i < N; i += 100) {
-    ASSERT_LEVELDB_OK(Put(Key(i), Key(i)));
-  }
-  dbfull()->TEST_CompactMemTable();
+    if (loaded_filters_number <= 0) {
+      return;
+    }
 
-  // Prevent auto compactions triggered by seeks
-  env_->delay_data_sync_.store(true, std::memory_order_release);
+    Reopen(&options);
 
-  // Lookup present keys.  Should rarely read from small sstable.
-  env_->random_read_counter_.Reset();
-  for (int i = 0; i < N; i++) {
-    ASSERT_EQ(Key(i), Get(Key(i)));
-  }
-  int reads = env_->random_read_counter_.Read();
-  std::fprintf(stderr, "%d present => %d reads\n", N, reads);
-  ASSERT_GE(reads, N);
-  ASSERT_LE(reads, N + 2 * N / 100);
+    // Populate multiple layers
+    const int N = 10000;
+    for (int i = 0; i < N; i++) {
+      ASSERT_LEVELDB_OK(Put(Key(i), Key(i)));
+    }
+    Compact("a", "z");
+    for (int i = 0; i < N; i += 100) {
+      ASSERT_LEVELDB_OK(Put(Key(i), Key(i)));
+    }
+    dbfull()->TEST_CompactMemTable();
 
-  // Lookup present keys.  Should rarely read from either sstable.
-  env_->random_read_counter_.Reset();
-  for (int i = 0; i < N; i++) {
-    ASSERT_EQ("NOT_FOUND", Get(Key(i) + ".missing"));
-  }
-  reads = env_->random_read_counter_.Read();
-  std::fprintf(stderr, "%d missing => %d reads\n", N, reads);
-  ASSERT_LE(reads, 3 * N / 100);
+    // Prevent auto compactions triggered by seeks
+    env_->delay_data_sync_.store(true, std::memory_order_release);
 
-  env_->delay_data_sync_.store(false, std::memory_order_release);
-  Close();
-  delete options.block_cache;
-  delete options.filter_policy;
+    // Lookup present keys.  Should rarely read from small sstable.
+    env_->random_read_counter_.Reset();
+    for (int i = 0; i < N; i++) {
+      ASSERT_EQ(Key(i), Get(Key(i)));
+    }
+    int reads = env_->random_read_counter_.Read();
+    std::fprintf(stderr, "%d present => %d reads\n", N, reads);
+    ASSERT_GE(reads, N);
+    ASSERT_LE(reads, N + 2 * N / 100);
+
+    // Lookup present keys.  Should rarely read from either sstable.
+    env_->random_read_counter_.Reset();
+    for (int i = 0; i < N; i++) {
+      ASSERT_EQ("NOT_FOUND", Get(Key(i) + ".missing"));
+    }
+    reads = env_->random_read_counter_.Read();
+    std::fprintf(stderr, "%d missing => %d reads\n", N, reads);
+    ASSERT_LE(reads, 3 * N / 100);
+
+    env_->delay_data_sync_.store(false, std::memory_order_release);
+    Close();
+    delete options.block_cache;
+  }while(ChangeOptions());
 }
 
 TEST_F(DBTest, LogCloseError) {
@@ -2366,6 +2369,45 @@ TEST_F(DBTest, Randomized) {
     }
     if (model_snap != nullptr) model.ReleaseSnapshot(model_snap);
     if (db_snap != nullptr) db_->ReleaseSnapshot(db_snap);
+  } while (ChangeOptions());
+}
+
+TEST_F(DBTest, PutGetAndDelete) {
+  Random rnd(test::RandomSeed());
+  do {
+    KVMap map;
+    KVMap delete_map;
+    const int N = 10000;
+    for(int i = 0; i < N; i++){
+      std::string k = RandomKey(&rnd);
+      std::string v = RandomString(
+          &rnd, rnd.OneIn(20) ? 100 + rnd.Uniform(100) : rnd.Uniform(8));
+      map[k] = v;
+      ASSERT_LEVELDB_OK(db_->Put(WriteOptions(), k, v));
+    }
+
+    //put to disk
+    dbfull()->TEST_CompactMemTable();
+
+    for(int i = 0; i < N / 100; i++){
+      std::string k = RandomKey(&rnd);
+      delete_map[k] = map[k];
+      map.erase(k);
+      ASSERT_LEVELDB_OK(db_->Delete(WriteOptions(), k));
+    }
+
+    for(auto iter = map.begin(); iter != map.end(); iter++){
+      std::string key = iter->first;
+      std::string value;
+      ASSERT_LEVELDB_OK(db_->Get(ReadOptions(), key, &value));
+      ASSERT_EQ(value, map[key]);
+    }
+
+    for(auto iter = delete_map.begin(); iter != delete_map.end(); iter++){
+      std::string key = iter->first;
+      std::string value;
+        ASSERT_TRUE(db_->Get(ReadOptions(), key, &value).IsNotFound());
+    }
   } while (ChangeOptions());
 }
 

@@ -336,6 +336,7 @@ class InternalMultiQueue : public MultiQueue {
     if (adjusted_ios < original_ios) {
       adjustment_time_++;
       LoggingAdjustmentInformation(colds.size(), hot->reader->FilterUnitsNumber(),
+                                   hot->reader->AccessTime(),
                                    adjusted_ios, original_ios);
       return true;
     }
@@ -343,15 +344,18 @@ class InternalMultiQueue : public MultiQueue {
   }
 
   void LoggingAdjustmentInformation(size_t cold_number, size_t hot_units_number,
+                                    size_t access_time,
                                   double adjusted_ios, double original_ios)
       EXCLUSIVE_LOCKS_REQUIRED(mutex_){
 #ifdef USE_ADJUSTMENT_LOGGING
     Log(logger_,
-        "Adjustment: Cold BF Number: %zu, Filter Units number of Hot BF: "
-        "%zu, adjusted "
-        "ios: %f, original ios: %f"
+        "Adjustment: Cold BF Number: %zu, Filter Units number of Hot BF: %zu, "
+        "hot access frequency %zu, "
+        "original ios: %f, "
+        "adjusted ios: %f, "
         "adjust %zu times now",
-        cold_number, hot_units_number, adjusted_ios, original_ios, adjustment_time_);
+        cold_number, hot_units_number, access_time,original_ios, adjusted_ios,
+        adjustment_time_);
 #endif
   }
 
