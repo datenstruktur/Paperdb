@@ -1,7 +1,7 @@
 #!/bin/bash
 
-num=200000000 #kv number in database
-value_size=1024
+num=1700000000 #kv number in database
+value_size=100
 reads=10000000
 bloom_bits=4 #bits per key for every filter unit
 
@@ -51,7 +51,7 @@ mkdir build && cd build
 # the overhead is high
 cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build .
 
-benchmark="./db_bench --num=$num --print_process=0 --value_size=$value_size --reads=$reads --bloom_bits=$bloom_bits"
+benchmark="./db_bench --num=$num --print_process=0 --value_size=$value_size --reads=$reads --bloom_bits=$bloom_bits --cache_size=0"
 
 # pass in db path
 if [[ $classify_path == true ]]; then
