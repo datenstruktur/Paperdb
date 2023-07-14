@@ -42,7 +42,6 @@ struct Table::Rep {
       job->key = multi_cache_key;
       job->multi_queue = multi_queue;
       options.schedule->ScheduleUser(ReleaseBGWork, job);
-      handle = nullptr;
     }
   }
 
