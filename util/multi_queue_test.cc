@@ -56,7 +56,10 @@ class MultiQueueTest : public testing::Test {
   }
 
   MultiQueue::Handle* Insert(const Slice& key) {
-    return multi_queue_->Insert(key, NewReader(), MultiQueueTest::Deleter);
+    FilterBlockReader* reader = NewReader();
+    MultiQueue::Handle* handle = multi_queue_->Insert(key, reader, MultiQueueTest::Deleter);
+    reader->InitLoadFilter();
+    return handle;
   }
 
   MultiQueue::Handle* Lookup(const Slice& key) const {
@@ -73,14 +76,21 @@ class MultiQueueTest : public testing::Test {
 
   size_t TotalCharge() const { return multi_queue_->TotalCharge(); }
 
-  bool KeyMayMatchSearchExisted(MultiQueue::Handle* handle, SequenceNumber sn = 10) const {
+  bool KeyMayMatchSearchExisted(MultiQueue::Handle* handle,
+                                SequenceNumber sn = 10) const {
+    if(handle == nullptr) return true;
     InternalKey key("foo", sn, kTypeValue);
-    return multi_queue_->KeyMayMatch(handle, 100, key.Encode());
+    FilterBlockReader* reader = multi_queue_->Value(handle);
+    multi_queue_->UpdateHandle(handle, key.Encode());
+    return reader->KeyMayMatch(100, key.Encode());
   }
 
   bool KeyMayMatchSearchNotExisted(MultiQueue::Handle* handle) const {
+    if(handle == nullptr) return true;
     InternalKey key("key", 10, kTypeValue);
-    return multi_queue_->KeyMayMatch(handle, 100, key.Encode());
+    FilterBlockReader* reader = multi_queue_->Value(handle);
+    multi_queue_->UpdateHandle(handle, key.Encode());
+    return reader->KeyMayMatch(100, key.Encode());
   }
 
   void GoBackToInitFilter(MultiQueue::Handle* handle) const {

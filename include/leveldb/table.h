@@ -83,6 +83,8 @@ class LEVELDB_EXPORT Table {
   Rep* const rep_;
 
   void ParseHandleKey();
+
+  bool MultiQueueKeyMayMatch(uint64_t block_offset, const Slice& key);
 };
 
 }  // namespace leveldb

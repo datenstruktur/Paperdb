@@ -278,6 +278,7 @@ void FilterBlockReader::UpdateFile(RandomAccessFile* file) {
 }
 
 Status FilterBlockReader::GoBackToInitFilter(RandomAccessFile* file) {
+  // todo: use CondVarSignal
   MutexLock l(&mutex_);
   UpdateFile(file);
   if (init_units_number_ < 0) {

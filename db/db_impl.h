@@ -170,6 +170,11 @@ class DBImpl : public DB {
   // Lock over the persistent DB state.  Non-null iff successfully acquired.
   FileLock* db_lock_;
 
+  port::Mutex mq_schedule_mutex_;
+  bool destructor_loader_wait_ GUARDED_BY(mq_schedule_mutex_);
+  bool destructor_user_wait_ GUARDED_BY(mq_schedule_mutex_);
+  port::CondVar mq_schedule_cv_ GUARDED_BY(mq_schedule_mutex_);
+
   // State below is protected by mutex_
   port::Mutex mutex_;
   std::atomic<bool> shutting_down_;

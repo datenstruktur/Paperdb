@@ -12,6 +12,7 @@
 
 #include "table/block.h"
 #include "table/two_level_iterator.h"
+#include "util/mq_schedule.h"
 
 namespace leveldb {
 
@@ -164,6 +165,24 @@ static void DeleteCacheFilter(const Slice& key, FilterBlockReader* value) {
   delete value;
 }
 
+static void LoadFilterBGWork(void* arg){
+  FilterBlockReader* job = reinterpret_cast<FilterBlockReader*>(arg);
+  job->InitLoadFilter();
+}
+
+struct GoBackToInitFilterJob{
+  MultiQueue* multi_queue;
+  RandomAccessFile* file;
+  MultiQueue::Handle* handle;
+};
+
+static void GoBackToInitFilterBGWork(void* arg){
+  GoBackToInitFilterJob* job = reinterpret_cast<GoBackToInitFilterJob*>(arg);
+  // get handle to job->handle
+  job->multi_queue->GoBackToInitFilter(job->handle, job->file);
+  delete job;
+}
+
 // get FilterBlockReader and saved in rep_->filter, we should return
 // cache handle and reader, so the pointer of reader passed in ReadFilter
 void Table::ReadMeta() {
@@ -190,24 +209,28 @@ void Table::ReadMeta() {
   std::string filter_key = rep_->multi_cache_key;
   Slice key(filter_key.data(), filter_key.size());
 
-  MultiQueue::Handle* cache_handle;
-
-  cache_handle = multi_queue->Lookup(key);
-  if (cache_handle == nullptr) {
+  MultiQueue::Handle* handle = multi_queue->Lookup(key);
+  reader =  multi_queue->Value(handle);
+  if (reader == nullptr) { //not in multi queue, insert
     reader = ReadFilter();
     if (reader != nullptr) {
-      cache_handle = multi_queue->Insert(key, reader, &DeleteCacheFilter);
+      handle = multi_queue->Insert(key, reader, &DeleteCacheFilter);
+      // todo: use background thread
+      // fix mq_schedule, take part of load and use
+      rep_->options.schedule->ScheduleLoader(LoadFilterBGWork, reader);
     }
-  } else{
-    reader = multi_queue->Value(cache_handle);
+  } else{ // in multi queue, load filter
     // check filter unit number
-    // prev file will be free, update new file object
-    // todo: add unit test
-    multi_queue->GoBackToInitFilter(cache_handle, rep_->file);
-    assert(reader->FilterUnitsNumber() == reader->LoadFilterNumber());
+    // prev file object will be free, update new file object
+    GoBackToInitFilterJob* job = new GoBackToInitFilterJob();
+    job->multi_queue = multi_queue;
+    job->file = rep_->file;
+    job->handle = handle;
+
+    rep_->options.schedule->ScheduleUser(GoBackToInitFilterBGWork, job);
   }
 
-  rep_->handle = cache_handle;
+  rep_->handle = handle;
 }
 
 Table::~Table() { delete rep_; }
@@ -291,6 +314,39 @@ Iterator* Table::NewIterator(const ReadOptions& options) const {
       &Table::BlockReader, const_cast<Table*>(this), options);
 }
 
+struct KeyMayMatchJob {
+  MultiQueue* multi_queue;
+  MultiQueue::Handle* handle;
+  std::string key;
+};
+
+static void KeyMayMatchBGWork(void *arg){
+  KeyMayMatchJob* job = reinterpret_cast<KeyMayMatchJob*>(arg);
+  // todo ~DBImpl should wait for it
+  job->multi_queue->UpdateHandle(job->handle, job->key);
+  delete job;
+}
+
+bool Table::MultiQueueKeyMayMatch(uint64_t block_offset, const Slice& key) {
+  MultiQueue* multi_queue = rep_->options.multi_queue;
+  if(multi_queue && rep_->handle) {
+    // update access time first
+    bool is_existed = multi_queue->Value(rep_->handle)->KeyMayMatch(block_offset, key);
+
+    KeyMayMatchJob* job = new KeyMayMatchJob();
+    job->multi_queue = rep_->options.multi_queue;
+    job->handle = rep_->handle;
+    job->key = key.ToString();
+
+
+    // let background thread to apply adjustment
+    rep_->options.schedule->ScheduleUser(KeyMayMatchBGWork, job);
+    // no lock for value
+    return is_existed;
+  }
+  return true;
+}
+
 Status Table::InternalGet(const ReadOptions& options, const Slice& k, void* arg,
                           void (*handle_result)(void*, const Slice&,
                                                 const Slice&)) {
@@ -305,8 +361,7 @@ Status Table::InternalGet(const ReadOptions& options, const Slice& k, void* arg,
         !rep_->reader->KeyMayMatch(handle.offset(), k)) {
       // Not found
     } else if (rep_->handle != nullptr && is_decode_ok &&
-               !rep_->options.multi_queue->KeyMayMatch(rep_->handle,
-                                                       handle.offset(), k)) {
+               !MultiQueueKeyMayMatch(handle.offset(), k)) {
       // Not found
     } else {
       Iterator* block_iter = BlockReader(this, options, iiter->value());

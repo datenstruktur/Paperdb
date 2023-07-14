@@ -27,13 +27,9 @@
 #include "leveldb/status.h"
 #include "leveldb/table.h"
 #include "leveldb/table_builder.h"
-#include "port/port.h"
 #include "table/block.h"
 #include "table/merger.h"
-#include "table/two_level_iterator.h"
-#include "util/coding.h"
-#include "util/logging.h"
-#include "util/mutexlock.h"
+#include "util/mq_schedule.h"
 
 namespace leveldb {
 
@@ -142,6 +138,7 @@ DBImpl::DBImpl(const Options& raw_options, const std::string& dbname)
       db_lock_(nullptr),
       shutting_down_(false),
       background_work_finished_signal_(&mutex_),
+      mq_schedule_cv_(&mq_schedule_mutex_),
       mem_(nullptr),
       imm_(nullptr),
       has_imm_(false),
@@ -151,9 +148,14 @@ DBImpl::DBImpl(const Options& raw_options, const std::string& dbname)
       seed_(0),
       tmp_batch_(new WriteBatch),
       background_compaction_scheduled_(false),
+      destructor_user_wait_(false),
+      destructor_loader_wait_(false),
       manual_compaction_(nullptr),
       versions_(new VersionSet(dbname_, &options_, table_cache_,
-                               &internal_comparator_)) {}
+                               &internal_comparator_)) {
+  options_.schedule->SetSignal(&destructor_user_wait_, &destructor_loader_wait_,
+                                       &mq_schedule_mutex_, &mq_schedule_cv_);
+}
 
 DBImpl::~DBImpl() {
   // Wait for background work to finish.
@@ -180,7 +182,15 @@ DBImpl::~DBImpl() {
     delete options_.block_cache;
   }
 
-  if(options_.bloom_filter_adjustment && options_.filter_policy) {
+  // waiting for background thread finished to delete mq
+  // only two background thread finished
+  // multi queue will be deleted
+  mq_schedule_mutex_.Lock();
+  while (destructor_loader_wait_ || destructor_user_wait_){
+    mq_schedule_cv_.Wait();
+  }
+  mq_schedule_mutex_.Unlock();
+  if(options_.multi_queue) {
     delete options_.multi_queue;
   }
 

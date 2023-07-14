@@ -143,8 +143,7 @@ class InternalMultiQueue : public MultiQueue {
  public:
   explicit InternalMultiQueue() : usage_(0),
                                   logger_(nullptr),
-                                  adjustment_time_(0),
-        scheduler_(MQSchedule::Default()) {
+                                  adjustment_time_(0){
     queues_.resize(filters_number + 1);
     for (int i = 0; i < filters_number + 1; i++) {
       queues_[i] = new SingleQueue();
@@ -160,38 +159,29 @@ class InternalMultiQueue : public MultiQueue {
     }
   }
 
-  static void BGWork(void * arg){
-    FilterBlockReader* loader = static_cast<FilterBlockReader*>(arg);
-    loader->InitLoadFilter();
-  }
-
   Handle* Insert(const Slice& key, FilterBlockReader* reader,
                  void (*deleter)(const Slice&, FilterBlockReader*)) override {
     MutexLock l(&mutex_);
     if(reader == nullptr) return nullptr;
+    // insert to queue
     size_t number = reader->LoadFilterNumber();
     SingleQueue* queue = queues_[number];
     QueueHandle* handle = queue->Insert(key, reader, deleter);
-    map_.emplace(key.ToString(), handle);
-    usage_ += reader->LoadFilterNumber() * reader->OneUnitSize();
 
-    // loading filter in background thread
-    scheduler_->Schedule(BGWork, reader);
+    // insert to hashtable
+    map_.emplace(key.ToString(), handle);
+
+    // update usage
+    usage_ += reader->LoadFilterNumber() * reader->OneUnitSize();
 
     return reinterpret_cast<Handle*>(handle);
   }
 
-  bool KeyMayMatch(Handle* handle, uint64_t block_offset,
-                   const Slice& key) override {
+  void UpdateHandle(Handle* handle, const Slice& key) override{
     MutexLock l(&mutex_);
-    FilterBlockReader* reader = Value(handle);
     QueueHandle* queue_handle = reinterpret_cast<QueueHandle*>(handle);
-    // found queue_handle where is in by reader's filter units number
     SingleQueue* single_queue = FindQueue(queue_handle);
     if(single_queue){
-      // access time++ first
-      bool is_existed = reader->KeyMayMatch(block_offset, key);
-
       // change to hot handle
       single_queue->MoveToMRU(queue_handle);
 
@@ -201,10 +191,7 @@ class InternalMultiQueue : public MultiQueue {
         SequenceNumber sn = parsedInternalKey.sequence;
         Adjustment(queue_handle, sn);
       }
-
-      return is_existed;
     }
-    return true;
   }
 
   Handle* Lookup(const Slice& key) override {
@@ -286,7 +273,6 @@ class InternalMultiQueue : public MultiQueue {
   // 2^32-1 at least (42,9496,7295)
   // 2^64-1 at most  (1844,6744,0737,0955,1615)
   size_t adjustment_time_ GUARDED_BY(mutex_);
-  MQSchedule* scheduler_; // no destruction object, destroyed when process down
 
   mutable port::Mutex mutex_;
 

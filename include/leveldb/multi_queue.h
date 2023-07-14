@@ -35,14 +35,12 @@ class LEVELDB_EXPORT MultiQueue {
 
   // insert a handle contains filter into multi-queue
   // deleter will be called when handle is freed
+  // filter will be loading in other thread
   virtual Handle* Insert(const Slice& key, FilterBlockReader* reader,
                          void (*deleter)(const Slice& key,
                                          FilterBlockReader* value)) = 0;
 
-  // check the key if in table
-  // return true if handle is nullptr
-  virtual bool KeyMayMatch(Handle* handle, uint64_t block_offset,
-                           const Slice& key) = 0;
+  virtual void UpdateHandle(Handle* handle, const Slice& key) = 0;
 
   // found a handle save in multi queue
   // key : [filter.filter name][table file id]

@@ -9,15 +9,17 @@
 #include <atomic>
 #include <thread>
 
+#include "mutexlock.h"
 
 namespace leveldb {
 
-void MQSchedule::BackgroundThreadMain() {
+void Scheduler::BackgroundThreadMain() {
   while (true) {
     background_work_mutex_.Lock();
 
     // Wait until there is work to be done.
     while (background_work_queue_.empty()) {
+      WakeUpDestructor();
       background_work_cv_.Wait();
     }
 
@@ -31,10 +33,27 @@ void MQSchedule::BackgroundThreadMain() {
   }
 }
 
-void MQSchedule::Schedule(void (*background_work_function)(void*),
+void Scheduler::WakeUpDestructor() {
+  MutexLock l(main_thread_destructor_mutex_);
+  *main_thread_destructor_wait_ = false;
+  main_thread_destructor_cv_->Signal();
+}
+
+void Scheduler::LockDestructor() {
+  MutexLock l(main_thread_destructor_mutex_);
+  *main_thread_destructor_wait_ = true;
+}
+
+void Scheduler::SetSignal(bool* flag, port::Mutex* mutex, port::CondVar* cv) {
+  main_thread_destructor_wait_ = flag;
+  main_thread_destructor_mutex_ = mutex;
+  main_thread_destructor_cv_ = cv;
+}
+
+void Scheduler::Schedule(void (*background_work_function)(void*),
                           void* background_work_arg) {
   background_work_mutex_.Lock();
-
+  LockDestructor();  // has background job, do not free multi_queue
   // Start the background thread, if we haven't done so already.
   if (!started_background_thread_) {
     started_background_thread_ = true;
@@ -49,6 +68,22 @@ void MQSchedule::Schedule(void (*background_work_function)(void*),
 
   background_work_queue_.emplace(background_work_function, background_work_arg);
   background_work_mutex_.Unlock();
+}
+
+void MQSchedule::ScheduleLoader(void (*background_work_function)(void*),
+                                void* background_work_arg) {
+  loader.Schedule(background_work_function, background_work_arg);
+}
+
+void MQSchedule::ScheduleUser(void (*background_work_function)(void*),
+                              void* background_work_arg) {
+  user.Schedule(background_work_function, background_work_arg);
+}
+
+void MQSchedule::SetSignal(bool* user_flag, bool* loader_flag,
+                           port::Mutex* mutex, port::CondVar* cv) {
+  user.SetSignal(user_flag, mutex, cv);
+  loader.SetSignal(loader_flag, mutex, cv);
 }
 namespace {
 
