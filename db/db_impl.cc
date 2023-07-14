@@ -6,7 +6,6 @@
 
 #include <algorithm>
 #include <atomic>
-#include <cstdint>
 #include <cstdio>
 #include <set>
 #include <string>
@@ -14,10 +13,8 @@
 
 #include "db/builder.h"
 #include "db/db_iter.h"
-#include "db/dbformat.h"
 #include "db/filename.h"
 #include "db/log_reader.h"
-#include "db/log_writer.h"
 #include "db/memtable.h"
 #include "db/table_cache.h"
 #include "db/version_set.h"
@@ -190,9 +187,8 @@ DBImpl::~DBImpl() {
     mq_schedule_cv_.Wait();
   }
   mq_schedule_mutex_.Unlock();
-  if(options_.multi_queue) {
-    delete options_.multi_queue;
-  }
+
+  delete options_.multi_queue;
 
   // we want to log adjustment time in ~InternalMultiQueue
   // info log must be deleted after delete multi queue

@@ -15,6 +15,19 @@
 #include "util/mq_schedule.h"
 
 namespace leveldb {
+struct ReleaseJob{
+  MultiQueue* multi_queue;
+  std::string key;
+};
+
+static void ReleaseBGWork(void* arg){
+  ReleaseJob* job = reinterpret_cast<ReleaseJob*>(arg);
+  // get handle to job->handle
+  // todo: fix, handle maybe not in mq
+  //  when we reopen frequently in DBTest.Randomized
+  job->multi_queue->Release(job->key);
+  delete job;
+}
 
 struct Table::Rep {
   ~Rep() {
@@ -25,10 +38,11 @@ struct Table::Rep {
       // release for this table
       // save sequence and hotness in multi queue
       // just evict all filter units
-      Slice key(multi_cache_key.data(), multi_cache_key.size());
-      multi_queue->Release(key);
-      size_t filter_numbers = multi_queue->Value(handle)->FilterUnitsNumber();
-      assert(filter_numbers == 0);
+      ReleaseJob* job = new ReleaseJob();
+      job->key = multi_cache_key;
+      job->multi_queue = multi_queue;
+      options.schedule->ScheduleUser(ReleaseBGWork, job);
+      handle = nullptr;
     }
   }
 
