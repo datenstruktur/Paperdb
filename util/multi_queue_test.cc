@@ -66,7 +66,7 @@ class MultiQueueTest : public testing::Test {
     return multi_queue_->Lookup(key);
   }
 
-  void Release(const Slice& key) const { multi_queue_->Release(key); }
+  void Release(MultiQueue::Handle* handle) const { multi_queue_->Release(handle); }
 
   void Erase(const Slice& key) const { multi_queue_->Erase(key); }
 
@@ -133,7 +133,7 @@ TEST_F(MultiQueueTest, InsertAndErase) {
   ASSERT_NE(insert_handle, nullptr);
 
   // erase from cache
-  Release("key1");
+  Release(insert_handle);
 
   // can not be found in cache
   MultiQueue::Handle* lookup_handle = Lookup("key1");
@@ -154,8 +154,11 @@ TEST_F(MultiQueueTest, TotalCharge) {
   FilterBlockReader* reader = Value(insert_handle);
   ASSERT_EQ(TotalCharge(), reader->Size());
 
-  Release("key1");  // erase from cache, but still in memory
+  Release(insert_handle);  // erase from cache, but still in memory
   ASSERT_EQ(TotalCharge(), 0);
+
+  GoBackToInitFilter(insert_handle);
+  ASSERT_EQ(TotalCharge(), reader->Size());
 
   Erase("key1");
   ASSERT_EQ(TotalCharge(), 0);
@@ -168,14 +171,13 @@ TEST_F(MultiQueueTest, GoBackToInitFilter) {
   ASSERT_NE(insert_handle, nullptr);
   ASSERT_EQ(Value(insert_handle)->FilterUnitsNumber(), loaded_filters_number);
 
-  Release("key1");
+  Release(insert_handle);
   ASSERT_NE(insert_handle, nullptr);
   ASSERT_EQ(Value(insert_handle)->FilterUnitsNumber(), 0);
 
   GoBackToInitFilter(insert_handle);
   ASSERT_NE(insert_handle, nullptr);
   ASSERT_EQ(Value(insert_handle)->FilterUnitsNumber(), loaded_filters_number);
-
 }
 
 

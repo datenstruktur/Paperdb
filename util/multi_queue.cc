@@ -152,7 +152,17 @@ class InternalMultiQueue : public MultiQueue {
 
   ~InternalMultiQueue() override {
     // save adjustment times when db is over by force
+    MutexLock l(&mutex_);
     Log(logger_, "Adjustment: Apply %zu times until now", adjustment_time_);
+#ifdef DEBUG
+    // check usage if same as map
+    uint64_t real_usage = 0;
+    for(auto & iter : map_){
+      real_usage += iter.second->reader->Size();
+    }
+    assert(real_usage == usage_);
+#endif
+
     for (int i = 0; i < filters_number + 1; i++) {
       delete queues_[i];
       queues_[i] = nullptr;
@@ -217,6 +227,7 @@ class InternalMultiQueue : public MultiQueue {
       queues_[init_filter_number]->Append(queue_handle);
 
       reader->GoBackToInitFilter(file);
+      usage_ += (init_filter_number - filter_number) * reader->OneUnitSize();
     }
   }
 
@@ -228,11 +239,10 @@ class InternalMultiQueue : public MultiQueue {
     }
   }
 
-  void Release(const Slice& key) override {
+  void Release(Handle* handle) override {
     MutexLock l(&mutex_);
-    auto iter = map_.find(key.ToString());
-    if (iter != map_.end()) {
-      QueueHandle* queue_handle = iter->second;
+    if (handle != nullptr) {
+      QueueHandle* queue_handle = reinterpret_cast<QueueHandle*>(handle);
       Status s;
       while(queue_handle->reader->CanBeEvict()) {
         s = EvictHandle(queue_handle);

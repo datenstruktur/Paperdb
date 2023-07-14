@@ -27,6 +27,9 @@ option(USE_SAN_THE "Use sanitizers to check thread issues" OFF)
 option(USE_SAN_UB "Use sanitizers to check undefined behaviour" ON)
 
 option(USE_ADJUSTMENT_LOGGING "Use logging to record adjustment information" OFF)
+if(CMAKE_BUILD_TYPE STREQUAL "Debug") # support DEBUG FLAG
+  add_definitions(-DDEBUG)
+endif ()
 
 if (WIN32)
   set(LEVELDB_PLATFORM_NAME LEVELDB_PLATFORM_WINDOWS)

@@ -53,7 +53,7 @@ class LEVELDB_EXPORT MultiQueue {
   virtual void Erase(const Slice& key) = 0;
 
   // evict all filter when table is freed
-  virtual void Release(const Slice& key) = 0;
+  virtual void Release(Handle* handle) = 0;
 
   // re init filter which be released
   virtual void GoBackToInitFilter(Handle* handle, RandomAccessFile* file) = 0;
