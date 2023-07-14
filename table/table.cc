@@ -15,11 +15,6 @@
 #include "util/mq_schedule.h"
 
 namespace leveldb {
-struct ReleaseJob{
-  MultiQueue* multi_queue;
-  std::string key;
-};
-
 struct Table::Rep {
   ~Rep() {
     delete index_block;
