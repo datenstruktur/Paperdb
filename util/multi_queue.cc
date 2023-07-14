@@ -231,9 +231,9 @@ class InternalMultiQueue : public MultiQueue {
   void Release(const Slice& key) override {
     MutexLock l(&mutex_);
     auto iter = map_.find(key.ToString());
-    Status s;
     if (iter != map_.end()) {
       QueueHandle* queue_handle = iter->second;
+      Status s;
       while(queue_handle->reader->CanBeEvict()) {
         s = EvictHandle(queue_handle);
         assert(s.ok());

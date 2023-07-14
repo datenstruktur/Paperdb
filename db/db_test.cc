@@ -17,11 +17,6 @@
 #include "leveldb/env.h"
 #include "leveldb/filter_policy.h"
 #include "leveldb/table.h"
-#include "port/port.h"
-#include "port/thread_annotations.h"
-#include "util/hash.h"
-#include "util/logging.h"
-#include "util/mutexlock.h"
 #include "util/testutil.h"
 
 namespace leveldb {
