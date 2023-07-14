@@ -25,7 +25,7 @@
 # Perf
 Before optimized, lock and unlock mutex to update handle and apply adjustment in multiqueue, will be heavies in Get path, we can create a background thread to reduce the overhead.
 
-![perf](./doc/perf-before.svg)
+![perf](https://raw.githack.com/WangTingZheng/Paperdb/elasticbf-dev/doc/perf-before.svg)
 
 # Performance
 
