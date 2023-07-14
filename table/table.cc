@@ -15,6 +15,19 @@
 #include "util/mq_schedule.h"
 
 namespace leveldb {
+struct ReleaseJob{
+  MultiQueue* multi_queue;
+  std::string key;
+};
+
+static void ReleaseBGWork(void* arg){
+  ReleaseJob* job = reinterpret_cast<ReleaseJob*>(arg);
+  // get handle to job->handle
+  // todo: fix, handle maybe not in mq
+  //  when we reopen frequently in DBTest.Randomized
+  job->multi_queue->Release(job->key);
+  delete job;
+}
 
 struct Table::Rep {
   ~Rep() {
