@@ -18,24 +18,23 @@ struct BackgroundWorkItem {
   void* const arg;
 };
 
-class Scheduler {
+class MQScheduler {
  public:
-  Scheduler(): background_work_cv_(&background_work_mutex_),
-                 started_background_thread_(false){}
+  MQScheduler(): background_work_cv_(&background_work_mutex_),
+                 started_background_thread_(false),is_set_(false){}
   void Schedule(void (*background_work_function)(void* background_work_arg),
     void* background_work_arg);
 
   void SetSignal(bool* flag, port::Mutex* mutex, port::CondVar* cv);
 
-  void BackgroundThreadMain();
-  static void BackgroundThreadEntryPoint(Scheduler* env){
-    env->BackgroundThreadMain();
-  }
+  static MQScheduler* Default();
+
  private:
   port::Mutex background_work_mutex_;
   port::CondVar background_work_cv_ GUARDED_BY(background_work_mutex_);
   bool started_background_thread_ GUARDED_BY(background_work_mutex_);
 
+  bool is_set_;
   port::Mutex *main_thread_destructor_mutex_;
   bool* main_thread_destructor_wait_;
   port::CondVar* main_thread_destructor_cv_;
@@ -45,22 +44,11 @@ class Scheduler {
 
   std::queue<BackgroundWorkItem> background_work_queue_
       GUARDED_BY(background_work_mutex_);
-};
 
-class MQSchedule{
- public:
-  static MQSchedule* Default();
-  void ScheduleLoader(void (*background_work_function)(void* background_work_arg),
-                void* background_work_arg);
-  void ScheduleUser(void (*background_work_function)(void* background_work_arg),
-                void* background_work_arg);
-
-  void SetSignal(bool *user_flag, bool *loader_flag,
-                 port::Mutex* mutex, port::CondVar* cv);
-
- private:
-  Scheduler loader;
-  Scheduler user;
+  void BackgroundThreadMain();
+  static void BackgroundThreadEntryPoint(MQScheduler* env){
+    env->BackgroundThreadMain();
+  }
 };
 
 }  // namespace leveldb

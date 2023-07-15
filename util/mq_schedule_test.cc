@@ -13,9 +13,9 @@ namespace leveldb{
 
 class MQScheduleTest : public testing::Test {
  public:
-  MQScheduleTest():env_(MQSchedule::Default()){}
+  MQScheduleTest():env_(MQScheduler::Default()){}
 
-  MQSchedule* env_;
+  MQScheduler* env_;
 };
 
 TEST_F(MQScheduleTest, RunImmediately) {
@@ -34,7 +34,7 @@ TEST_F(MQScheduleTest, RunImmediately) {
   };
 
   RunState state;
-  MQSchedule mqs;
+  MQScheduler mqs;
 
   env_->Schedule(&RunState::Run, &state);
 
@@ -46,7 +46,7 @@ TEST_F(MQScheduleTest, RunImmediately) {
 
 struct Manager {
   port::Mutex *mutex;
-  MQSchedule* env;
+  MQScheduler* env;
   bool* done;
   port::CondVar* cv;
 
@@ -66,6 +66,7 @@ static void LoadFilter(void* arg) {
 
 static void Compaction(void* arg) {
   Manager* manager = static_cast<Manager*>(arg);
+  manager->env->SetSignal(manager->done, manager->mutex, manager->cv);
   // deadlock here
   // thread in schedule is working for compaction
   // just running "background_work_function(background_work_arg);" in BackgroundThreadMain
@@ -79,13 +80,6 @@ static void Compaction(void* arg) {
     manager->cv->Wait();
   }
   manager->mutex->Unlock();
-
-  // protect compaction_done and compaction cv
-  manager->compaction_mutex->Lock();
-  // wake up main thread if compaction is done
-  *manager->compaction_done = true;
-  manager->compaction_cv->SignalAll();
-  manager->compaction_mutex->Unlock();
 }
 
 TEST_F(MQScheduleTest, DeadlockInMQ) {
@@ -94,7 +88,7 @@ TEST_F(MQScheduleTest, DeadlockInMQ) {
   port::Mutex mutex;
   port::CondVar cv(&mutex);
 
-  MQSchedule* mq_env = MQSchedule::Default();
+  MQScheduler* mq_env = MQScheduler::Default();
   manager.mutex = &mutex;
   manager.done = &done;
   manager.env = mq_env;

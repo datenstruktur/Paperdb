@@ -11,6 +11,6 @@
 namespace leveldb {
 
 Options::Options() : comparator(BytewiseComparator()), env(Env::Default()),
-                     schedule(MQSchedule::Default()) {}
+                     schedule(MQScheduler::Default()) {}
 
 }  // namespace leveldb

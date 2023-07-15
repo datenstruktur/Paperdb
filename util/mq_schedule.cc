@@ -13,7 +13,7 @@
 
 namespace leveldb {
 
-void Scheduler::BackgroundThreadMain() {
+void MQScheduler::BackgroundThreadMain() {
   while (true) {
     background_work_mutex_.Lock();
 
@@ -33,24 +33,27 @@ void Scheduler::BackgroundThreadMain() {
   }
 }
 
-void Scheduler::WakeUpDestructor() {
+void MQScheduler::WakeUpDestructor() {
+  assert(is_set_);
   MutexLock l(main_thread_destructor_mutex_);
   *main_thread_destructor_wait_ = false;
   main_thread_destructor_cv_->Signal();
 }
 
-void Scheduler::LockDestructor() {
+void MQScheduler::LockDestructor() {
+  assert(is_set_);
   MutexLock l(main_thread_destructor_mutex_);
   *main_thread_destructor_wait_ = true;
 }
 
-void Scheduler::SetSignal(bool* flag, port::Mutex* mutex, port::CondVar* cv) {
+void MQScheduler::SetSignal(bool* flag, port::Mutex* mutex, port::CondVar* cv) {
   main_thread_destructor_wait_ = flag;
   main_thread_destructor_mutex_ = mutex;
   main_thread_destructor_cv_ = cv;
+  is_set_ = true;
 }
 
-void Scheduler::Schedule(void (*background_work_function)(void*),
+void MQScheduler::Schedule(void (*background_work_function)(void*),
                           void* background_work_arg) {
   background_work_mutex_.Lock();
   LockDestructor();  // has background job, do not free multi_queue
@@ -68,22 +71,6 @@ void Scheduler::Schedule(void (*background_work_function)(void*),
 
   background_work_queue_.emplace(background_work_function, background_work_arg);
   background_work_mutex_.Unlock();
-}
-
-void MQSchedule::ScheduleLoader(void (*background_work_function)(void*),
-                                void* background_work_arg) {
-  loader.Schedule(background_work_function, background_work_arg);
-}
-
-void MQSchedule::ScheduleUser(void (*background_work_function)(void*),
-                              void* background_work_arg) {
-  user.Schedule(background_work_function, background_work_arg);
-}
-
-void MQSchedule::SetSignal(bool* user_flag, bool* loader_flag,
-                           port::Mutex* mutex, port::CondVar* cv) {
-  user.SetSignal(user_flag, mutex, cv);
-  loader.SetSignal(loader_flag, mutex, cv);
 }
 namespace {
 
@@ -117,7 +104,7 @@ class SingletonEnv {
   SingletonEnv(const SingletonEnv&) = delete;
   SingletonEnv& operator=(const SingletonEnv&) = delete;
 
-  MQSchedule* env() { return reinterpret_cast<MQSchedule*>(&env_storage_); }
+  MQScheduler* env() { return reinterpret_cast<MQScheduler*>(&env_storage_); }
 
   static void AssertEnvNotInitialized() {
 #if !defined(NDEBUG)
@@ -138,12 +125,12 @@ template <typename EnvType>
 std::atomic<bool> SingletonEnv<EnvType>::env_initialized_;
 #endif  // !defined(NDEBUG)
 
-using DefaultSchedule = SingletonEnv<MQSchedule>;
+using DefaultSchedule = SingletonEnv<MQScheduler>;
 
 }  // namespace
 
 // create singleton no destruction object
-MQSchedule* MQSchedule::Default() {
+MQScheduler* MQScheduler::Default() {
   static DefaultSchedule env_container;
   return env_container.env();
 }

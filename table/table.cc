@@ -166,19 +166,6 @@ static void LoadFilterBGWork(void* arg){
   job->InitLoadFilter();
 }
 
-struct GoBackToInitFilterJob{
-  MultiQueue* multi_queue;
-  RandomAccessFile* file;
-  MultiQueue::Handle* handle;
-};
-
-static void GoBackToInitFilterBGWork(void* arg){
-  GoBackToInitFilterJob* job = reinterpret_cast<GoBackToInitFilterJob*>(arg);
-  // get handle to job->handle
-  job->multi_queue->GoBackToInitFilter(job->handle, job->file);
-  delete job;
-}
-
 // get FilterBlockReader and saved in rep_->filter, we should return
 // cache handle and reader, so the pointer of reader passed in ReadFilter
 void Table::ReadMeta() {
@@ -213,17 +200,12 @@ void Table::ReadMeta() {
       handle = multi_queue->Insert(key, reader, &DeleteCacheFilter);
       // todo: use background thread
       // fix mq_schedule, take part of load and use
-      rep_->options.schedule->ScheduleLoader(LoadFilterBGWork, reader);
+      rep_->options.schedule->Schedule(LoadFilterBGWork, reader);
     }
   } else{ // in multi queue, load filter
     // check filter unit number
     // prev file object will be free, update new file object
-    GoBackToInitFilterJob* job = new GoBackToInitFilterJob();
-    job->multi_queue = multi_queue;
-    job->file = rep_->file;
-    job->handle = handle;
-
-    rep_->options.schedule->ScheduleUser(GoBackToInitFilterBGWork, job);
+    multi_queue->GoBackToInitFilter(rep_->handle, rep_->file);
   }
 
   rep_->handle = handle;
@@ -310,35 +292,13 @@ Iterator* Table::NewIterator(const ReadOptions& options) const {
       &Table::BlockReader, const_cast<Table*>(this), options);
 }
 
-struct KeyMayMatchJob {
-  MultiQueue* multi_queue;
-  MultiQueue::Handle* handle;
-  std::string key;
-};
-
-static void KeyMayMatchBGWork(void *arg){
-  KeyMayMatchJob* job = reinterpret_cast<KeyMayMatchJob*>(arg);
-  // todo ~DBImpl should wait for it
-  job->multi_queue->UpdateHandle(job->handle, job->key);
-  delete job;
-}
-
 bool Table::MultiQueueKeyMayMatch(uint64_t block_offset, const Slice& key) {
   MultiQueue* multi_queue = rep_->options.multi_queue;
   if(multi_queue && rep_->handle) {
     // update access time first
-    bool is_existed = multi_queue->Value(rep_->handle)->KeyMayMatch(block_offset, key);
-
-    KeyMayMatchJob* job = new KeyMayMatchJob();
-    job->multi_queue = rep_->options.multi_queue;
-    job->handle = rep_->handle;
-    job->key = key.ToString();
-
-
-    // let background thread to apply adjustment
-    rep_->options.schedule->ScheduleUser(KeyMayMatchBGWork, job);
-    // no lock for value
-    return is_existed;
+    FilterBlockReader* reader = multi_queue->Value(rep_->handle);
+    multi_queue->UpdateHandle(rep_->handle, key);
+    return reader->KeyMayMatch(block_offset, key);
   }
   return true;
 }

@@ -145,13 +145,14 @@ DBImpl::DBImpl(const Options& raw_options, const std::string& dbname)
       seed_(0),
       tmp_batch_(new WriteBatch),
       background_compaction_scheduled_(false),
-      destructor_user_wait_(false),
-      destructor_loader_wait_(false),
+      destructor_wait_(false),
       manual_compaction_(nullptr),
       versions_(new VersionSet(dbname_, &options_, table_cache_,
                                &internal_comparator_)) {
-  options_.schedule->SetSignal(&destructor_user_wait_, &destructor_loader_wait_,
+  mutex_.Lock();
+  options_.schedule->SetSignal(&destructor_wait_,
                                        &mq_schedule_mutex_, &mq_schedule_cv_);
+  mutex_.Unlock();
 }
 
 DBImpl::~DBImpl() {
@@ -179,11 +180,11 @@ DBImpl::~DBImpl() {
     delete options_.block_cache;
   }
 
-  // waiting for background thread finished to delete mq
-  // only two background thread finished
-  // multi queue will be deleted
+  // waiting for background thread finished
+  // waiting some filter can not be used
+  // todo: use shutting_down flag to end loading
   mq_schedule_mutex_.Lock();
-  while (destructor_loader_wait_ || destructor_user_wait_){
+  while (destructor_wait_){
     mq_schedule_cv_.Wait();
   }
   mq_schedule_mutex_.Unlock();
