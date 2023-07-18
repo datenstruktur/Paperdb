@@ -177,7 +177,9 @@ void Table::ReadMeta() {
   if (multi_queue == nullptr) {
     if (rep_->reader == nullptr) {
       rep_->reader = ReadFilter();
-      rep_->reader->InitLoadFilter();
+      if(rep_->reader != nullptr) {
+        rep_->reader->InitLoadFilter();
+      }
     }
     return;
   }
@@ -193,8 +195,7 @@ void Table::ReadMeta() {
   Slice key(filter_key.data(), filter_key.size());
 
   MultiQueue::Handle* handle = multi_queue->Lookup(key);
-  reader =  multi_queue->Value(handle);
-  if (reader == nullptr) { //not in multi queue, insert
+  if (handle == nullptr) { //not in multi queue, insert
     reader = ReadFilter();
     if (reader != nullptr) {
       handle = multi_queue->Insert(key, reader, &DeleteCacheFilter);
@@ -205,7 +206,7 @@ void Table::ReadMeta() {
   } else{ // in multi queue, load filter
     // check filter unit number
     // prev file object will be free, update new file object
-    multi_queue->GoBackToInitFilter(rep_->handle, rep_->file);
+    multi_queue->GoBackToInitFilter(handle, rep_->file);
   }
 
   rep_->handle = handle;
