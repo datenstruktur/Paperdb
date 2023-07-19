@@ -94,7 +94,7 @@ class FilterBlockReader {
   }
 
   uint64_t AccessTime() const {
-    return access_time_.load(std::memory_order_release);
+    return access_time_.load(std::memory_order_acquire);
   }
 
   bool IsCold(SequenceNumber now_sequence) {
@@ -125,14 +125,14 @@ class FilterBlockReader {
     MutexLock l(&mutex_);
     double fpr = pow(policy_->FalsePositiveRate(),
                      static_cast<double>(FilterUnitsNumberInternal()));
-    return fpr * static_cast<double>(access_time_.load(std::memory_order_release));
+    return fpr * static_cast<double>(access_time_.load(std::memory_order_acquire));
   }
 
   double LoadIOs() {
     MutexLock l(&mutex_);
     double fpr = pow(policy_->FalsePositiveRate(),
                      static_cast<double>(FilterUnitsNumberInternal() + 1));
-    return fpr * static_cast<double>(access_time_.load(std::memory_order_release));
+    return fpr * static_cast<double>(access_time_.load(std::memory_order_acquire));
   }
 
   double EvictIOs() {
@@ -140,7 +140,7 @@ class FilterBlockReader {
     assert(!filter_units.empty());
     double fpr = pow(policy_->FalsePositiveRate(),
                      static_cast<double>(FilterUnitsNumberInternal() - 1));
-    return fpr * static_cast<double>(access_time_.load(std::memory_order_release));
+    return fpr * static_cast<double>(access_time_.load(std::memory_order_acquire));
   }
 
  private:
