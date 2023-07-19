@@ -145,14 +145,14 @@ DBImpl::DBImpl(const Options& raw_options, const std::string& dbname)
       seed_(0),
       tmp_batch_(new WriteBatch),
       background_compaction_scheduled_(false),
-      destructor_wait_(false),
+      destructor_wait_(true),
       manual_compaction_(nullptr),
       versions_(new VersionSet(dbname_, &options_, table_cache_,
                                &internal_comparator_)) {
-  mutex_.Lock();
-  options_.schedule->SetSignal(&destructor_wait_,
-                                       &mq_schedule_mutex_, &mq_schedule_cv_);
-  mutex_.Unlock();
+}
+
+static void ShutDownMQThread(void *arg){
+    fprintf(stdout, "exit mq thread, lose all job waiting to down\n");
 }
 
 DBImpl::~DBImpl() {
@@ -162,6 +162,10 @@ DBImpl::~DBImpl() {
   while (background_compaction_scheduled_) {
     background_work_finished_signal_.Wait();
   }
+
+  // shutting done mq background thread
+  options_.schedule->ShutDown();
+  options_.schedule->Schedule(ShutDownMQThread, nullptr);
   mutex_.Unlock();
 
   if (db_lock_ != nullptr) {
@@ -179,15 +183,6 @@ DBImpl::~DBImpl() {
   if (owns_cache_) {
     delete options_.block_cache;
   }
-
-  // waiting for background thread finished
-  // waiting some filter can not be used
-  // todo: use shutting_down flag to end loading
-  mq_schedule_mutex_.Lock();
-  while (destructor_wait_){
-    mq_schedule_cv_.Wait();
-  }
-  mq_schedule_mutex_.Unlock();
 
   delete options_.multi_queue;
 

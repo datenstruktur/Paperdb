@@ -5,9 +5,11 @@
 #ifndef LEVELDB_MQ_SCHEDULE_H
 #define LEVELDB_MQ_SCHEDULE_H
 
+#include <atomic>
 #include <queue>
 
 #include "port/port.h"
+#include <atomic>
 namespace leveldb {
 
 struct BackgroundWorkItem {
@@ -21,11 +23,13 @@ struct BackgroundWorkItem {
 class MQScheduler {
  public:
   MQScheduler(): background_work_cv_(&background_work_mutex_),
-                 started_background_thread_(false),is_set_(false){}
+                 started_background_thread_(false), shutting_down_(false){}
   void Schedule(void (*background_work_function)(void* background_work_arg),
     void* background_work_arg);
 
-  void SetSignal(bool* flag, port::Mutex* mutex, port::CondVar* cv);
+  void ShutDown(){
+    shutting_down_.store(true, std::memory_order_release);
+  }
 
   static MQScheduler* Default();
 
@@ -34,13 +38,7 @@ class MQScheduler {
   port::CondVar background_work_cv_ GUARDED_BY(background_work_mutex_);
   bool started_background_thread_ GUARDED_BY(background_work_mutex_);
 
-  bool is_set_;
-  port::Mutex *main_thread_destructor_mutex_;
-  bool* main_thread_destructor_wait_;
-  port::CondVar* main_thread_destructor_cv_;
-
-  void WakeUpDestructor();
-  void LockDestructor();
+  std::atomic<bool> shutting_down_;
 
   std::queue<BackgroundWorkItem> background_work_queue_
       GUARDED_BY(background_work_mutex_);

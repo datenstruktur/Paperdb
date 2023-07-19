@@ -9,17 +9,25 @@
 #include <atomic>
 #include <thread>
 
-#include "mutexlock.h"
 
 namespace leveldb {
 
 void MQScheduler::BackgroundThreadMain() {
   while (true) {
+    if(shutting_down_.load(std::memory_order_acquire)){
+      // mq schedule is a singleton
+      // clear object value for next time usage
+      started_background_thread_ = false;
+      while (!background_work_queue_.empty()) {
+        background_work_queue_.pop();
+      }
+      shutting_down_.store(false, std::memory_order_release);
+      break ;
+    }
     background_work_mutex_.Lock();
 
     // Wait until there is work to be done.
     while (background_work_queue_.empty()) {
-      WakeUpDestructor();
       background_work_cv_.Wait();
     }
 
@@ -33,30 +41,9 @@ void MQScheduler::BackgroundThreadMain() {
   }
 }
 
-void MQScheduler::WakeUpDestructor() {
-  assert(is_set_);
-  MutexLock l(main_thread_destructor_mutex_);
-  *main_thread_destructor_wait_ = false;
-  main_thread_destructor_cv_->Signal();
-}
-
-void MQScheduler::LockDestructor() {
-  assert(is_set_);
-  MutexLock l(main_thread_destructor_mutex_);
-  *main_thread_destructor_wait_ = true;
-}
-
-void MQScheduler::SetSignal(bool* flag, port::Mutex* mutex, port::CondVar* cv) {
-  main_thread_destructor_wait_ = flag;
-  main_thread_destructor_mutex_ = mutex;
-  main_thread_destructor_cv_ = cv;
-  is_set_ = true;
-}
-
 void MQScheduler::Schedule(void (*background_work_function)(void*),
                           void* background_work_arg) {
   background_work_mutex_.Lock();
-  LockDestructor();  // has background job, do not free multi_queue
   // Start the background thread, if we haven't done so already.
   if (!started_background_thread_) {
     started_background_thread_ = true;
