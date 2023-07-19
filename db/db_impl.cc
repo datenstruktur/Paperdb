@@ -163,9 +163,7 @@ DBImpl::~DBImpl() {
     background_work_finished_signal_.Wait();
   }
 
-  // shutting done mq background thread
-  options_.schedule->ShutDown();
-  options_.schedule->Schedule(ShutDownMQThread, nullptr);
+
   mutex_.Unlock();
 
   if (db_lock_ != nullptr) {
@@ -185,6 +183,10 @@ DBImpl::~DBImpl() {
   }
 
   delete options_.multi_queue;
+
+  // shutting done mq background thread
+  options_.schedule->ShutDown();
+  options_.schedule->Schedule(ShutDownMQThread, nullptr);
 
   // we want to log adjustment time in ~InternalMultiQueue
   // info log must be deleted after delete multi queue

@@ -13,19 +13,8 @@
 namespace leveldb {
 
 void MQScheduler::BackgroundThreadMain() {
-  while (true) {
+  while (!shutting_down_) {
     background_work_mutex_.Lock();
-    if(shutting_down_){
-      // mq schedule is a singleton
-      // clear object value for next time usage
-      started_background_thread_ = false;
-      while (!background_work_queue_.empty()) {
-        background_work_queue_.pop();
-      }
-      shutting_down_ = false;
-      background_work_mutex_.Unlock();
-      break ;
-    }
 
     // Wait until there is work to be done.
     while (background_work_queue_.empty()) {
@@ -40,6 +29,16 @@ void MQScheduler::BackgroundThreadMain() {
     background_work_mutex_.Unlock();
     background_work_function(background_work_arg);
   }
+
+  // mq schedule is a singleton
+  // clear object value for next time usage
+  background_work_mutex_.Lock();
+  started_background_thread_ = false;
+  while (!background_work_queue_.empty()) {
+    background_work_queue_.pop();
+  }
+  shutting_down_ = false;
+  background_work_mutex_.Unlock();
 }
 
 void MQScheduler::Schedule(void (*background_work_function)(void*),
