@@ -10,6 +10,7 @@
 
 #include "port/port.h"
 #include <atomic>
+#include "mutexlock.h"
 namespace leveldb {
 
 struct BackgroundWorkItem {
@@ -28,7 +29,8 @@ class MQScheduler {
     void* background_work_arg);
 
   void ShutDown(){
-    shutting_down_.store(true, std::memory_order_release);
+    MutexLock l(&background_work_mutex_);
+    shutting_down_ = true;
   }
 
   static MQScheduler* Default();
@@ -38,7 +40,7 @@ class MQScheduler {
   port::CondVar background_work_cv_ GUARDED_BY(background_work_mutex_);
   bool started_background_thread_ GUARDED_BY(background_work_mutex_);
 
-  std::atomic<bool> shutting_down_;
+  bool shutting_down_;
 
   std::queue<BackgroundWorkItem> background_work_queue_
       GUARDED_BY(background_work_mutex_);
