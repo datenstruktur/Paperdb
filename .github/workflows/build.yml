@@ -91,7 +91,7 @@ jobs:
       run: ${{ env.BINARY_PATH }}db_bench${{ env.BINARY_SUFFIX }} --print_process=0
 
     - name: Run LevelDB Benchmarks without MQ
-      if: ${{ runner.os == 'Linux' && matrix.optimized == false && matrix.compiler == clang }}
+      if: ${{ runner.os == 'Linux' && matrix.optimized == false && matrix.compiler == 'clang' }}
       run: ${{ env.BINARY_PATH }}db_bench${{ env.BINARY_SUFFIX }} --print_process=0 --multi_queue_open=0
 
     - name: Run SQLite Benchmarks
@@ -131,5 +131,5 @@ jobs:
       run: ${{ env.BINARY_PATH }}db_bench${{ env.BINARY_SUFFIX }} --print_process=0
 
     - name: Run LevelDB Benchmarks with thread sanitizer without MQ
-      if: ${{ runner.os == 'Linux' && matrix.optimized == false && matrix.compiler == clang }}
+      if: ${{ runner.os == 'Linux' && matrix.optimized == false && matrix.compiler == 'clang' }}
       run: ${{ env.BINARY_PATH }}db_bench${{ env.BINARY_SUFFIX }} --print_process=0
