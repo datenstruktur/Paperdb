@@ -25,6 +25,7 @@ struct Table::Rep {
       // save sequence and hotness in multi queue
       // just evict all filter units
       multi_queue->Release(handle);
+      handle = nullptr;
     }
   }
 
@@ -170,7 +171,8 @@ static void LoadFilterBGWork(void* arg){
 // cache handle and reader, so the pointer of reader passed in ReadFilter
 void Table::ReadMeta() {
   MultiQueue* multi_queue = rep_->options.multi_queue;
-  if (rep_->options.filter_policy == nullptr || rep_->reader != nullptr) {
+  if (rep_->options.filter_policy == nullptr || rep_->reader != nullptr
+      || rep_->handle != nullptr) {
     return;
   }
 
@@ -181,10 +183,6 @@ void Table::ReadMeta() {
         rep_->reader->InitLoadFilter();
       }
     }
-    return;
-  }
-
-  if (rep_->handle) {
     return;
   }
 
