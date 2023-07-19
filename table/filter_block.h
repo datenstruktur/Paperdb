@@ -23,6 +23,7 @@
 #include "table/format.h"
 #include "util/hash.h"
 #include "util/mutexlock.h"
+#include <atomic>
 
 namespace leveldb {
 
@@ -77,6 +78,8 @@ class FilterBlockReader {
   Status GoBackToInitFilter(RandomAccessFile* file);
   ~FilterBlockReader();
 
+  void UpdateState(const SequenceNumber& sn);
+
   size_t LoadFilterNumber() const { return init_units_number_; }
 
   size_t FilterUnitsNumber()  {
@@ -91,13 +94,11 @@ class FilterBlockReader {
   }
 
   uint64_t AccessTime() const {
-    MutexLock l(&mutex_);
-    return access_time_;
+    return access_time_.load(std::memory_order_release);
   }
 
   bool IsCold(SequenceNumber now_sequence) {
-    MutexLock l(&mutex_);
-    return now_sequence >= (sequence_ + life_time);
+    return now_sequence >= (sequence_.load(std::memory_order_acquire) + life_time);
   }
 
   size_t OneUnitSize() const { return disk_size_; }
@@ -124,14 +125,14 @@ class FilterBlockReader {
     MutexLock l(&mutex_);
     double fpr = pow(policy_->FalsePositiveRate(),
                      static_cast<double>(FilterUnitsNumberInternal()));
-    return fpr * static_cast<double>(access_time_);
+    return fpr * static_cast<double>(access_time_.load(std::memory_order_release));
   }
 
   double LoadIOs() {
     MutexLock l(&mutex_);
     double fpr = pow(policy_->FalsePositiveRate(),
                      static_cast<double>(FilterUnitsNumberInternal() + 1));
-    return fpr * static_cast<double>(access_time_);
+    return fpr * static_cast<double>(access_time_.load(std::memory_order_release));
   }
 
   double EvictIOs() {
@@ -139,7 +140,7 @@ class FilterBlockReader {
     assert(!filter_units.empty());
     double fpr = pow(policy_->FalsePositiveRate(),
                      static_cast<double>(FilterUnitsNumberInternal() - 1));
-    return fpr * static_cast<double>(access_time_);
+    return fpr * static_cast<double>(access_time_.load(std::memory_order_release));
   }
 
  private:
@@ -156,15 +157,14 @@ class FilterBlockReader {
   size_t num_;      // Number of entries in offset array
 
   mutable port::Mutex mutex_;
-  uint64_t access_time_ GUARDED_BY(mutex_);
-  SequenceNumber sequence_ GUARDED_BY(mutex_);
+  std::atomic<uint64_t> access_time_;
+  std::atomic<SequenceNumber> sequence_;
 
   RandomAccessFile* file_ GUARDED_BY(mutex_);
 
   std::vector<const char*> filter_units GUARDED_BY(mutex_);
   bool heap_allocated_ GUARDED_BY(mutex_);
 
-  void UpdateState(const Slice& key);
   Status LoadFilterInternal();
   Status EvictFilterInternal();
 

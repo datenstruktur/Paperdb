@@ -80,17 +80,13 @@ class MultiQueueTest : public testing::Test {
                                 SequenceNumber sn = 10) const {
     if(handle == nullptr) return true;
     InternalKey key("foo", sn, kTypeValue);
-    FilterBlockReader* reader = multi_queue_->Value(handle);
-    multi_queue_->UpdateHandle(handle, key.Encode());
-    return reader->KeyMayMatch(100, key.Encode());
+    return multi_queue_->UpdateHandle(handle, 100, key.Encode());
   }
 
   bool KeyMayMatchSearchNotExisted(MultiQueue::Handle* handle) const {
     if(handle == nullptr) return true;
     InternalKey key("key", 10, kTypeValue);
-    FilterBlockReader* reader = multi_queue_->Value(handle);
-    multi_queue_->UpdateHandle(handle, key.Encode());
-    return reader->KeyMayMatch(100, key.Encode());
+    return multi_queue_->UpdateHandle(handle, 100, key.Encode());
   }
 
   void GoBackToInitFilter(MultiQueue::Handle* handle) const {

@@ -149,19 +149,13 @@ FilterBlockReader::FilterBlockReader(const FilterPolicy* policy,
   num_ = (n - 25) / 4;
 }
 
-void FilterBlockReader::UpdateState(const Slice& key) {
-  MutexLock l(&mutex_);
-  ParsedInternalKey parsedInternalKey;
-  if (ParseInternalKey(key, &parsedInternalKey)) {
-    sequence_ = parsedInternalKey.sequence;
-  }
-  access_time_++;
+void FilterBlockReader::UpdateState(const SequenceNumber& sn) {
+  sequence_.store(sn, std::memory_order_acquire);
+  access_time_.fetch_add(1);
 }
 
 bool FilterBlockReader::KeyMayMatch(uint64_t block_offset, const Slice& key) {
   uint64_t index = block_offset >> base_lg_;
-  UpdateState(key);
-
   if (index < num_) {
     uint32_t start = DecodeFixed32(offset_ + index * 4);
     uint32_t limit = DecodeFixed32(offset_ + index * 4 + 4);

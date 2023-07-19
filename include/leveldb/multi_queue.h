@@ -40,7 +40,8 @@ class LEVELDB_EXPORT MultiQueue {
                          void (*deleter)(const Slice& key,
                                          FilterBlockReader* value)) = 0;
 
-  virtual void UpdateHandle(Handle* handle, const Slice& key) = 0;
+  virtual bool UpdateHandle(Handle* handle, uint64_t block_offset,
+                            const Slice& key) = 0;
 
   // found a handle save in multi queue
   // key : [filter.filter name][table file id]

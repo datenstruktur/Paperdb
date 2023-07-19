@@ -153,7 +153,8 @@ class InternalMultiQueue : public MultiQueue {
   ~InternalMultiQueue() override {
     // save adjustment times when db is over by force
     MutexLock l(&mutex_);
-    Log(logger_, "Adjustment: Apply %zu times until now", adjustment_time_);
+    Log(logger_, "Adjustment: Apply %zu times until now",
+        adjustment_time_.load(std::memory_order_acquire));
 #ifdef DEBUG
     // check usage if same as map
     uint64_t real_usage = 0;
@@ -187,7 +188,7 @@ class InternalMultiQueue : public MultiQueue {
     return reinterpret_cast<Handle*>(handle);
   }
 
-  void UpdateHandle(Handle* handle, const Slice& key) override{
+  bool UpdateHandle(Handle* handle, uint64_t block_offset, const Slice& key) override{
     MutexLock l(&mutex_);
     QueueHandle* queue_handle = reinterpret_cast<QueueHandle*>(handle);
     SingleQueue* single_queue = FindQueue(queue_handle);
@@ -199,9 +200,15 @@ class InternalMultiQueue : public MultiQueue {
       ParsedInternalKey parsedInternalKey;
       if (ParseInternalKey(key, &parsedInternalKey)) {
         SequenceNumber sn = parsedInternalKey.sequence;
-        Adjustment(queue_handle, sn);
+        FilterBlockReader* reader = Value(handle);
+        if(reader) {
+          reader->UpdateState(sn);
+          Adjustment(queue_handle, sn);
+          return reader->KeyMayMatch(block_offset, key);
+        }
       }
     }
+    return true;
   }
 
   Handle* Lookup(const Slice& key) override {
@@ -282,7 +289,7 @@ class InternalMultiQueue : public MultiQueue {
   Logger* logger_ GUARDED_BY(mutex_);
   // 2^32-1 at least (42,9496,7295)
   // 2^64-1 at most  (1844,6744,0737,0955,1615)
-  size_t adjustment_time_ GUARDED_BY(mutex_);
+  std::atomic<size_t> adjustment_time_;
 
   mutable port::Mutex mutex_;
 
@@ -330,10 +337,12 @@ class InternalMultiQueue : public MultiQueue {
     adjusted_ios += hot->reader->LoadIOs();
 
     if (adjusted_ios < original_ios) {
-      adjustment_time_++;
+      adjustment_time_.fetch_add(1);
+#ifdef USE_ADJUSTMENT_LOGGING
       LoggingAdjustmentInformation(colds.size(), hot->reader->FilterUnitsNumber(),
                                    hot->reader->AccessTime(),
                                    adjusted_ios, original_ios);
+#endif
       return true;
     }
     return false;
@@ -343,7 +352,6 @@ class InternalMultiQueue : public MultiQueue {
                                     size_t access_time,
                                   double adjusted_ios, double original_ios)
       EXCLUSIVE_LOCKS_REQUIRED(mutex_){
-#ifdef USE_ADJUSTMENT_LOGGING
     Log(logger_,
         "Adjustment: Cold BF Number: %zu, Filter Units number of Hot BF: %zu, "
         "hot access frequency %zu, "
@@ -351,8 +359,7 @@ class InternalMultiQueue : public MultiQueue {
         "adjusted ios: %f, "
         "adjust %zu times now",
         cold_number, hot_units_number, access_time,original_ios, adjusted_ios,
-        adjustment_time_);
-#endif
+        adjustment_time_.load(std::memory_order_acquire));
   }
 
   Status LoadHandle(QueueHandle* handle) EXCLUSIVE_LOCKS_REQUIRED(mutex_){
@@ -385,7 +392,7 @@ class InternalMultiQueue : public MultiQueue {
         Log(logger_, "Adjustment: Evict colds handles failed, message is %s",
             s.ToString().c_str());
 #endif
-        adjustment_time_--;
+        adjustment_time_.fetch_sub(1);
         return ;
       }
     }
@@ -396,7 +403,7 @@ class InternalMultiQueue : public MultiQueue {
       Log(logger_, "Adjustment: Load hot handle failed, message is %s",
           s.ToString().c_str());
 #endif
-      adjustment_time_--;
+      adjustment_time_.fetch_sub(1);
     }
   }
 
@@ -405,7 +412,8 @@ class InternalMultiQueue : public MultiQueue {
     if (hot_handle && hot_handle->reader->CanBeLoaded()) {
       size_t memory = hot_handle->reader->OneUnitSize();
       std::vector<QueueHandle*> cold = FindColdFilter(memory, sn);
-      if (!cold.empty() && CanBeAdjusted(cold, hot_handle)) {
+      if(cold.empty()) return ;
+      if (CanBeAdjusted(cold, hot_handle)) {
         ApplyAdjustment(cold, hot_handle);
       }
     }

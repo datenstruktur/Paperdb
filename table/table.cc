@@ -296,10 +296,7 @@ Iterator* Table::NewIterator(const ReadOptions& options) const {
 bool Table::MultiQueueKeyMayMatch(uint64_t block_offset, const Slice& key) {
   MultiQueue* multi_queue = rep_->options.multi_queue;
   if(multi_queue && rep_->handle) {
-    // update access time first
-    FilterBlockReader* reader = multi_queue->Value(rep_->handle);
-    multi_queue->UpdateHandle(rep_->handle, key);
-    return reader->KeyMayMatch(block_offset, key);
+    return multi_queue->UpdateHandle(rep_->handle, block_offset, key);
   }
   return true;
 }
