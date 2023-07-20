@@ -13,8 +13,12 @@
 namespace leveldb {
 
 void MQScheduler::BackgroundThreadMain() {
-  while (!shutting_down_) {
+  while (true) {
     background_work_mutex_.Lock();
+    if(shutting_down_){
+      background_work_mutex_.Unlock();
+      break ;
+    }
 
     // Wait until there is work to be done.
     while (background_work_queue_.empty()) {
