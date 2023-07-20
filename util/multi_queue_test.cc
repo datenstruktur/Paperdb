@@ -58,7 +58,6 @@ class MultiQueueTest : public testing::Test {
   MultiQueue::Handle* Insert(const Slice& key) {
     FilterBlockReader* reader = NewReader();
     MultiQueue::Handle* handle = multi_queue_->Insert(key, reader, MultiQueueTest::Deleter);
-    reader->InitLoadFilter();
     return handle;
   }
 
@@ -127,6 +126,8 @@ TEST_F(MultiQueueTest, InsertAndErase) {
   if(filters_number <= 0) return ;
   MultiQueue::Handle* insert_handle = Insert("key1");
   ASSERT_NE(insert_handle, nullptr);
+
+  ASSERT_EQ(Value(insert_handle)->FilterUnitsNumber(), loaded_filters_number);
 
   // erase from cache
   Release(insert_handle);

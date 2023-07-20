@@ -158,8 +158,6 @@ class InternalMultiQueue : public MultiQueue {
   ~InternalMultiQueue() override {
     // save adjustment times when db is over by force
     MutexLock l(&mutex_);
-    scheduler->ShutDown();
-    scheduler->Schedule(ShutDownMQThread, nullptr);
     Log(logger_, "Adjustment: Apply %zu times until now",
         adjustment_time_.load(std::memory_order_acquire));
 #ifdef DEBUG
@@ -175,6 +173,9 @@ class InternalMultiQueue : public MultiQueue {
       delete queues_[i];
       queues_[i] = nullptr;
     }
+
+    scheduler->ShutDown();
+    scheduler->Schedule(ShutDownMQThread, nullptr);
   }
 
   static void LoadFilterBGWork(void* arg){
