@@ -151,10 +151,6 @@ DBImpl::DBImpl(const Options& raw_options, const std::string& dbname)
                                &internal_comparator_)) {
 }
 
-static void ShutDownMQThread(void *arg){
-    fprintf(stdout, "exit mq thread, lose all job waiting to down\n");
-}
-
 DBImpl::~DBImpl() {
   // Wait for background work to finish.
   mutex_.Lock();
@@ -183,10 +179,6 @@ DBImpl::~DBImpl() {
   }
 
   delete options_.multi_queue;
-
-  // shutting done mq background thread
-  options_.schedule->ShutDown();
-  options_.schedule->Schedule(ShutDownMQThread, nullptr);
 
   // we want to log adjustment time in ~InternalMultiQueue
   // info log must be deleted after delete multi queue

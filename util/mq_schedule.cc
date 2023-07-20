@@ -16,7 +16,6 @@ void MQScheduler::BackgroundThreadMain() {
   while (true) {
     background_work_mutex_.Lock();
     if(shutting_down_){
-      background_work_mutex_.Unlock();
       break ;
     }
 
@@ -36,7 +35,6 @@ void MQScheduler::BackgroundThreadMain() {
 
   // mq schedule is a singleton
   // clear object value for next time usage
-  background_work_mutex_.Lock();
   started_background_thread_ = false;
   while (!background_work_queue_.empty()) {
     background_work_queue_.pop();
@@ -78,9 +76,9 @@ namespace {
 //     return default_env.env();
 //   }
 template <typename EnvType>
-class SingletonEnv {
+class SingletonScheduler {
  public:
-  SingletonEnv() {
+  SingletonScheduler() {
 #if !defined(NDEBUG)
     env_initialized_.store(true, std::memory_order_relaxed);
 #endif  // !defined(NDEBUG)
@@ -90,18 +88,12 @@ class SingletonEnv {
                   "env_storage_ does not meet the Env's alignment needs");
     new (&env_storage_) EnvType();
   }
-  ~SingletonEnv() = default;
+  ~SingletonScheduler() = default;
 
-  SingletonEnv(const SingletonEnv&) = delete;
-  SingletonEnv& operator=(const SingletonEnv&) = delete;
+  SingletonScheduler(const SingletonScheduler&) = delete;
+  SingletonScheduler& operator=(const SingletonScheduler&) = delete;
 
   MQScheduler* env() { return reinterpret_cast<MQScheduler*>(&env_storage_); }
-
-  static void AssertEnvNotInitialized() {
-#if !defined(NDEBUG)
-    assert(!env_initialized_.load(std::memory_order_relaxed));
-#endif  // !defined(NDEBUG)
-  }
 
  private:
   typename std::aligned_storage<sizeof(EnvType), alignof(EnvType)>::type
@@ -113,10 +105,10 @@ class SingletonEnv {
 
 #if !defined(NDEBUG)
 template <typename EnvType>
-std::atomic<bool> SingletonEnv<EnvType>::env_initialized_;
+std::atomic<bool> SingletonScheduler<EnvType>::env_initialized_;
 #endif  // !defined(NDEBUG)
 
-using DefaultSchedule = SingletonEnv<MQScheduler>;
+using DefaultSchedule = SingletonScheduler<MQScheduler>;
 
 }  // namespace
 

@@ -143,16 +143,23 @@ class InternalMultiQueue : public MultiQueue {
  public:
   explicit InternalMultiQueue() : usage_(0),
                                   logger_(nullptr),
-                                  adjustment_time_(0){
+                                  adjustment_time_(0),
+                                  scheduler(MQScheduler::Default()){
     queues_.resize(filters_number + 1);
     for (int i = 0; i < filters_number + 1; i++) {
       queues_[i] = new SingleQueue();
     }
   }
 
+  static void ShutDownMQThread(void *arg){
+    fprintf(stderr, "exit mq thread, lose all job waiting to down\n");
+  }
+
   ~InternalMultiQueue() override {
     // save adjustment times when db is over by force
     MutexLock l(&mutex_);
+    scheduler->ShutDown();
+    scheduler->Schedule(ShutDownMQThread, nullptr);
     Log(logger_, "Adjustment: Apply %zu times until now",
         adjustment_time_.load(std::memory_order_acquire));
 #ifdef DEBUG
@@ -170,6 +177,11 @@ class InternalMultiQueue : public MultiQueue {
     }
   }
 
+  static void LoadFilterBGWork(void* arg){
+    FilterBlockReader* job = reinterpret_cast<FilterBlockReader*>(arg);
+    job->InitLoadFilter();
+  }
+
   Handle* Insert(const Slice& key, FilterBlockReader* reader,
                  void (*deleter)(const Slice&, FilterBlockReader*)) override {
     MutexLock l(&mutex_);
@@ -184,6 +196,8 @@ class InternalMultiQueue : public MultiQueue {
 
     // update usage
     usage_ += reader->LoadFilterNumber() * reader->OneUnitSize();
+
+    scheduler->Schedule(LoadFilterBGWork, reader);
 
     return reinterpret_cast<Handle*>(handle);
   }
@@ -295,6 +309,8 @@ class InternalMultiQueue : public MultiQueue {
 
   std::vector<SingleQueue*> queues_ GUARDED_BY(mutex_);
   std::unordered_map<std::string, QueueHandle*> map_ GUARDED_BY(mutex_);
+
+  MQScheduler* scheduler GUARDED_BY(mutex_);
 
   std::vector<QueueHandle*> FindColdFilter(uint64_t memory, SequenceNumber sn)
       EXCLUSIVE_LOCKS_REQUIRED(mutex_){

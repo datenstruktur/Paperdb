@@ -162,11 +162,6 @@ static void DeleteCacheFilter(const Slice& key, FilterBlockReader* value) {
   delete value;
 }
 
-static void LoadFilterBGWork(void* arg){
-  FilterBlockReader* job = reinterpret_cast<FilterBlockReader*>(arg);
-  job->InitLoadFilter();
-}
-
 // get FilterBlockReader and saved in rep_->filter, we should return
 // cache handle and reader, so the pointer of reader passed in ReadFilter
 void Table::ReadMeta() {
@@ -186,7 +181,6 @@ void Table::ReadMeta() {
     return;
   }
 
-  FilterBlockReader* reader = nullptr;
 
   // Get filter block from cache, or read from disk and insert
   std::string filter_key = rep_->multi_cache_key;
@@ -194,12 +188,9 @@ void Table::ReadMeta() {
 
   MultiQueue::Handle* handle = multi_queue->Lookup(key);
   if (handle == nullptr) { //not in multi queue, insert
-    reader = ReadFilter();
+    FilterBlockReader* reader = ReadFilter();
     if (reader != nullptr) {
       handle = multi_queue->Insert(key, reader, &DeleteCacheFilter);
-      // todo: use background thread
-      // fix mq_schedule, take part of load and use
-      rep_->options.schedule->Schedule(LoadFilterBGWork, reader);
     }
   } else{ // in multi queue, load filter
     // check filter unit number
