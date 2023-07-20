@@ -159,7 +159,6 @@ DBImpl::~DBImpl() {
     background_work_finished_signal_.Wait();
   }
 
-
   mutex_.Unlock();
 
   if (db_lock_ != nullptr) {

@@ -15,15 +15,6 @@ namespace leveldb {
 void MQScheduler::BackgroundThreadMain() {
   while (true) {
     background_work_mutex_.Lock();
-    if(shutting_down_){
-      // mq schedule is a singleton
-      // clear object value for next time usage
-      started_background_thread_ = false;
-      while (!background_work_queue_.empty()) {
-        background_work_queue_.pop();
-      }
-      shutting_down_ = false;
-    }
 
     // Wait until there is work to be done.
     while (background_work_queue_.empty()) {

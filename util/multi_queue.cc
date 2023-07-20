@@ -151,10 +151,6 @@ class InternalMultiQueue : public MultiQueue {
     }
   }
 
-  static void ShutDownMQThread(void *arg){
-    fprintf(stderr, "exit mq thread, lose all job waiting to down\n");
-  }
-
   ~InternalMultiQueue() override {
     // save adjustment times when db is over by force
     MutexLock l(&mutex_);
@@ -168,14 +164,10 @@ class InternalMultiQueue : public MultiQueue {
     }
     assert(real_usage == usage_);
 #endif
-
     for (int i = 0; i < filters_number + 1; i++) {
       delete queues_[i];
       queues_[i] = nullptr;
     }
-
-    scheduler->ShutDown();
-    scheduler->Schedule(ShutDownMQThread, nullptr);
   }
 
   static void LoadFilterBGWork(void* arg){

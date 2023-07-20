@@ -1754,12 +1754,13 @@ TEST_F(DBTest, BloomFilter) {
 
     options.env = env_;
     options.block_cache = NewLRUCache(0);  // Prevent cache hits
+    options.create_if_missing = true;
 
     if (loaded_filters_number <= 0) {
       return;
     }
 
-    Reopen(&options);
+    DestroyAndReopen(&options);
 
     // Populate multiple layers
     const int N = 10000;

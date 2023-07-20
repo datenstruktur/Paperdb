@@ -24,14 +24,9 @@ struct BackgroundWorkItem {
 class MQScheduler {
  public:
   MQScheduler(): background_work_cv_(&background_work_mutex_),
-                 started_background_thread_(false), shutting_down_(false){}
+                 started_background_thread_(false){}
   void Schedule(void (*background_work_function)(void* background_work_arg),
     void* background_work_arg);
-
-  void ShutDown(){
-    MutexLock l(&background_work_mutex_);
-    shutting_down_ = true;
-  }
 
   static MQScheduler* Default();
 
@@ -39,8 +34,6 @@ class MQScheduler {
   port::Mutex background_work_mutex_;
   port::CondVar background_work_cv_ GUARDED_BY(background_work_mutex_);
   bool started_background_thread_ GUARDED_BY(background_work_mutex_);
-
-  bool shutting_down_;
 
   std::queue<BackgroundWorkItem> background_work_queue_
       GUARDED_BY(background_work_mutex_);
