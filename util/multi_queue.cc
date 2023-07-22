@@ -167,11 +167,15 @@ class InternalMultiQueue : public MultiQueue {
     }
     assert(real_usage == usage_);
 #endif
-    // todo waiting for background thread done
     for (int i = 0; i < filters_number + 1; i++) {
       delete queues_[i];
       queues_[i] = nullptr;
     }
+  }
+
+  static void LoadFilterBGWork(void *arg){
+    FilterBlockReader* reader = static_cast<FilterBlockReader*>(arg);
+    reader->InitLoadFilter();
   }
 
   Handle* Insert(const Slice& key, FilterBlockReader* reader,
@@ -180,8 +184,7 @@ class InternalMultiQueue : public MultiQueue {
     if(reader == nullptr) return nullptr;
     // insert to queue
 
-    reader->InitLoadFilter();
-    size_t number = reader->FilterUnitsNumber();
+    size_t number = reader->LoadFilterNumber();
     SingleQueue* queue = queues_[number];
     QueueHandle* handle = queue->Insert(key, reader, deleter);
 
@@ -189,7 +192,9 @@ class InternalMultiQueue : public MultiQueue {
     map_.emplace(key.ToString(), handle);
 
     // update usage
-    usage_ += reader->Size();
+    usage_ += reader->LoadFilterNumber() * reader->OneUnitSize();
+
+    scheduler->Schedule(LoadFilterBGWork, reader);
 
     return reinterpret_cast<Handle*>(handle);
   }
@@ -205,23 +210,59 @@ class InternalMultiQueue : public MultiQueue {
     }
   }
 
-  static void AdjustmentBGWork(void* arg, Handle* handle, SequenceNumber sn){
-    MultiQueue* multi_queue = static_cast<MultiQueue*>(arg);
-    if(multi_queue != nullptr){
+  struct AdjustmentJob{
+    MultiQueue* multi_queue;
+    Handle* handle;
+    SequenceNumber sn;
+  };
+
+  static void AdjustmentBGWork(void* arg){
+    AdjustmentJob* job = static_cast<AdjustmentJob*>(arg);
+    if(job != nullptr) {
+      MultiQueue* multi_queue = job->multi_queue;
+      Handle* handle = job->handle;
+      SequenceNumber sn = job->sn;
       multi_queue->DoAdjustment(handle, sn);
     }
+    delete job;
+  }
+
+  // todo: use reference maybe stuck?
+  static inline bool ParseKey(const Slice& key, SequenceNumber* sn){
+      const size_t n = key.size();
+      if (n < 8) return false;
+      uint64_t num = DecodeFixed64(key.data() + n - 8);
+      *sn = num >> 8;
+      return ((num & 0xff) <= static_cast<uint8_t>(kTypeValue));
   }
 
   bool UpdateHandle(Handle* handle, uint64_t block_offset, const Slice& key) override{
     // try to apply adjustment
-    ParsedInternalKey parsedInternalKey;
-    if (ParseInternalKey(key, &parsedInternalKey)) {
-      SequenceNumber sn = parsedInternalKey.sequence;
+    SequenceNumber sn;
+    if (ParseKey(key, &sn)) {
+#ifdef DEBUG
+      ParsedInternalKey internal_key;
+      assert(ParseInternalKey(key, &internal_key));
+      assert(internal_key.sequence == sn);
+#endif
       FilterBlockReader* reader = Value(handle);
       if (reader) {
+        // update access time first
+        bool is_existed = reader->KeyMayMatch(block_offset, key);
+
+        // adjust if reader is hot
+        if(!reader->IsCold(sn)) {
+          AdjustmentJob* job = new AdjustmentJob();
+          job->multi_queue = this;
+          job->handle = handle;
+          job->sn = sn;
+
+          scheduler->Schedule(AdjustmentBGWork, job);
+        }
+
+        // reader must be hot before if we try to adjust
         reader->UpdateState(sn);
-        scheduler->Schedule(AdjustmentBGWork, this, handle, sn);
-        return reader->KeyMayMatch(block_offset, key);
+        return is_existed;
       }
     }
     return true;
