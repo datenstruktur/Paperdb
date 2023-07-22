@@ -194,7 +194,7 @@ class InternalMultiQueue : public MultiQueue {
     // update usage
     usage_ += reader->LoadFilterNumber() * reader->OneUnitSize();
 
-    scheduler->Schedule(LoadFilterBGWork, reader);
+    scheduler->Schedule(LoadFilterBGWork, reader, JOB_TYPE_PRODUCER);
 
     return reinterpret_cast<Handle*>(handle);
   }
@@ -257,7 +257,7 @@ class InternalMultiQueue : public MultiQueue {
           job->handle = handle;
           job->sn = sn;
 
-          scheduler->Schedule(AdjustmentBGWork, job);
+          scheduler->Schedule(AdjustmentBGWork, job, JOB_TYPE_CONSUMER);
         }
 
         // reader must be hot before if we try to adjust
