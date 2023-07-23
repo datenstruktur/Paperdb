@@ -201,7 +201,7 @@ class InternalMultiQueue : public MultiQueue {
     return reinterpret_cast<Handle*>(handle);
   }
 
-  void DoAdjustment(Handle* handle, SequenceNumber sn) override{
+  void DoAdjustment(Handle* handle, const SequenceNumber& sn) override{
     MutexLock l(&mutex_);
     QueueHandle* queue_handle = reinterpret_cast<QueueHandle*>(handle);
     SingleQueue* single_queue = FindQueue(queue_handle);
@@ -332,7 +332,7 @@ class InternalMultiQueue : public MultiQueue {
 
   MQScheduler* scheduler;
 
-  std::vector<QueueHandle*> FindColdFilter(uint64_t memory, SequenceNumber sn)
+  std::vector<QueueHandle*> FindColdFilter(uint64_t memory, const SequenceNumber& sn)
       EXCLUSIVE_LOCKS_REQUIRED(mutex_){
     SingleQueue* queue = nullptr;
     std::vector<QueueHandle*> filters;
@@ -443,7 +443,7 @@ class InternalMultiQueue : public MultiQueue {
     }
   }
 
-  void Adjustment(QueueHandle* hot_handle, SequenceNumber sn)
+  void Adjustment(QueueHandle* hot_handle, const SequenceNumber& sn)
       EXCLUSIVE_LOCKS_REQUIRED(mutex_){
     if (hot_handle && hot_handle->reader->CanBeLoaded()) {
       size_t memory = hot_handle->reader->OneUnitSize();
