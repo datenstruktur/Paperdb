@@ -102,9 +102,11 @@ class SingleQueue {
       if (e == nullptr || e == mru_ || e == lru_) {
         break;
       }
-      if (e->reader->IsCold(sn) && e->reader->CanBeEvict()) {
+      if (e->reader->IsCold(sn)) {
         memory -= e->reader->OneUnitSize();
         filters.emplace_back(e);
+      } else {
+        break ;
       }
       e = e->prev;
     } while (memory > 0); // evict cold memory can be bigger than load a hot filter
@@ -194,7 +196,7 @@ class InternalMultiQueue : public MultiQueue {
     // update usage
     usage_ += reader->LoadFilterNumber() * reader->OneUnitSize();
 
-    scheduler->Schedule(LoadFilterBGWork, reader, JOB_TYPE_PRODUCER);
+    scheduler->Schedule(LoadFilterBGWork, reader);
 
     return reinterpret_cast<Handle*>(handle);
   }
@@ -208,23 +210,6 @@ class InternalMultiQueue : public MultiQueue {
       single_queue->MoveToMRU(queue_handle);
       Adjustment(queue_handle, sn);
     }
-  }
-
-  struct AdjustmentJob{
-    MultiQueue* multi_queue;
-    Handle* handle;
-    SequenceNumber sn;
-  };
-
-  static void AdjustmentBGWork(void* arg){
-    AdjustmentJob* job = static_cast<AdjustmentJob*>(arg);
-    if(job != nullptr) {
-      MultiQueue* multi_queue = job->multi_queue;
-      Handle* handle = job->handle;
-      SequenceNumber sn = job->sn;
-      multi_queue->DoAdjustment(handle, sn);
-    }
-    delete job;
   }
 
   // todo: use reference maybe stuck?
@@ -248,21 +233,12 @@ class InternalMultiQueue : public MultiQueue {
       FilterBlockReader* reader = Value(handle);
       if (reader) {
         // update access time first
-        bool is_existed = reader->KeyMayMatch(block_offset, key);
+        reader->UpdateState(sn);
 
         // adjust if reader is hot
-        if(!reader->IsCold(sn)) {
-          AdjustmentJob* job = new AdjustmentJob();
-          job->multi_queue = this;
-          job->handle = handle;
-          job->sn = sn;
+        DoAdjustment(handle, sn);
 
-          scheduler->Schedule(AdjustmentBGWork, job, JOB_TYPE_CONSUMER);
-        }
-
-        // reader must be hot before if we try to adjust
-        reader->UpdateState(sn);
-        return is_existed;
+        return reader->KeyMayMatch(block_offset, key);
       }
     }
     return true;

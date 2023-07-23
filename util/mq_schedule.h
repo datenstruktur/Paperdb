@@ -23,12 +23,14 @@ struct BackgroundWorkItem {
   void* const arg;
 };
 
-class Scheduler {
+class MQScheduler {
  public:
-  Scheduler(): background_work_cv_(&background_work_mutex_), background_finished_cv_(&background_work_mutex_),
+  MQScheduler(): background_work_cv_(&background_work_mutex_), background_finished_cv_(&background_work_mutex_),
                  started_background_thread_(false), shutting_down_(true){}
   void Schedule(void (*background_work_function)(void*),
              void* background_work_arg);
+
+  static MQScheduler* Default();
 
   void ShutDown(){
     MutexLock l(&background_work_mutex_);
@@ -48,25 +50,10 @@ class Scheduler {
       GUARDED_BY(background_work_mutex_);
 
   void BackgroundThreadMain();
-  static void BackgroundThreadEntryPoint(Scheduler* env){
+  static void BackgroundThreadEntryPoint(MQScheduler* env){
     env->BackgroundThreadMain();
   }
 };
-
-enum JobType{JOB_TYPE_PRODUCER, JOB_TYPE_CONSUMER};
-
-class MQScheduler{
- public:
-  static MQScheduler* Default();
-  void Schedule(void (*background_work_function)(void*),
-                void* background_work_arg, JobType job_type);
-
-  void ShutDown();
- private:
-  Scheduler producer;
-  Scheduler consumer;
-};
-
 }  // namespace leveldb
 
 #endif  // LEVELDB_MQ_SCHEDULE_H

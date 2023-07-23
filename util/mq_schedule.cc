@@ -13,7 +13,7 @@
 
 namespace leveldb {
 
-void Scheduler::BackgroundThreadMain() {
+void MQScheduler::BackgroundThreadMain() {
   while (true) {
     background_work_mutex_.Lock();
 
@@ -34,7 +34,7 @@ void Scheduler::BackgroundThreadMain() {
   }
 }
 
-void Scheduler::Schedule(void (*background_work_function)(void*),
+void MQScheduler::Schedule(void (*background_work_function)(void*),
                           void* background_work_arg) {
   background_work_mutex_.Lock();
   shutting_down_ = false;
@@ -54,27 +54,6 @@ void Scheduler::Schedule(void (*background_work_function)(void*),
   background_work_mutex_.Unlock();
 }
 
-void MQScheduler::Schedule(void (*background_work_function)(void*),
-                           void* background_work_arg, JobType job_type) {
-  switch (job_type) {
-    case JOB_TYPE_PRODUCER: {
-      producer.Schedule(background_work_function, background_work_arg);
-      break ;
-    }
-    case JOB_TYPE_CONSUMER:{
-      consumer.Schedule(background_work_function, background_work_arg);
-      break ;
-    }
-    default:{
-      break ;
-    }
-  }
-}
-
-void MQScheduler::ShutDown() {
-  producer.ShutDown();
-  consumer.ShutDown();
-}
 namespace {
 
 // Wraps an Env instance whose destructor is never created.
