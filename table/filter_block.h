@@ -107,7 +107,7 @@ class FilterBlockReader {
 
   bool CanBeLoaded() {
     MutexLock l(&mutex_);
-    return FilterUnitsNumberInternal() < filters_number;
+    return FilterUnitsNumberInternal() < all_units_number_;
   }
 
   bool CanBeEvict() {
@@ -115,7 +115,7 @@ class FilterBlockReader {
     return FilterUnitsNumberInternal() > 0;
   }
 
-  // filter block memory overhead(Byte), use by Cache->Insert
+  // filter block memory overhead(Byte)
   size_t Size() {
     MutexLock l(&mutex_);
     return FilterUnitsNumberInternal() * disk_size_;
