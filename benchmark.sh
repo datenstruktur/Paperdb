@@ -1,6 +1,6 @@
 #!/bin/bash
 
-num=1700000000 #kv number in database
+num=1000000000 #kv number in database
 value_size=100
 reads=10000000
 bloom_bits=4 #bits per key for every filter unit
