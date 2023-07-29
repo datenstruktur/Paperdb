@@ -31,7 +31,7 @@ struct Table::Rep {
 
   Options options;
   Status status;
-  DirectIORandomAccessFile* file;
+  RandomAccessFile* file;
   uint64_t block_cache_id;
   uint64_t table_id;
   Footer footer;
@@ -63,7 +63,7 @@ void Table::ParseHandleKey() {
   }
 }
 
-Status Table::Open(const Options& options, DirectIORandomAccessFile* file,
+Status Table::Open(const Options& options, RandomAccessFile* file,
                    uint64_t size, Table** table, uint64_t table_id) {
   *table = nullptr;                             //every table has unique file id
   if (size < Footer::kEncodedLength) {
@@ -252,9 +252,10 @@ Iterator* Table::BlockReader(void* arg, const ReadOptions& options,
         s = ReadBlock(table->rep_->file, options, handle, &contents);
         if (s.ok()) {
           block = new Block(contents);
-          // cache in block, no mmap now
-          cache_handle = block_cache->Insert(key, block, block->size(),
-                                             &DeleteCachedBlock);
+          if(contents.cachale) {
+            cache_handle = block_cache->Insert(key, block, block->size(),
+                                               &DeleteCachedBlock);
+          }
         }
       }
     } else {

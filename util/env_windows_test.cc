@@ -7,6 +7,7 @@
 #include "port/port.h"
 #include "util/env_windows_test_helper.h"
 #include "util/testutil.h"
+#include "util/read_buffer.h"
 
 namespace leveldb {
 
@@ -43,7 +44,7 @@ TEST_F(EnvWindowsTest, TestOpenOnRead) {
   for (int i = 0; i < kNumFiles; i++) {
     ASSERT_LEVELDB_OK(env_->NewRandomAccessFile(test_file, &files[i]));
   }
-  char scratch;
+  ReadBuffer scratch;
   Slice read_result;
   for (int i = 0; i < kNumFiles; i++) {
     ASSERT_LEVELDB_OK(files[i]->Read(i, 1, &read_result, &scratch));

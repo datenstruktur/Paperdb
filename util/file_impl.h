@@ -49,32 +49,6 @@ class StringSource : public RandomAccessFile {
   uint64_t Size() const { return contents_.size(); }
 
   Status Read(uint64_t offset, size_t n, Slice* result,
-              char* scratch) const override {
-    if (offset >= contents_.size()) {
-      return Status::InvalidArgument("invalid Read offset");
-    }
-    if (offset + n > contents_.size()) {
-      n = contents_.size() - offset;
-    }
-    std::memcpy(scratch, &contents_[offset], n);
-    *result = Slice(scratch, n);
-    return Status::OK();
-  }
-
- private:
-  std::string contents_;
-};
-
-class DirectIOStringSource : public DirectIORandomAccessFile {
- public:
-  DirectIOStringSource(const Slice& contents)
-      : contents_(contents.data(), contents.size()) {}
-
-  ~DirectIOStringSource() override = default;
-
-  uint64_t Size() const { return contents_.size(); }
-
-  Status Read(uint64_t offset, size_t n, Slice* result,
               ReadBuffer* scratch) const override {
     if (offset >= contents_.size()) {
       return Status::InvalidArgument("invalid Read offset");
@@ -82,12 +56,10 @@ class DirectIOStringSource : public DirectIORandomAccessFile {
     if (offset + n > contents_.size()) {
       n = contents_.size() - offset;
     }
-
-    char* buf = (char*)malloc(sizeof (char)* n);
+    char *buf = (char *)malloc(sizeof (char )* n);
+    scratch->SetPtr(buf, /*aligned=*/false);
     std::memcpy(buf, &contents_[offset], n);
     *result = Slice(buf, n);
-
-    scratch->SetPtr(buf, /*aligned=*/false);
     return Status::OK();
   }
 
@@ -103,14 +75,11 @@ class FileImpl {
 
   StringSource* GetSource();
 
-  DirectIOStringSource* GetDirectIOSource();
-
   ~FileImpl();
 
  private:
   StringSink* sink_;
   StringSource* source_;
-  DirectIOStringSource* direct_io_source_;
   uint64_t write_offset_;
 };
 
@@ -199,7 +168,7 @@ class SpecialEnv : public EnvWrapper {
 
   Status NewRandomAccessFile(const std::string& f, RandomAccessFile** r);
 
-  Status NewDirectIORandomAccessFile(const std::string& f, DirectIORandomAccessFile** r);
+  Status NewDirectIORandomAccessFile(const std::string& f, RandomAccessFile** r);
 };
 
 }  // namespace leveldb

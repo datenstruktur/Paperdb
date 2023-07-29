@@ -70,12 +70,12 @@ class FilterBlockReader {
  public:
   // REQUIRES: "contents" and *policy must stay live while *this is live.
   FilterBlockReader(const FilterPolicy* policy, const Slice& contents,
-                    DirectIORandomAccessFile* file);
+                    RandomAccessFile* file);
   bool KeyMayMatch(uint64_t block_offset, const Slice& key);
   Status LoadFilter();
   Status EvictFilter();
   Status InitLoadFilter();
-  Status GoBackToInitFilter(DirectIORandomAccessFile* file);
+  Status GoBackToInitFilter(RandomAccessFile* file);
   ~FilterBlockReader();
 
   void UpdateState(const SequenceNumber& sn);
@@ -162,7 +162,7 @@ class FilterBlockReader {
   uint64_t access_time_ GUARDED_BY(mutex_);
   SequenceNumber sequence_ GUARDED_BY(mutex_);
 
-  DirectIORandomAccessFile* file_ GUARDED_BY(mutex_);
+  RandomAccessFile* file_ GUARDED_BY(mutex_);
 
   std::vector<const char*> filter_units GUARDED_BY(mutex_);
   std::vector<ReadBuffer*> reader_buffers_ GUARDED_BY(mutex_);
@@ -170,7 +170,7 @@ class FilterBlockReader {
   Status LoadFilterInternal();
   Status EvictFilterInternal();
 
-  void UpdateFile(DirectIORandomAccessFile* file);
+  void UpdateFile(RandomAccessFile* file);
 
   bool init_done GUARDED_BY(mutex_);
   port::CondVar init_signal GUARDED_BY(mutex_);

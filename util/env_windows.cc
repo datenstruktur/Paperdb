@@ -230,22 +230,25 @@ class WindowsRandomAccessFile : public RandomAccessFile {
   ~WindowsRandomAccessFile() override = default;
 
   Status Read(uint64_t offset, size_t n, Slice* result,
-              char* scratch) const override {
+              ReadBuffer* scratch) const override {
     DWORD bytes_read = 0;
     OVERLAPPED overlapped = {0};
 
     overlapped.OffsetHigh = static_cast<DWORD>(offset >> 32);
     overlapped.Offset = static_cast<DWORD>(offset);
-    if (!::ReadFile(handle_.get(), scratch, static_cast<DWORD>(n), &bytes_read,
+
+    char* buf = (char*)malloc(sizeof(char) * n);
+    scratch->SetPtr(buf, /*aligned=*/false);
+    if (!::ReadFile(handle_.get(), buf, static_cast<DWORD>(n), &bytes_read,
                     &overlapped)) {
       DWORD error_code = ::GetLastError();
       if (error_code != ERROR_HANDLE_EOF) {
-        *result = Slice(scratch, 0);
+        *result = Slice(buf, 0);
         return Status::IOError(filename_, GetWindowsErrorMessage(error_code));
       }
     }
 
-    *result = Slice(scratch, bytes_read);
+    *result = Slice(buf, bytes_read);
     return Status::OK();
   }
 
@@ -254,7 +257,7 @@ class WindowsRandomAccessFile : public RandomAccessFile {
   const std::string filename_;
 };
 
-class WindowsDirectIORandomAccessFile : public DirectIORandomAccessFile {
+class WindowsDirectIORandomAccessFile : public RandomAccessFile {
  public:
   WindowsDirectIORandomAccessFile(std::string filename, ScopedHandle handle)
       : handle_(std::move(handle)), filename_(std::move(filename)) {}
@@ -307,12 +310,13 @@ class WindowsMmapReadableFile : public RandomAccessFile {
   }
 
   Status Read(uint64_t offset, size_t n, Slice* result,
-              char* scratch) const override {
+              ReadBuffer* scratch) const override {
     if (offset + n > length_) {
       *result = Slice();
       return WindowsError(filename_, ERROR_INVALID_PARAMETER);
     }
 
+    scratch->SetPtr(nullptr, /*aligned=*/false);
     *result = Slice(mmap_base_ + offset, n);
     return Status::OK();
   }
@@ -516,7 +520,7 @@ class WindowsEnv : public Env {
   }
 
   Status NewDirectIORandomAccessFile(const std::string& filename,
-                                     DirectIORandomAccessFile** result) override{
+                                     RandomAccessFile** result) override{
     *result = nullptr;
     DWORD desired_access = GENERIC_READ;
     DWORD share_mode = FILE_SHARE_READ;

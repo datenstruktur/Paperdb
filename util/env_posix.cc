@@ -78,6 +78,7 @@ size_t ReturnPageSize(){
   }
 #endif
   // Default assume 4KB
+  // Todo: Too big?
   return 4U * 1024U;
 }
 
@@ -226,7 +227,7 @@ class PosixRandomAccessFile final : public RandomAccessFile {
   }
 
   Status Read(uint64_t offset, size_t n, Slice* result,
-              char* scratch) const override {
+              ReadBuffer* scratch) const override {
     int fd = fd_;
     if (!has_permanent_fd_) {
       fd = ::open(filename_.c_str(), O_RDONLY | kOpenBaseFlags);
@@ -238,8 +239,13 @@ class PosixRandomAccessFile final : public RandomAccessFile {
     assert(fd != -1);
 
     Status status;
-    ssize_t read_size = ::pread(fd, scratch, n, static_cast<off_t>(offset));
-    *result = Slice(scratch, (read_size < 0) ? 0 : read_size);
+
+    //creat array for read
+    char * buf = (char*)malloc(sizeof(char) * n);
+    scratch->SetPtr(buf, /*aligned=*/false);
+
+    ssize_t read_size = ::pread(fd, buf, n, static_cast<off_t>(offset));
+    *result = Slice(buf, (read_size < 0) ? 0 : read_size);
     if (read_size < 0) {
       // An error: return a non-ok status.
       status = PosixError(filename_, errno);
@@ -259,7 +265,7 @@ class PosixRandomAccessFile final : public RandomAccessFile {
   const std::string filename_;
 };
 
-class PosixDirectIORandomAccessFile final : public DirectIORandomAccessFile {
+class PosixDirectIORandomAccessFile final : public RandomAccessFile {
  public:
   // The new instance takes ownership of |fd|. |fd_limiter| must outlive this
   // instance, and will be used to determine if .
@@ -355,12 +361,14 @@ class PosixMmapReadableFile final : public RandomAccessFile {
   }
 
   Status Read(uint64_t offset, size_t n, Slice* result,
-              char* scratch) const override {
+              ReadBuffer* scratch) const override {
     if (offset + n > length_) {
       *result = Slice();
       return PosixError(filename_, EINVAL);
     }
 
+    // mmap manage memory by itself
+    scratch->SetPtr(nullptr, /*aligned=*/false);
     *result = Slice(mmap_base_ + offset, n);
     return Status::OK();
   }
@@ -669,7 +677,7 @@ class PosixEnv : public Env {
   }
 
   Status NewDirectIORandomAccessFile(const std::string& filename,
-                                     DirectIORandomAccessFile** result) override{
+                                     RandomAccessFile** result) override{
     *result = nullptr;
     int fd = ::open(filename.c_str(), O_RDONLY | kDirectIOFlags | kOpenBaseFlags);
     if(fd < 0){

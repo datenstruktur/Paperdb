@@ -12,7 +12,7 @@
 namespace leveldb {
 
 struct TableAndFile {
-  DirectIORandomAccessFile* file;
+  RandomAccessFile* file;
   Table* table;
 };
 
@@ -38,6 +38,13 @@ TableCache::TableCache(const std::string& dbname, const Options& options,
 
 TableCache::~TableCache() { delete cache_; }
 
+Status TableCache::NewRandomAccessFileForTable(const std::string& fname, RandomAccessFile** file){
+  if(options_.using_direct_io){
+    return env_->NewDirectIORandomAccessFile(fname, file);
+  }
+  return env_->NewRandomAccessFile(fname, file);
+}
+
 Status TableCache::FindTable(uint64_t file_number, uint64_t file_size,
                              Cache::Handle** handle) {
   Status s;
@@ -47,12 +54,12 @@ Status TableCache::FindTable(uint64_t file_number, uint64_t file_size,
   *handle = cache_->Lookup(key);
   if (*handle == nullptr) {
     std::string fname = TableFileName(dbname_, file_number);
-    DirectIORandomAccessFile* file = nullptr;
+    RandomAccessFile* file = nullptr;
     Table* table = nullptr;
-    s = env_->NewDirectIORandomAccessFile(fname, &file);
+    s = NewRandomAccessFileForTable(fname, &file);
     if (!s.ok()) {
       std::string old_fname = SSTTableFileName(dbname_, file_number);
-      if (env_->NewDirectIORandomAccessFile(old_fname, &file).ok()) {
+      if (NewRandomAccessFileForTable(old_fname, &file).ok()) {
         s = Status::OK();
       }
     }

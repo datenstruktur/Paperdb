@@ -34,6 +34,10 @@ void ReadBuffer::SetPtr(char* ptr, bool aligned){
   aligned_ = aligned;
 }
 
+bool ReadBuffer::PtrIsNotNull() const{
+  return ptr_ == nullptr;
+}
+
 void ReadBuffer::FreePtr(){
   if(ptr_ == nullptr) return;
   if(!aligned_){

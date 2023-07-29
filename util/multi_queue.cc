@@ -255,7 +255,7 @@ class InternalMultiQueue : public MultiQueue {
     }
   }
 
-  void GoBackToInitFilter(Handle* handle, DirectIORandomAccessFile* file) override {
+  void GoBackToInitFilter(Handle* handle, RandomAccessFile* file) override {
     MutexLock l(&mutex_);
     if(handle != nullptr){
       QueueHandle* queue_handle = reinterpret_cast<QueueHandle*>(handle);

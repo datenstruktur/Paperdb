@@ -83,11 +83,12 @@ static const size_t kBlockTrailerSize = 5;
 struct BlockContents {
   Slice data;           // Actual contents of data
   ReadBuffer *read_buffer; // the memory allocated by direct io
+  bool cachale;
 };
 
 // Read the block identified by "handle" from "file".  On failure
 // return non-OK.  On success fill *result and return OK.
-Status ReadBlock(DirectIORandomAccessFile* file, const ReadOptions& options,
+Status ReadBlock(RandomAccessFile* file, const ReadOptions& options,
                  const BlockHandle& handle, BlockContents* result);
 
 // Implementation details follow.  Clients should ignore,

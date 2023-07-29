@@ -31,6 +31,8 @@ class ReadBuffer {
   // for Read in Env
   void SetPtr(char* ptr, bool aligned);
 
+  bool PtrIsNotNull() const;
+
  private:
   void FreePtr();
   char* ptr_;

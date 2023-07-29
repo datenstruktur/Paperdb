@@ -88,7 +88,7 @@ class LEVELDB_EXPORT Env {
                                      RandomAccessFile** result) = 0;
 
   virtual Status NewDirectIORandomAccessFile(const std::string& fname,
-                                             DirectIORandomAccessFile** result) = 0;
+                                             RandomAccessFile** result) = 0;
 
   // Create an object that writes to a new file with the specified
   // name.  Deletes any existing file with the same name and creates a
@@ -273,24 +273,7 @@ class LEVELDB_EXPORT RandomAccessFile {
   //
   // Safe for concurrent use by multiple threads.
   virtual Status Read(uint64_t offset, size_t n, Slice* result,
-                      char* scratch) const = 0;
-};
-
-// A file abstraction for randomly reading the contents of a file.
-class LEVELDB_EXPORT DirectIORandomAccessFile {
- public:
-  DirectIORandomAccessFile() = default;
-
-  DirectIORandomAccessFile(const DirectIORandomAccessFile&) = delete;
-  DirectIORandomAccessFile& operator=(const DirectIORandomAccessFile&) = delete;
-
-  virtual ~DirectIORandomAccessFile();
-
-  // read [offset, n] from disk for user
-  // but read [aligned offset, aligned size] for DirectIO
-  // save malloc memory ptr in allocated, free by user
-  virtual Status Read(uint64_t offset, size_t n, Slice* result,
-                      ReadBuffer* allocated) const = 0;
+                      ReadBuffer* scratch) const = 0;
 };
 
 // A file abstraction for sequential writing.  The implementation
@@ -373,7 +356,7 @@ class LEVELDB_EXPORT EnvWrapper : public Env {
   }
 
   Status NewDirectIORandomAccessFile(const std::string& f,
-                                     DirectIORandomAccessFile** r) override {
+                                     RandomAccessFile** r) override {
       return target_->NewDirectIORandomAccessFile(f, r);
   }
 

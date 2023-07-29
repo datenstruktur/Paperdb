@@ -32,8 +32,6 @@ SequentialFile::~SequentialFile() = default;
 
 RandomAccessFile::~RandomAccessFile() = default;
 
-DirectIORandomAccessFile::~DirectIORandomAccessFile() = default;
-
 WritableFile::~WritableFile() = default;
 
 Logger::~Logger() = default;

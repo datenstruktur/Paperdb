@@ -181,7 +181,7 @@ class TableConstructor : public Constructor {
     EXPECT_EQ(sink.contents().size(), builder.FileSize());
 
     // Open the table
-    source_ = new DirectIOStringSource(sink.contents());
+    source_ = new StringSource(sink.contents());
     Options table_options;
     table_options.comparator = options.comparator;
     // no need to ReadMeta
@@ -205,7 +205,7 @@ class TableConstructor : public Constructor {
     source_ = nullptr;
   }
 
-  DirectIOStringSource* source_;
+  StringSource* source_;
   Table* table_;
 
   TableConstructor();

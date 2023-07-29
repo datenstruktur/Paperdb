@@ -109,7 +109,7 @@ void FilterBlockBuilder::GenerateFilter() {
 
 FilterBlockReader::FilterBlockReader(const FilterPolicy* policy,
                                      const Slice& contents,
-                                     DirectIORandomAccessFile* file)
+                                     RandomAccessFile* file)
     : policy_(policy),
       data_(nullptr),
       offset_(nullptr),
@@ -262,7 +262,7 @@ Status FilterBlockReader::InitLoadFilter() {
   return s;
 }
 
-void FilterBlockReader::UpdateFile(DirectIORandomAccessFile* file) {
+void FilterBlockReader::UpdateFile(RandomAccessFile* file) {
   mutex_.AssertHeld();
   if(file != nullptr) {
     // file_ will be freed by table cache
@@ -270,7 +270,7 @@ void FilterBlockReader::UpdateFile(DirectIORandomAccessFile* file) {
   }
 }
 
-Status FilterBlockReader::GoBackToInitFilter(DirectIORandomAccessFile* file) {
+Status FilterBlockReader::GoBackToInitFilter(RandomAccessFile* file) {
   // todo: use CondVarSignal
   MutexLock l(&mutex_);
   UpdateFile(file);

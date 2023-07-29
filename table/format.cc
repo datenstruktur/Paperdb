@@ -66,10 +66,11 @@ Status Footer::DecodeFrom(Slice* input) {
   return result;
 }
 
-Status ReadBlock(DirectIORandomAccessFile* file, const ReadOptions& options,
+Status ReadBlock(RandomAccessFile* file, const ReadOptions& options,
                  const BlockHandle& handle, BlockContents* result) {
   result->data = Slice();
   result->read_buffer = nullptr;
+  result->cachale = false;
 
   // Read the block contents as well as the type/crc footer.
   // See table_builder.cc for the code that built this structure.
@@ -98,6 +99,8 @@ Status ReadBlock(DirectIORandomAccessFile* file, const ReadOptions& options,
   switch (data[n]) {
     case kNoCompression:
       result->data = Slice(data, n);
+      // mmap's ptr is null, no need for cache
+      result->cachale = read_buffer.PtrIsNotNull();
       // use move semantics to move buffer
       result->read_buffer = new ReadBuffer(std::move(read_buffer));
 

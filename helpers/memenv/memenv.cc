@@ -190,25 +190,12 @@ class RandomAccessFileImpl : public RandomAccessFile {
   ~RandomAccessFileImpl() override { file_->Unref(); }
 
   Status Read(uint64_t offset, size_t n, Slice* result,
-              char* scratch) const override {
-    return file_->Read(offset, n, result, scratch);
-  }
-
- private:
-  FileState* file_;
-};
-
-class DirectIORandomAccessFileImpl : public DirectIORandomAccessFile{
- public:
-  explicit DirectIORandomAccessFileImpl(FileState* file) : file_(file) { file_->Ref(); }
-  ~DirectIORandomAccessFileImpl() override {file_->Unref();}
-  Status Read(uint64_t offset, size_t n, Slice* result,
-              ReadBuffer* allocated) const override {
-    // destroy buf by free, not delete
-    char* buf = (char*)(malloc(sizeof(char*) * n));
-    allocated->SetPtr(buf, /*aligned=*/false);
+              ReadBuffer* scratch) const override {
+    char* buf = (char*)malloc(sizeof(char) * n);
+    scratch->SetPtr(buf, /*aligned=*/false);
     return file_->Read(offset, n, result, buf);
   }
+
  private:
   FileState* file_;
 };
@@ -270,14 +257,14 @@ class InMemoryEnv : public EnvWrapper {
   }
 
   Status NewDirectIORandomAccessFile(
-      const std::string& fname, DirectIORandomAccessFile** result) override {
+      const std::string& fname, RandomAccessFile** result) override {
     MutexLock lock(&mutex_);
     if (file_map_.find(fname) == file_map_.end()) {
       *result = nullptr;
       return Status::IOError(fname, "File not found");
     }
 
-    *result = new DirectIORandomAccessFileImpl(file_map_[fname]);
+    *result = new RandomAccessFileImpl(file_map_[fname]);
     return Status::OK();
   }
 
