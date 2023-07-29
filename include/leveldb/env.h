@@ -21,8 +21,6 @@
 #include "leveldb/export.h"
 #include "leveldb/status.h"
 
-#include "util/read_buffer.h"
-
 // This workaround can be removed when leveldb::Env::DeleteFile is removed.
 #if defined(_WIN32)
 // On Windows, the method name DeleteFile (below) introduces the risk of
@@ -50,6 +48,7 @@ class DirectIORandomAccessFile;
 class SequentialFile;
 class Slice;
 class WritableFile;
+class ReadBuffer;
 
 class LEVELDB_EXPORT Env {
  public:

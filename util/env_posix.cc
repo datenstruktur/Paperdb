@@ -8,12 +8,6 @@
 #ifndef __Fuchsia__
 #include <sys/resource.h>
 #endif
-#include <sys/stat.h>
-#include <sys/time.h>
-#include <sys/types.h>
-#include <unistd.h>
-#include <fcntl.h>
-
 #include <atomic>
 #include <cerrno>
 #include <cstddef>
@@ -21,21 +15,29 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <fcntl.h>
 #include <limits>
 #include <queue>
 #include <set>
 #include <string>
+#include <sys/stat.h>
+#include <sys/time.h>
+#include <sys/types.h>
 #include <thread>
 #include <type_traits>
+#include <unistd.h>
 #include <utility>
 
 #include "leveldb/env.h"
 #include "leveldb/slice.h"
 #include "leveldb/status.h"
+
 #include "port/port.h"
 #include "port/thread_annotations.h"
 #include "util/env_posix_test_helper.h"
 #include "util/posix_logger.h"
+
+#include "read_buffer.h"
 
 namespace leveldb {
 
@@ -65,6 +67,33 @@ constexpr const int kDirectIOFlags = 0; // use fcntl, not open, macos has not O_
 
 
 constexpr const size_t kWritableFileBufferSize = 65536;
+
+size_t kAlignPageSize = 0;
+
+size_t ReturnPageSize(){
+#if __linux__ || defined(_SC_PAGESIZE)
+  long v = sysconf(_SC_PAGESIZE);
+  if (v >= 1024) {
+    return static_cast<size_t>(v);
+  }
+#endif
+  // Default assume 4KB
+  return 4U * 1024U;
+}
+
+size_t GetPageSize() {
+  if (kAlignPageSize > 0) return kAlignPageSize;
+  kAlignPageSize = ReturnPageSize();
+  return kAlignPageSize;
+}
+
+inline bool PosixIsAligned(uint64_t val){
+  return IsAligned(val, GetPageSize());
+}
+
+inline bool PosixIsAligned(const char* ptr){
+  return IsAligned(ptr, GetPageSize());
+}
 
 Status PosixError(const std::string& context, int error_number) {
   if (error_number == ENOENT) {
@@ -284,8 +313,8 @@ class PosixDirectIORandomAccessFile final : public DirectIORandomAccessFile {
     size_t   aligned_size     = n + user_data_offset;
     aligned_size              = aligned_size + (GetPageSize() - (aligned_size & (GetPageSize() - 1)));
 
-    assert(IsAligned(aligned_offset));
-    assert(IsAligned(aligned_size));
+    assert(PosixIsAligned(aligned_offset));
+    assert(PosixIsAligned(aligned_size));
 
     char *buf = nullptr;
     if(posix_memalign(reinterpret_cast<void **>(&buf), GetPageSize(),
@@ -293,7 +322,7 @@ class PosixDirectIORandomAccessFile final : public DirectIORandomAccessFile {
       return Status::Corruption("Can not malloc aligned buff");
     }
 
-    assert(IsAligned(buf));
+    assert(PosixIsAligned(buf));
 
     scratch->SetPtr(buf, /*aligned=*/true);
     Status status;

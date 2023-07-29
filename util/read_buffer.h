@@ -6,39 +6,10 @@
 #define LEVELDB_READ_BUFFER_H
 
 #include <cstdlib>
-#include <malloc.h>
-#include <unistd.h>
 #include <cstdint>
+#include "leveldb/env.h"
 
 namespace leveldb {
-namespace {
-size_t kAlignPageSize = 0;
-
-size_t GetPageSize() {
-  if (kAlignPageSize > 0) return kAlignPageSize;
-#if __linux__ || defined(_SC_PAGESIZE)
-  long v = sysconf(_SC_PAGESIZE);
-  if (v >= 1024) {
-    kAlignPageSize = static_cast<size_t>(v);
-  } else {
-    // Default assume 4KB
-    kAlignPageSize = 4U * 1024U;
-  }
-#elif _WIN32
-#include <sysinfoapi.h>
-  SYSTEM_INFO sinfo;
-  GetSystemInfo(&sinfo);
-
-  page_size = sinfo.dwPageSize;
-#else
-  // Default assume 4KB
-  page_size = 4U * 1024U;
-#endif
-
-  return kAlignPageSize;
-}
-}
-
 class ReadBuffer {
  public:
   ReadBuffer();
@@ -54,12 +25,12 @@ class ReadBuffer {
   bool aligned_;
 };
 
-inline static bool IsAligned(uint64_t val){
-  return (val & (GetPageSize() - 1)) == 0;
+inline bool IsAligned(uint64_t val, size_t alignment){
+  return (val & (alignment - 1)) == 0;
 }
 
-inline static bool IsAligned(const char* ptr){
-  return (reinterpret_cast<uintptr_t>(ptr) & (GetPageSize() - 1)) == 0;
+inline bool IsAligned(const char* ptr, size_t alignment){
+  return (reinterpret_cast<uintptr_t>(ptr) & (alignment - 1)) == 0;
 }
 
 }  // namespace leveldb

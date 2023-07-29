@@ -32,6 +32,7 @@
 #include "util/logging.h"
 #include "util/mutexlock.h"
 #include "util/windows_logger.h"
+#include "util/read_buffer.h"
 
 namespace leveldb {
 
@@ -44,6 +45,29 @@ constexpr int kDefaultMmapLimit = (sizeof(void*) >= 8) ? 1000 : 0;
 
 // Can be set by by EnvWindowsTestHelper::SetReadOnlyMMapLimit().
 int g_mmap_limit = kDefaultMmapLimit;
+
+size_t kAlignPageSize = 0;
+
+size_t ReturnPageSize() {
+  SYSTEM_INFO sinfo;
+  GetSystemInfo(&sinfo);
+
+  return sinfo.dwPageSize;
+}
+
+size_t GetPageSize() {
+  if (kAlignPageSize > 0) return kAlignPageSize;
+  kAlignPageSize = ReturnPageSize();
+  return kAlignPageSize;
+}
+
+inline bool WindowsIsAligned(uint64_t val){
+  return IsAligned(val, GetPageSize());
+}
+
+inline bool WindowsIsAligned(const char* ptr){
+  return IsAligned(ptr, GetPageSize());
+}
 
 std::string GetWindowsErrorMessage(DWORD error_code) {
   std::string message;
@@ -248,11 +272,11 @@ class WindowsDirectIORandomAccessFile : public DirectIORandomAccessFile {
     size_t   aligned_size     = n + user_data_offset;
     aligned_size              = aligned_size + (GetPageSize() - (aligned_size & (GetPageSize() - 1)));
 
-    assert(IsAligned(aligned_offset));
-    assert(IsAligned(aligned_size));
+    assert(WindowsIsAligned(aligned_offset));
+    assert(WindowsIsAligned(aligned_size));
 
     char *buf = reinterpret_cast<char *>(_aligned_malloc(aligned_size, GetPageSize()));
-    assert(IsAligned(buf));
+    assert(WindowsIsAligned(buf));
 
     overlapped.OffsetHigh = static_cast<DWORD>(aligned_offset >> 32);
     overlapped.Offset = static_cast<DWORD>(aligned_offset);
