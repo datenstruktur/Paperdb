@@ -83,7 +83,7 @@ class DirectIOStringSource : public DirectIORandomAccessFile {
       n = contents_.size() - offset;
     }
 
-    char* buf = new char[n];
+    char* buf = (char*)malloc(sizeof (char)* n);
     std::memcpy(buf, &contents_[offset], n);
     *result = Slice(buf, n);
 

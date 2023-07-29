@@ -70,17 +70,20 @@ Status Table::Open(const Options& options, DirectIORandomAccessFile* file,
     return Status::Corruption("file is too short to be an sstable");
   }
 
+  //TODO: use buffer io?
   char* footer_space = nullptr;
   Slice footer_input;
   Status s = file->Read(size - Footer::kEncodedLength, Footer::kEncodedLength,
                         &footer_input, &footer_space);
 
-  std::unique_ptr<char[]> footer_ptr(footer_space);
   if (!s.ok()) return s;
 
   Footer footer;
   s = footer.DecodeFrom(&footer_input);
-  if (!s.ok()) return s;
+  if (!s.ok()) {
+    free(footer_space);
+    return s;
+  }
 
   // Read the index block
   BlockContents index_block_contents;
@@ -89,6 +92,7 @@ Status Table::Open(const Options& options, DirectIORandomAccessFile* file,
     opt.verify_checksums = true;
   }
   s = ReadBlock(file, opt, footer.index_handle(), &index_block_contents);
+  free(footer_space);
 
   if (s.ok()) {
     // We've successfully read the footer and the index block: we're
@@ -250,10 +254,9 @@ Iterator* Table::BlockReader(void* arg, const ReadOptions& options,
         s = ReadBlock(table->rep_->file, options, handle, &contents);
         if (s.ok()) {
           block = new Block(contents);
-          if (contents.cachable && options.fill_cache) {
-            cache_handle = block_cache->Insert(key, block, block->size(),
-                                               &DeleteCachedBlock);
-          }
+          // cache in block, no mmap now
+          cache_handle = block_cache->Insert(key, block, block->size(),
+                                             &DeleteCachedBlock);
         }
       }
     } else {

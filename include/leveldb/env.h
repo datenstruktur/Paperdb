@@ -285,17 +285,11 @@ class LEVELDB_EXPORT DirectIORandomAccessFile {
 
   virtual ~DirectIORandomAccessFile();
 
-  // Read up to "n" bytes from the file starting at "offset".
-  // "scratch[0..n-1]" may be written by this routine.  Sets "*result"
-  // to the data that was read (including if fewer than "n" bytes were
-  // successfully read).  May set "*result" to point at data in
-  // "scratch[0..n-1]", so "scratch[0..n-1]" must be live when
-  // "*result" is used.  If an error was encountered, returns a non-OK
-  // status.
-  //
-  // Safe for concurrent use by multiple threads.
+  // read [offset, n] from disk for user
+  // but read [aligned offset, aligned size] for DirectIO
+  // save malloc memory ptr in allocated, free by user
   virtual Status Read(uint64_t offset, size_t n, Slice* result,
-                      char** scratch) const = 0;
+                      char** allocated) const = 0;
 };
 
 // A file abstraction for sequential writing.  The implementation

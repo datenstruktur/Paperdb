@@ -245,7 +245,7 @@ class WindowsDirectIORandomAccessFile : public DirectIORandomAccessFile {
     overlapped.OffsetHigh = static_cast<DWORD>(offset >> 32);
     overlapped.Offset = static_cast<DWORD>(offset);
 
-    char* buf = new char[n];
+    char* buf = (char*)malloc(sizeof(char) * n);
     *scratch = buf;
     if (!::ReadFile(handle_.get(), buf, static_cast<DWORD>(n), &bytes_read,
                     &overlapped)) {
@@ -496,8 +496,9 @@ class WindowsEnv : public Env {
     DWORD share_mode = FILE_SHARE_READ;
     ScopedHandle handle =
         ::CreateFileA(filename.c_str(), desired_access, share_mode,
-                      /*lpSecurityAttributes=*/nullptr, OPEN_EXISTING,
-                      FILE_ATTRIBUTE_READONLY,
+                      /*lpSecurityAttributes=*/nullptr,
+                      OPEN_EXISTING,
+                      FILE_ATTRIBUTE_READONLY | FILE_FLAG_NO_BUFFERING,
                       /*hTemplateFile=*/nullptr);
     if (!handle.is_valid()) {
       return WindowsError(filename, ::GetLastError());

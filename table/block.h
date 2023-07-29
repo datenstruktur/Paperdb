@@ -34,9 +34,9 @@ class Block {
   uint32_t NumRestarts() const;
 
   const char* data_;
+  char* allocated_ptr_; // memory allocated by direct io
   size_t size_;
   uint32_t restart_offset_;  // Offset in data_ of restart array
-  bool owned_;               // Block owns data_[]
 };
 
 }  // namespace leveldb

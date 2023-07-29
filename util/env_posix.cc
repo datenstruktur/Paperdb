@@ -12,6 +12,7 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 #include <atomic>
 #include <cerrno>
@@ -55,6 +56,13 @@ constexpr const int kOpenBaseFlags = O_CLOEXEC;
 #else
 constexpr const int kOpenBaseFlags = 0;
 #endif  // defined(HAVE_O_CLOEXEC)
+
+#if __linux__
+constexpr const int kDirectIOFlags = O_DIRECT;
+#elif __APPLE__
+constexpr const int kDirectIOFlags = 0; // use fcntl, not open, macos has not O_DIRECT
+#endif //defined(OS_LINUX)
+
 
 constexpr const size_t kWritableFileBufferSize = 65536;
 
@@ -230,6 +238,25 @@ class PosixRandomAccessFile final : public RandomAccessFile {
   const std::string filename_;
 };
 
+static size_t GetPageSize() {
+#if __linux__ || defined(_SC_PAGESIZE)
+  long v = sysconf(_SC_PAGESIZE);
+  if (v >= 1024) {
+    return static_cast<size_t>(v);
+  }
+#endif
+  // Default assume 4KB
+  return 4U * 1024U;
+}
+
+inline static bool IsAligned(uint64_t val){
+  return (val & (GetPageSize() - 1)) == 0;
+}
+
+inline static bool IsAligned(char* ptr){
+  return (reinterpret_cast<uintptr_t>(ptr) & (GetPageSize() - 1)) == 0;
+}
+
 class PosixDirectIORandomAccessFile final : public DirectIORandomAccessFile {
  public:
   // The new instance takes ownership of |fd|. |fd_limiter| must outlive this
@@ -257,19 +284,42 @@ class PosixDirectIORandomAccessFile final : public DirectIORandomAccessFile {
               char** scratch) const override {
     int fd = fd_;
     if (!has_permanent_fd_) {
-      fd = ::open(filename_.c_str(), O_RDONLY | kOpenBaseFlags);
+      fd = ::open(filename_.c_str(), O_RDONLY | kDirectIOFlags | kOpenBaseFlags);
       if (fd < 0) {
         return PosixError(filename_, errno);
       }
+
+#if __linux__
+#elif __APPLE__ // open direct io in macos
+      fcntl(fd, F_NOCACHE, 1);
+#endif
     }
 
     assert(fd != -1);
 
-    char *buf = new char[n];
+    //todo beatify it
+    uint64_t aligned_offset = offset - (offset & (GetPageSize() - 1));
+    size_t   user_data_offset = offset - aligned_offset;
+    size_t   aligned_size     = n + user_data_offset;
+    aligned_size              = aligned_size + (GetPageSize() - (aligned_size & (GetPageSize() - 1)));
+
+    assert(IsAligned(aligned_offset));
+    assert(IsAligned(aligned_size));
+
+    char *buf = nullptr;
+    if(posix_memalign(reinterpret_cast<void **>(&buf), GetPageSize(),
+                       aligned_size) != 0){
+      return Status::Corruption("Can not malloc aligned buff");
+    }
+
+    assert(IsAligned(buf));
+
     *scratch = buf;
     Status status;
-    ssize_t read_size = ::pread(fd, buf, n, static_cast<off_t>(offset));
-    *result = Slice(buf, (read_size < 0) ? 0 : read_size);
+    ssize_t read_size = ::pread(fd, buf, aligned_size, static_cast<off_t>(aligned_offset));
+
+    // return back user data
+    *result = Slice(buf + user_data_offset, (read_size < 0) ? 0 : n);
     if (read_size < 0) {
       // An error: return a non-ok status.
       status = PosixError(filename_, errno);
@@ -634,7 +684,7 @@ class PosixEnv : public Env {
   Status NewDirectIORandomAccessFile(const std::string& filename,
                                      DirectIORandomAccessFile** result) override{
     *result = nullptr;
-    int fd = ::open(filename.c_str(), O_RDONLY | kOpenBaseFlags);
+    int fd = ::open(filename.c_str(), O_RDONLY | kDirectIOFlags | kOpenBaseFlags);
     if(fd < 0){
       return PosixError(filename, errno);
     }

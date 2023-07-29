@@ -165,7 +165,7 @@ class FilterBlockReader {
   DirectIORandomAccessFile* file_ GUARDED_BY(mutex_);
 
   std::vector<const char*> filter_units GUARDED_BY(mutex_);
-  bool heap_allocated_ GUARDED_BY(mutex_);
+  std::vector<char*> filter_units_allocated GUARDED_BY(mutex_);
 
   Status LoadFilterInternal();
   Status EvictFilterInternal();

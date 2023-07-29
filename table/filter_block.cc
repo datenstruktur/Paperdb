@@ -116,7 +116,6 @@ FilterBlockReader::FilterBlockReader(const FilterPolicy* policy,
       num_(0),
       base_lg_(0),
       file_(file),
-      heap_allocated_(false), // if false, manage data by mmap
       access_time_(0), // the time this table be access. todo: Hotness inheritance
       sequence_(0),
       init_done(false),
@@ -216,10 +215,8 @@ Status FilterBlockReader::LoadFilterInternal() {
     return s;
   }
 
-  // if heap_allocated, delete by FilterBlockReader
-  // if not, delete by mmap
-  heap_allocated_ = contents.heap_allocated;
   filter_units.push_back(contents.data.data());
+  filter_units_allocated.push_back(contents.allocated_ptr);
   return s;
 }
 
@@ -230,11 +227,12 @@ Status FilterBlockReader::EvictFilterInternal() {
 
   // load from left to right
   // evict from right to left
-  const char* data = filter_units.back();
-  if (heap_allocated_) {
-    delete[] data;
-  }
   filter_units.pop_back();
+
+  char* data = filter_units_allocated.back();
+  filter_units_allocated.pop_back();
+  free(data);
+
   return Status::OK();
 }
 
@@ -305,10 +303,8 @@ Status FilterBlockReader::GoBackToInitFilter(DirectIORandomAccessFile* file) {
 FilterBlockReader::~FilterBlockReader() {
   MutexLock l(&mutex_);
   WaitForLoading();
-  if (heap_allocated_) {
-    for (const char* filter_unit : filter_units) {
-      delete[] filter_unit;
-    }
+  for (char* filter_unit : filter_units_allocated) {
+    free(filter_unit);
   }
 
   delete[] data_;

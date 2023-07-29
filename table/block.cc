@@ -8,12 +8,10 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <vector>
 
 #include "leveldb/comparator.h"
 #include "table/format.h"
 #include "util/coding.h"
-#include "util/logging.h"
 
 namespace leveldb {
 
@@ -25,7 +23,7 @@ inline uint32_t Block::NumRestarts() const {
 Block::Block(const BlockContents& contents)
     : data_(contents.data.data()),
       size_(contents.data.size()),
-      owned_(contents.heap_allocated) {
+      allocated_ptr_(contents.allocated_ptr) {
   if (size_ < sizeof(uint32_t)) {
     size_ = 0;  // Error marker
   } else {
@@ -40,9 +38,7 @@ Block::Block(const BlockContents& contents)
 }
 
 Block::~Block() {
-  if (owned_) {
-    delete[] data_;
-  }
+  free(allocated_ptr_);
 }
 
 // Helper routine: decode the next block entry starting at "p",
