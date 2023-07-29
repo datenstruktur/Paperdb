@@ -65,6 +65,36 @@ class StringSource : public RandomAccessFile {
   std::string contents_;
 };
 
+class DirectIOStringSource : public DirectIORandomAccessFile {
+ public:
+  DirectIOStringSource(const Slice& contents)
+      : contents_(contents.data(), contents.size()) {}
+
+  ~DirectIOStringSource() override = default;
+
+  uint64_t Size() const { return contents_.size(); }
+
+  Status Read(uint64_t offset, size_t n, Slice* result,
+              char** scratch) const override {
+    if (offset >= contents_.size()) {
+      return Status::InvalidArgument("invalid Read offset");
+    }
+    if (offset + n > contents_.size()) {
+      n = contents_.size() - offset;
+    }
+
+    char* buf = new char[n];
+    std::memcpy(buf, &contents_[offset], n);
+    *result = Slice(buf, n);
+
+    *scratch = buf;
+    return Status::OK();
+  }
+
+ private:
+  std::string contents_;
+};
+
 class FileImpl {
  public:
   FileImpl();
@@ -73,11 +103,14 @@ class FileImpl {
 
   StringSource* GetSource();
 
+  DirectIOStringSource* GetDirectIOSource();
+
   ~FileImpl();
 
  private:
   StringSink* sink_;
   StringSource* source_;
+  DirectIOStringSource* direct_io_source_;
   uint64_t write_offset_;
 };
 
@@ -165,6 +198,8 @@ class SpecialEnv : public EnvWrapper {
   Status NewWritableFile(const std::string& f, WritableFile** r);
 
   Status NewRandomAccessFile(const std::string& f, RandomAccessFile** r);
+
+  Status NewDirectIORandomAccessFile(const std::string& f, DirectIORandomAccessFile** r);
 };
 
 }  // namespace leveldb

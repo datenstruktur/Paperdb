@@ -230,6 +230,67 @@ class PosixRandomAccessFile final : public RandomAccessFile {
   const std::string filename_;
 };
 
+class PosixDirectIORandomAccessFile final : public DirectIORandomAccessFile {
+ public:
+  // The new instance takes ownership of |fd|. |fd_limiter| must outlive this
+  // instance, and will be used to determine if .
+  PosixDirectIORandomAccessFile(std::string filename, int fd, Limiter* fd_limiter)
+      : has_permanent_fd_(fd_limiter->Acquire()),
+        fd_(has_permanent_fd_ ? fd : -1),
+        fd_limiter_(fd_limiter),
+        filename_(std::move(filename)) {
+    if (!has_permanent_fd_) {
+      assert(fd_ == -1);
+      ::close(fd);  // The file will be opened on every read.
+    }
+  }
+
+  ~PosixDirectIORandomAccessFile() override {
+    if (has_permanent_fd_) {
+      assert(fd_ != -1);
+      ::close(fd_);
+      fd_limiter_->Release();
+    }
+  }
+
+  Status Read(uint64_t offset, size_t n, Slice* result,
+              char** scratch) const override {
+    int fd = fd_;
+    if (!has_permanent_fd_) {
+      fd = ::open(filename_.c_str(), O_RDONLY | kOpenBaseFlags);
+      if (fd < 0) {
+        return PosixError(filename_, errno);
+      }
+    }
+
+    assert(fd != -1);
+
+    char *buf = new char[n];
+    *scratch = buf;
+    Status status;
+    ssize_t read_size = ::pread(fd, buf, n, static_cast<off_t>(offset));
+    *result = Slice(buf, (read_size < 0) ? 0 : read_size);
+    if (read_size < 0) {
+      // An error: return a non-ok status.
+      status = PosixError(filename_, errno);
+    }
+    if (!has_permanent_fd_) {
+      // Close the temporary file descriptor opened earlier.
+      assert(fd != fd_);
+      ::close(fd);
+    }
+
+    return status;
+  }
+
+ private:
+  const bool has_permanent_fd_;  // If false, the file is opened on every read.
+  const int fd_;                 // -1 if has_permanent_fd_ is false.
+  Limiter* const fd_limiter_;
+  const std::string filename_;
+};
+
+
 // Implements random read access in a file using mmap().
 //
 // Instances of this class are thread-safe, as required by the RandomAccessFile
@@ -568,6 +629,18 @@ class PosixEnv : public Env {
       mmap_limiter_.Release();
     }
     return status;
+  }
+
+  Status NewDirectIORandomAccessFile(const std::string& filename,
+                                     DirectIORandomAccessFile** result) override{
+    *result = nullptr;
+    int fd = ::open(filename.c_str(), O_RDONLY | kOpenBaseFlags);
+    if(fd < 0){
+      return PosixError(filename, errno);
+    }
+
+    *result = new PosixDirectIORandomAccessFile(filename, fd, &fd_limiter_);
+    return Status::OK();
   }
 
   Status NewWritableFile(const std::string& filename,

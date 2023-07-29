@@ -51,7 +51,7 @@ class FilterBlockTest : public testing::Test {
     char* filter_meta = new char[block.size()];
     memcpy(filter_meta, block.data(), block.size());
     Slice filter_meta_data(filter_meta, block.size());
-    StringSource* source = file.GetSource();
+    DirectIOStringSource* source = file.GetDirectIOSource();
     FilterBlockReader* reader = new FilterBlockReader(
         policy == nullptr ? &policy_ : policy, filter_meta_data, source);
     reader->InitLoadFilter();
@@ -286,7 +286,7 @@ TEST_F(FilterBlockTest, Size) {
   memcpy(filter_meta, block.data(), block.size());
   Slice filter_meta_data(filter_meta, block.size());
 
-  StringSource* source = file.GetSource();
+  DirectIOStringSource* source = file.GetDirectIOSource();
   FilterBlockReader reader(&policy_, filter_meta_data, source);
   reader.InitLoadFilter();
 

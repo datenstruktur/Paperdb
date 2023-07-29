@@ -10,6 +10,7 @@ namespace leveldb {
 FileImpl::FileImpl() : write_offset_(0) {
   sink_ = new StringSink();
   source_ = nullptr;
+  direct_io_source_ = nullptr;
 }
 
 void FileImpl::WriteRawFilters(std::vector<std::string> filters,
@@ -45,9 +46,17 @@ StringSource* FileImpl::GetSource() {
   return source_;
 }
 
+DirectIOStringSource* FileImpl::GetDirectIOSource() {
+  if(direct_io_source_ == nullptr){
+    direct_io_source_ = new DirectIOStringSource(sink_->contents());
+  }
+  return direct_io_source_;
+}
+
 FileImpl::~FileImpl() {
   delete sink_;
   delete source_;
+  delete direct_io_source_;
 }
 
 Status SpecialEnv::NewWritableFile(const std::string& f, WritableFile** r) {
@@ -150,6 +159,30 @@ Status SpecialEnv::NewRandomAccessFile(const std::string& f, RandomAccessFile** 
   Status s = target()->NewRandomAccessFile(f, r);
   if (s.ok() && count_random_reads_.load(std::memory_order_acquire)) {
     *r = new CountingFile(*r, &random_read_counter_);
+  }
+  return s;
+}
+
+Status SpecialEnv::NewDirectIORandomAccessFile(const std::string& f, DirectIORandomAccessFile** r) {
+  class DirectIOCountingFile : public DirectIORandomAccessFile {
+   private:
+    DirectIORandomAccessFile* target_;
+    AtomicCounter* counter_;
+
+   public:
+    DirectIOCountingFile(DirectIORandomAccessFile* target, AtomicCounter* counter)
+        : target_(target), counter_(counter) {}
+    ~DirectIOCountingFile() override { delete target_; }
+    Status Read(uint64_t offset, size_t n, Slice* result,
+                char** scratch) const override {
+      counter_->Increment();
+      return target_->Read(offset, n, result, scratch);
+    }
+  };
+
+  Status s = target()->NewDirectIORandomAccessFile(f, r);
+  if (s.ok() && count_random_reads_.load(std::memory_order_acquire)) {
+    *r = new DirectIOCountingFile(*r, &random_read_counter_);
   }
   return s;
 }

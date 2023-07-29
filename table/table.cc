@@ -31,7 +31,7 @@ struct Table::Rep {
 
   Options options;
   Status status;
-  RandomAccessFile* file;
+  DirectIORandomAccessFile* file;
   uint64_t block_cache_id;
   uint64_t table_id;
   Footer footer;
@@ -63,17 +63,19 @@ void Table::ParseHandleKey() {
   }
 }
 
-Status Table::Open(const Options& options, RandomAccessFile* file,
+Status Table::Open(const Options& options, DirectIORandomAccessFile* file,
                    uint64_t size, Table** table, uint64_t table_id) {
   *table = nullptr;                             //every table has unique file id
   if (size < Footer::kEncodedLength) {
     return Status::Corruption("file is too short to be an sstable");
   }
 
-  char footer_space[Footer::kEncodedLength];
+  char* footer_space = nullptr;
   Slice footer_input;
   Status s = file->Read(size - Footer::kEncodedLength, Footer::kEncodedLength,
-                        &footer_input, footer_space);
+                        &footer_input, &footer_space);
+
+  std::unique_ptr<char[]> footer_ptr(footer_space);
   if (!s.ok()) return s;
 
   Footer footer;

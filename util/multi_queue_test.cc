@@ -45,7 +45,7 @@ class MultiQueueTest : public testing::Test {
     memcpy(filter_meta, block.data(), block.size());
     Slice filter_meta_data(filter_meta, block.size());
 
-    StringSource* source = file->GetSource();
+    DirectIOStringSource* source = file->GetDirectIOSource();
     file_impl_.push_back(file);
     FilterBlockReader* reader = new FilterBlockReader(internal_policy_, filter_meta_data, source);
     return reader;

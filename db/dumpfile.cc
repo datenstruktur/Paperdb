@@ -146,11 +146,11 @@ Status DumpDescriptor(Env* env, const std::string& fname, WritableFile* dst) {
 
 Status DumpTable(Env* env, const std::string& fname, WritableFile* dst) {
   uint64_t file_size;
-  RandomAccessFile* file = nullptr;
+  DirectIORandomAccessFile* file = nullptr;
   Table* table = nullptr;
   Status s = env->GetFileSize(fname, &file_size);
   if (s.ok()) {
-    s = env->NewRandomAccessFile(fname, &file);
+    s = env->NewDirectIORandomAccessFile(fname, &file);
   }
   if (s.ok()) {
     // We use the default comparator, which may or may not match the

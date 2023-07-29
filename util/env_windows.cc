@@ -230,6 +230,41 @@ class WindowsRandomAccessFile : public RandomAccessFile {
   const std::string filename_;
 };
 
+class WindowsDirectIORandomAccessFile : public DirectIORandomAccessFile {
+ public:
+  WindowsDirectIORandomAccessFile(std::string filename, ScopedHandle handle)
+      : handle_(std::move(handle)), filename_(std::move(filename)) {}
+
+  ~WindowsDirectIORandomAccessFile() override = default;
+
+  Status Read(uint64_t offset, size_t n, Slice* result,
+              char** scratch) const override {
+    DWORD bytes_read = 0;
+    OVERLAPPED overlapped = {0};
+
+    overlapped.OffsetHigh = static_cast<DWORD>(offset >> 32);
+    overlapped.Offset = static_cast<DWORD>(offset);
+
+    char* buf = new char[n];
+    *scratch = buf;
+    if (!::ReadFile(handle_.get(), buf, static_cast<DWORD>(n), &bytes_read,
+                    &overlapped)) {
+      DWORD error_code = ::GetLastError();
+      if (error_code != ERROR_HANDLE_EOF) {
+        *result = Slice(buf, 0);
+        return Status::IOError(filename_, GetWindowsErrorMessage(error_code));
+      }
+    }
+
+    *result = Slice(buf, bytes_read);
+    return Status::OK();
+  }
+
+ private:
+  const ScopedHandle handle_;
+  const std::string filename_;
+};
+
 class WindowsMmapReadableFile : public RandomAccessFile {
  public:
   // base[0,length-1] contains the mmapped contents of the file.
@@ -452,6 +487,24 @@ class WindowsEnv : public Env {
     }
     mmap_limiter_.Release();
     return WindowsError(filename, ::GetLastError());
+  }
+
+  Status NewDirectIORandomAccessFile(const std::string& filename,
+                                     DirectIORandomAccessFile** result) override{
+    *result = nullptr;
+    DWORD desired_access = GENERIC_READ;
+    DWORD share_mode = FILE_SHARE_READ;
+    ScopedHandle handle =
+        ::CreateFileA(filename.c_str(), desired_access, share_mode,
+                      /*lpSecurityAttributes=*/nullptr, OPEN_EXISTING,
+                      FILE_ATTRIBUTE_READONLY,
+                      /*hTemplateFile=*/nullptr);
+    if (!handle.is_valid()) {
+      return WindowsError(filename, ::GetLastError());
+    }
+
+    *result = new WindowsDirectIORandomAccessFile(filename, std::move(handle));
+    return Status::OK();
   }
 
   Status NewWritableFile(const std::string& filename,

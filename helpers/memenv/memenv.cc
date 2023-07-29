@@ -197,6 +197,20 @@ class RandomAccessFileImpl : public RandomAccessFile {
   FileState* file_;
 };
 
+class DirectIORandomAccessFileImpl : public DirectIORandomAccessFile{
+ public:
+  explicit DirectIORandomAccessFileImpl(FileState* file) : file_(file) { file_->Ref(); }
+  ~DirectIORandomAccessFileImpl() override {file_->Unref();}
+  Status Read(uint64_t offset, size_t n, Slice* result,
+              char** scratch) const override {
+    char* buf = new char[n];
+    *scratch = buf;
+    return file_->Read(offset, n, result, buf);
+  }
+ private:
+  FileState* file_;
+};
+
 class WritableFileImpl : public WritableFile {
  public:
   WritableFileImpl(FileState* file) : file_(file) { file_->Ref(); }
@@ -250,6 +264,18 @@ class InMemoryEnv : public EnvWrapper {
     }
 
     *result = new RandomAccessFileImpl(file_map_[fname]);
+    return Status::OK();
+  }
+
+  Status NewDirectIORandomAccessFile(
+      const std::string& fname, DirectIORandomAccessFile** result) override {
+    MutexLock lock(&mutex_);
+    if (file_map_.find(fname) == file_map_.end()) {
+      *result = nullptr;
+      return Status::IOError(fname, "File not found");
+    }
+
+    *result = new DirectIORandomAccessFileImpl(file_map_[fname]);
     return Status::OK();
   }
 

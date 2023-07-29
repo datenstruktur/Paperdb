@@ -44,6 +44,7 @@ namespace leveldb {
 class FileLock;
 class Logger;
 class RandomAccessFile;
+class DirectIORandomAccessFile;
 class SequentialFile;
 class Slice;
 class WritableFile;
@@ -84,6 +85,9 @@ class LEVELDB_EXPORT Env {
   // The returned file may be concurrently accessed by multiple threads.
   virtual Status NewRandomAccessFile(const std::string& fname,
                                      RandomAccessFile** result) = 0;
+
+  virtual Status NewDirectIORandomAccessFile(const std::string& fname,
+                                             DirectIORandomAccessFile** result) = 0;
 
   // Create an object that writes to a new file with the specified
   // name.  Deletes any existing file with the same name and creates a
@@ -271,6 +275,29 @@ class LEVELDB_EXPORT RandomAccessFile {
                       char* scratch) const = 0;
 };
 
+// A file abstraction for randomly reading the contents of a file.
+class LEVELDB_EXPORT DirectIORandomAccessFile {
+ public:
+  DirectIORandomAccessFile() = default;
+
+  DirectIORandomAccessFile(const DirectIORandomAccessFile&) = delete;
+  DirectIORandomAccessFile& operator=(const DirectIORandomAccessFile&) = delete;
+
+  virtual ~DirectIORandomAccessFile();
+
+  // Read up to "n" bytes from the file starting at "offset".
+  // "scratch[0..n-1]" may be written by this routine.  Sets "*result"
+  // to the data that was read (including if fewer than "n" bytes were
+  // successfully read).  May set "*result" to point at data in
+  // "scratch[0..n-1]", so "scratch[0..n-1]" must be live when
+  // "*result" is used.  If an error was encountered, returns a non-OK
+  // status.
+  //
+  // Safe for concurrent use by multiple threads.
+  virtual Status Read(uint64_t offset, size_t n, Slice* result,
+                      char** scratch) const = 0;
+};
+
 // A file abstraction for sequential writing.  The implementation
 // must provide buffering since callers may append small fragments
 // at a time to the file.
@@ -349,6 +376,12 @@ class LEVELDB_EXPORT EnvWrapper : public Env {
                              RandomAccessFile** r) override {
     return target_->NewRandomAccessFile(f, r);
   }
+
+  Status NewDirectIORandomAccessFile(const std::string& f,
+                                     DirectIORandomAccessFile** r) override {
+      return target_->NewDirectIORandomAccessFile(f, r);
+  }
+
   Status NewWritableFile(const std::string& f, WritableFile** r) override {
     return target_->NewWritableFile(f, r);
   }
