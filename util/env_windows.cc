@@ -266,33 +266,23 @@ class WindowsDirectIORandomAccessFile : public DirectIORandomAccessFile {
     DWORD bytes_read = 0;
     OVERLAPPED overlapped = {0};
 
-    //todo beatify it by a function return a struct
-    uint64_t aligned_offset = offset - (offset & (GetPageSize() - 1));
-    size_t   user_data_offset = offset - aligned_offset;
-    size_t   aligned_size     = n + user_data_offset;
-    aligned_size              = aligned_size + (GetPageSize() - (aligned_size & (GetPageSize() - 1)));
+    const DirectIOAlignData data = NewAlignedData(offset, n, GetPageSize());
 
-    assert(WindowsIsAligned(aligned_offset));
-    assert(WindowsIsAligned(aligned_size));
+    overlapped.OffsetHigh = static_cast<DWORD>(data.offset >> 32);
+    overlapped.Offset = static_cast<DWORD>(data.offset);
 
-    char *buf = reinterpret_cast<char *>(_aligned_malloc(aligned_size, GetPageSize()));
-    assert(WindowsIsAligned(buf));
+    scratch->SetPtr(data.ptr, /*aligned=*/true);
 
-    overlapped.OffsetHigh = static_cast<DWORD>(aligned_offset >> 32);
-    overlapped.Offset = static_cast<DWORD>(aligned_offset);
-
-    scratch->SetPtr(buf, /*aligned=*/true);
-
-    if (!::ReadFile(handle_.get(), buf, static_cast<DWORD>(aligned_size), &bytes_read,
-                    &overlapped)) {
+    if (!::ReadFile(handle_.get(), data.ptr, static_cast<DWORD>(data.size),
+                    &bytes_read, &overlapped)) {
       DWORD error_code = ::GetLastError();
       if (error_code != ERROR_HANDLE_EOF) {
-        *result = Slice(buf, 0);
+        *result = Slice(data.ptr + data.user_offset, 0);
         return Status::IOError(filename_, GetWindowsErrorMessage(error_code));
       }
     }
 
-    *result = Slice(buf + user_data_offset, n);
+    *result = Slice(data.ptr + data.user_offset, n);
     return Status::OK();
   }
 

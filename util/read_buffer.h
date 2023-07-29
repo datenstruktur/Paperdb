@@ -13,12 +13,24 @@ namespace leveldb {
 class ReadBuffer {
  public:
   ReadBuffer();
+
+  // for compression in ReadBlock
+  ReadBuffer(char* ptr, bool aligned);
+
+  // free ptr in diff OS, and diff data(aligned or not aligned)
   ~ReadBuffer();
 
+  // copy will cause double free
   ReadBuffer(const ReadBuffer&) = delete;
-  ReadBuffer operator=(const ReadBuffer&) = delete;
+  ReadBuffer& operator=(const ReadBuffer&) = delete;
 
+  // for compression in ReadBlock
+  ReadBuffer(ReadBuffer&& buffer) noexcept;
+  ReadBuffer& operator=(ReadBuffer&& buffer) noexcept;
+
+  // for Read in Env
   void SetPtr(char* ptr, bool aligned);
+
  private:
   void FreePtr();
   char* ptr_;
@@ -33,6 +45,22 @@ inline bool IsAligned(const char* ptr, size_t alignment){
   return (reinterpret_cast<uintptr_t>(ptr) & (alignment - 1)) == 0;
 }
 
+struct DirectIOAlignData{
+  uint64_t offset;
+  size_t size;
+
+  size_t user_offset;
+  char* ptr;
+};
+
+// get closest alignment value before val
+uint64_t GetBeforeAlignedValue(uint64_t val, size_t alignment);
+
+// get closest alignment value after val
+uint64_t GetAfterAlignedValue(uint64_t val, size_t alignment);
+
+// new aligned block in diff os
+DirectIOAlignData NewAlignedData(uint64_t offset, size_t n, size_t alignment);
 }  // namespace leveldb
 
 #endif  // LEVELDB_READ_BUFFER_H

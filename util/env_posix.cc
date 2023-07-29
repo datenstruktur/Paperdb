@@ -87,14 +87,6 @@ size_t GetPageSize() {
   return kAlignPageSize;
 }
 
-inline bool PosixIsAligned(uint64_t val){
-  return IsAligned(val, GetPageSize());
-}
-
-inline bool PosixIsAligned(const char* ptr){
-  return IsAligned(ptr, GetPageSize());
-}
-
 Status PosixError(const std::string& context, int error_number) {
   if (error_number == ENOENT) {
     return Status::NotFound(context, std::strerror(error_number));
@@ -307,29 +299,14 @@ class PosixDirectIORandomAccessFile final : public DirectIORandomAccessFile {
 
     assert(fd != -1);
 
-    //todo beatify it
-    uint64_t aligned_offset = offset - (offset & (GetPageSize() - 1));
-    size_t   user_data_offset = offset - aligned_offset;
-    size_t   aligned_size     = n + user_data_offset;
-    aligned_size              = aligned_size + (GetPageSize() - (aligned_size & (GetPageSize() - 1)));
+    const DirectIOAlignData data = NewAlignedData(offset, n, GetPageSize());
 
-    assert(PosixIsAligned(aligned_offset));
-    assert(PosixIsAligned(aligned_size));
-
-    char *buf = nullptr;
-    if(posix_memalign(reinterpret_cast<void **>(&buf), GetPageSize(),
-                       aligned_size) != 0){
-      return Status::Corruption("Can not malloc aligned buff");
-    }
-
-    assert(PosixIsAligned(buf));
-
-    scratch->SetPtr(buf, /*aligned=*/true);
+    scratch->SetPtr(data.ptr, /*aligned=*/true);
     Status status;
-    ssize_t read_size = ::pread(fd, buf, aligned_size, static_cast<off_t>(aligned_offset));
+    ssize_t read_size = ::pread(fd, data.ptr, data.size, static_cast<off_t>(data.offset));
 
     // return back user data
-    *result = Slice(buf + user_data_offset, (read_size < 0) ? 0 : n);
+    *result = Slice(data.ptr + data.user_offset, (read_size < 0) ? 0 : n);
     if (read_size < 0) {
       // An error: return a non-ok status.
       status = PosixError(filename_, errno);

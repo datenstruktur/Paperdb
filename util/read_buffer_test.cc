@@ -24,35 +24,70 @@ TEST(ReadBufferTest, Empty) {
 }
 
 TEST(ReadBufferTest, Base) {
-  ReadBuffer read_buffer;
   char* ptr = (char*)malloc(sizeof(char) * 10);
-  read_buffer.SetPtr(ptr, /*aligned=*/false);
+  ReadBuffer read_buffer(ptr, /*aligned=*/false);
 }
 
 TEST(ReadBufferTest, BaseAligned) {
-  ReadBuffer read_buffer;
   char* ptr = AlignedMalloc();
   ASSERT_NE(ptr, nullptr);
-  read_buffer.SetPtr(ptr, /*aligned=*/true);
+  ReadBuffer read_buffer(ptr, /*aligned=*/true);
 }
 
 TEST(ReadBufferTest, Multi) {
-  ReadBuffer read_buffer;
   char* ptr1 = (char*)malloc(sizeof(char) * 10);
-  read_buffer.SetPtr(ptr1, /*aligned=*/false);
+  ReadBuffer read_buffer(ptr1, /*aligned=*/false);
 
   char* ptr2 = (char*)malloc(sizeof(char) * 10);
   read_buffer.SetPtr(ptr2, /*aligned=*/false);
 }
 
 TEST(ReadBufferTest, MultiAligned) {
-  ReadBuffer read_buffer;
   char* ptr1 = AlignedMalloc();
   ASSERT_NE(ptr1, nullptr);
-  read_buffer.SetPtr(ptr1, /*aligned=*/true);
+  ReadBuffer read_buffer(ptr1, /*aligned=*/true);
 
   char* ptr2 = AlignedMalloc();
   ASSERT_NE(ptr2, nullptr);
   read_buffer.SetPtr(ptr2, /*aligned=*/true);
+}
+
+TEST(ReadBufferTest, GetBeforeAlignedValue){
+  size_t alignment = 1024;
+
+  for(int i = 0; i < 1024; i++){
+    ASSERT_EQ(GetBeforeAlignedValue(i, alignment), 0);
+  }
+
+  for(int i = 1024; i < 2 * 1024; i++){
+    ASSERT_EQ(GetBeforeAlignedValue(i, alignment), 1024);
+  }
+}
+
+TEST(ReadBufferTest, GetAfterAlignedValue){
+  size_t alignment = 1024;
+
+  for(int i = 1; i <= 1024; i++){
+    ASSERT_EQ(GetAfterAlignedValue(i, alignment), 1024);
+  }
+
+  for(int i = 1024 + 1; i < 2 * 1024; i++){
+    ASSERT_EQ(GetAfterAlignedValue(i, alignment), 2 * 1024);
+  }
+}
+
+TEST(ReadBufferTest, NewAlignedData){
+  uint64_t offset = 1025;
+  size_t size = 1022;
+  size_t alignment = 1024;
+
+  DirectIOAlignData data = NewAlignedData(offset, size, alignment);
+  ReadBuffer read_buffer;
+  read_buffer.SetPtr(data.ptr, /*aligned=*/true);
+
+  ASSERT_EQ(data.offset, 1024);
+  ASSERT_TRUE(IsAligned(data.ptr, alignment));
+  ASSERT_EQ(data.user_offset, 1);
+  ASSERT_EQ(data.size, 1024);
 }
 }

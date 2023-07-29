@@ -74,15 +74,13 @@ Status ReadBlock(DirectIORandomAccessFile* file, const ReadOptions& options,
   // Read the block contents as well as the type/crc footer.
   // See table_builder.cc for the code that built this structure.
   size_t n = static_cast<size_t>(handle.size());
-  ReadBuffer *read_buffer = new ReadBuffer();
+  ReadBuffer read_buffer;
   Slice contents;
-  Status s = file->Read(handle.offset(), n + kBlockTrailerSize, &contents, read_buffer);
+  Status s = file->Read(handle.offset(), n + kBlockTrailerSize, &contents, &read_buffer);
   if (!s.ok()) {
-    delete read_buffer;
     return s;
   }
   if (contents.size() != n + kBlockTrailerSize) {
-    delete read_buffer;
     return Status::Corruption("truncated block read");
   }
 
@@ -92,7 +90,6 @@ Status ReadBlock(DirectIORandomAccessFile* file, const ReadOptions& options,
     const uint32_t crc = crc32c::Unmask(DecodeFixed32(data + n + 1));
     const uint32_t actual = crc32c::Value(data, n + 1);
     if (actual != crc) {
-      delete read_buffer;
       s = Status::Corruption("block checksum mismatch");
       return s;
     }
@@ -101,51 +98,40 @@ Status ReadBlock(DirectIORandomAccessFile* file, const ReadOptions& options,
   switch (data[n]) {
     case kNoCompression:
       result->data = Slice(data, n);
-      result->read_buffer = read_buffer;
+      // use move semantics to move buffer
+      result->read_buffer = new ReadBuffer(std::move(read_buffer));
 
       // Ok
       break; //TODO test compression?
     case kSnappyCompression: {
       size_t ulength = 0;
       if (!port::Snappy_GetUncompressedLength(data, n, &ulength)) {
-        delete read_buffer;
         return Status::Corruption("corrupted snappy compressed block length");
       }
       char* ubuf = (char *)malloc(sizeof(char) * ulength);
       if (!port::Snappy_Uncompress(data, n, ubuf)) {
-        delete read_buffer;
         free(ubuf);
         return Status::Corruption("corrupted snappy compressed block contents");
       }
-      delete read_buffer;
       result->data = Slice(ubuf, ulength);
-
-      ReadBuffer* snappy_buffer = new ReadBuffer();
-      snappy_buffer->SetPtr(ubuf, /*aligned=*/ false);
-      result->read_buffer = snappy_buffer;
+      result->read_buffer =  new ReadBuffer(ubuf, /*aligned=*/false);
       break;
     }
     case kZstdCompression: {
       size_t ulength = 0;
       if (!port::Zstd_GetUncompressedLength(data, n, &ulength)) {
-        delete read_buffer;
         return Status::Corruption("corrupted zstd compressed block length");
       }
       char* ubuf = (char *)malloc(sizeof(char) * ulength);
       if (!port::Zstd_Uncompress(data, n, ubuf)) {
-        delete read_buffer;
         free(ubuf);
         return Status::Corruption("corrupted zstd compressed block contents");
       }
-      delete read_buffer;
       result->data = Slice(ubuf, ulength);
-      ReadBuffer* zstd_buffer = new ReadBuffer();
-      zstd_buffer->SetPtr(ubuf, /*aligned=*/ false);
-      result->read_buffer = zstd_buffer;
+      result->read_buffer = new ReadBuffer(ubuf, /*aligned=*/false);
       break;
     }
     default:
-      delete read_buffer;
       return Status::Corruption("bad block type");
   }
 
