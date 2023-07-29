@@ -71,17 +71,17 @@ Status Table::Open(const Options& options, DirectIORandomAccessFile* file,
   }
 
   //TODO: use buffer io?
-  char* footer_space = nullptr;
+  ReadBuffer* read_buffer = new ReadBuffer();
   Slice footer_input;
   Status s = file->Read(size - Footer::kEncodedLength, Footer::kEncodedLength,
-                        &footer_input, &footer_space);
+                        &footer_input, read_buffer);
 
   if (!s.ok()) return s;
 
   Footer footer;
   s = footer.DecodeFrom(&footer_input);
   if (!s.ok()) {
-    free(footer_space);
+    delete read_buffer;
     return s;
   }
 
@@ -92,7 +92,7 @@ Status Table::Open(const Options& options, DirectIORandomAccessFile* file,
     opt.verify_checksums = true;
   }
   s = ReadBlock(file, opt, footer.index_handle(), &index_block_contents);
-  free(footer_space);
+  delete read_buffer;
 
   if (s.ok()) {
     // We've successfully read the footer and the index block: we're

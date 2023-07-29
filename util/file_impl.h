@@ -75,7 +75,7 @@ class DirectIOStringSource : public DirectIORandomAccessFile {
   uint64_t Size() const { return contents_.size(); }
 
   Status Read(uint64_t offset, size_t n, Slice* result,
-              char** scratch) const override {
+              ReadBuffer* scratch) const override {
     if (offset >= contents_.size()) {
       return Status::InvalidArgument("invalid Read offset");
     }
@@ -87,7 +87,7 @@ class DirectIOStringSource : public DirectIORandomAccessFile {
     std::memcpy(buf, &contents_[offset], n);
     *result = Slice(buf, n);
 
-    *scratch = buf;
+    scratch->SetPtr(buf, /*aligned=*/false);
     return Status::OK();
   }
 

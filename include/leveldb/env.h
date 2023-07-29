@@ -21,6 +21,8 @@
 #include "leveldb/export.h"
 #include "leveldb/status.h"
 
+#include "util/read_buffer.h"
+
 // This workaround can be removed when leveldb::Env::DeleteFile is removed.
 #if defined(_WIN32)
 // On Windows, the method name DeleteFile (below) introduces the risk of
@@ -289,7 +291,7 @@ class LEVELDB_EXPORT DirectIORandomAccessFile {
   // but read [aligned offset, aligned size] for DirectIO
   // save malloc memory ptr in allocated, free by user
   virtual Status Read(uint64_t offset, size_t n, Slice* result,
-                      char** allocated) const = 0;
+                      ReadBuffer* allocated) const = 0;
 };
 
 // A file abstraction for sequential writing.  The implementation

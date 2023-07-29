@@ -11,6 +11,7 @@
 #include "leveldb/slice.h"
 #include "leveldb/status.h"
 #include "leveldb/table_builder.h"
+#include "util/read_buffer.h"
 
 namespace leveldb {
 
@@ -81,7 +82,7 @@ static const size_t kBlockTrailerSize = 5;
 
 struct BlockContents {
   Slice data;           // Actual contents of data
-  char* allocated_ptr; // the memory allocated by direct io
+  ReadBuffer *read_buffer; // the memory allocated by direct io
 };
 
 // Read the block identified by "handle" from "file".  On failure

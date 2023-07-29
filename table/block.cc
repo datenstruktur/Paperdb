@@ -12,6 +12,7 @@
 #include "leveldb/comparator.h"
 #include "table/format.h"
 #include "util/coding.h"
+#include "util/read_buffer.h"
 
 namespace leveldb {
 
@@ -23,7 +24,7 @@ inline uint32_t Block::NumRestarts() const {
 Block::Block(const BlockContents& contents)
     : data_(contents.data.data()),
       size_(contents.data.size()),
-      allocated_ptr_(contents.allocated_ptr) {
+      read_buffer_(contents.read_buffer) {
   if (size_ < sizeof(uint32_t)) {
     size_ = 0;  // Error marker
   } else {
@@ -38,7 +39,7 @@ Block::Block(const BlockContents& contents)
 }
 
 Block::~Block() {
-  free(allocated_ptr_);
+  delete read_buffer_;
 }
 
 // Helper routine: decode the next block entry starting at "p",

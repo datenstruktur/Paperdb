@@ -174,7 +174,7 @@ Status SpecialEnv::NewDirectIORandomAccessFile(const std::string& f, DirectIORan
         : target_(target), counter_(counter) {}
     ~DirectIOCountingFile() override { delete target_; }
     Status Read(uint64_t offset, size_t n, Slice* result,
-                char** scratch) const override {
+                ReadBuffer* scratch) const override {
       counter_->Increment();
       return target_->Read(offset, n, result, scratch);
     }

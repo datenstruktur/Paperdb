@@ -238,25 +238,6 @@ class PosixRandomAccessFile final : public RandomAccessFile {
   const std::string filename_;
 };
 
-static size_t GetPageSize() {
-#if __linux__ || defined(_SC_PAGESIZE)
-  long v = sysconf(_SC_PAGESIZE);
-  if (v >= 1024) {
-    return static_cast<size_t>(v);
-  }
-#endif
-  // Default assume 4KB
-  return 4U * 1024U;
-}
-
-inline static bool IsAligned(uint64_t val){
-  return (val & (GetPageSize() - 1)) == 0;
-}
-
-inline static bool IsAligned(char* ptr){
-  return (reinterpret_cast<uintptr_t>(ptr) & (GetPageSize() - 1)) == 0;
-}
-
 class PosixDirectIORandomAccessFile final : public DirectIORandomAccessFile {
  public:
   // The new instance takes ownership of |fd|. |fd_limiter| must outlive this
@@ -281,7 +262,7 @@ class PosixDirectIORandomAccessFile final : public DirectIORandomAccessFile {
   }
 
   Status Read(uint64_t offset, size_t n, Slice* result,
-              char** scratch) const override {
+              ReadBuffer* scratch) const override {
     int fd = fd_;
     if (!has_permanent_fd_) {
       fd = ::open(filename_.c_str(), O_RDONLY | kDirectIOFlags | kOpenBaseFlags);
@@ -314,7 +295,7 @@ class PosixDirectIORandomAccessFile final : public DirectIORandomAccessFile {
 
     assert(IsAligned(buf));
 
-    *scratch = buf;
+    scratch->SetPtr(buf, /*aligned=*/true);
     Status status;
     ssize_t read_size = ::pread(fd, buf, aligned_size, static_cast<off_t>(aligned_offset));
 

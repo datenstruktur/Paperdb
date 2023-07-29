@@ -202,10 +202,10 @@ class DirectIORandomAccessFileImpl : public DirectIORandomAccessFile{
   explicit DirectIORandomAccessFileImpl(FileState* file) : file_(file) { file_->Ref(); }
   ~DirectIORandomAccessFileImpl() override {file_->Unref();}
   Status Read(uint64_t offset, size_t n, Slice* result,
-              char** allocated) const override {
+              ReadBuffer* allocated) const override {
     // destroy buf by free, not delete
     char* buf = (char*)(malloc(sizeof(char*) * n));
-    *allocated = buf;
+    allocated->SetPtr(buf, /*aligned=*/false);
     return file_->Read(offset, n, result, buf);
   }
  private:

@@ -216,7 +216,7 @@ Status FilterBlockReader::LoadFilterInternal() {
   }
 
   filter_units.push_back(contents.data.data());
-  filter_units_allocated.push_back(contents.allocated_ptr);
+  reader_buffers_.push_back(contents.read_buffer);
   return s;
 }
 
@@ -229,9 +229,9 @@ Status FilterBlockReader::EvictFilterInternal() {
   // evict from right to left
   filter_units.pop_back();
 
-  char* data = filter_units_allocated.back();
-  filter_units_allocated.pop_back();
-  free(data);
+  ReadBuffer* read_buffer= reader_buffers_.back();
+  reader_buffers_.pop_back();
+  delete read_buffer;
 
   return Status::OK();
 }
@@ -303,8 +303,8 @@ Status FilterBlockReader::GoBackToInitFilter(DirectIORandomAccessFile* file) {
 FilterBlockReader::~FilterBlockReader() {
   MutexLock l(&mutex_);
   WaitForLoading();
-  for (char* filter_unit : filter_units_allocated) {
-    free(filter_unit);
+  for (ReadBuffer* filter_unit : reader_buffers_) {
+    delete filter_unit;
   }
 
   delete[] data_;
