@@ -144,6 +144,8 @@ static bool FLAGS_clean_bench_file = false;
 
 static bool FLAGS_save_ios = true;
 
+static bool FLAGS_using_direct_io = true;
+
 namespace leveldb {
 
 namespace {
@@ -838,6 +840,7 @@ class Benchmark {
     Options options;
     options.env = g_env;
     options.create_if_missing = !FLAGS_use_existing_db;
+    options.using_direct_io = FLAGS_using_direct_io;
     options.bloom_filter_adjustment = FLAGS_multi_queue_open;
     options.block_cache = cache_;
     options.write_buffer_size = FLAGS_write_buffer_size;
@@ -971,11 +974,19 @@ class Benchmark {
     std::string value;
     const int range = (FLAGS_num + 99) / 100;
     KeyBuffer key;
+    if(FLAGS_save_ios) {
+      thread->stats.StartRecordingIO();
+    }
     for (int i = 0; i < reads_; i++) {
       const int k = thread->rand.Uniform(range);
       key.Set(k);
       db_->Get(options, key.slice(), &value);
       thread->stats.FinishedSingleOp();
+    }
+    char msg[100];
+    if(FLAGS_save_ios) {
+      int reads = thread->stats.FinishedRecordingIO();
+      std::snprintf(msg, sizeof(msg), "cause %d io\n", reads);
     }
   }
 
@@ -1167,6 +1178,9 @@ int main(int argc, char** argv) {
     } else if (sscanf(argv[i], "--save_io=%d%c", &n, &junk) == 1 &&
            (n == 0 || n == 1)) {
       FLAGS_save_ios = n;
+    }else if (sscanf(argv[i], "--using_direct_io=%d%c", &n, &junk) == 1 &&
+               (n == 0 || n == 1)) {
+      FLAGS_using_direct_io = n;
     }else if (sscanf(argv[i], "--bloom_bits=%d%c", &n, &junk) == 1) {
       FLAGS_bloom_bits = n;
     } else if (sscanf(argv[i], "--open_files=%d%c", &n, &junk) == 1) {
