@@ -29,30 +29,36 @@ TEST(ReadBufferTest, Empty) {
 TEST(ReadBufferTest, Base) {
   char* ptr = (char*)malloc(sizeof(char) * 10);
   ReadBuffer read_buffer(ptr, /*aligned=*/false);
+  ASSERT_TRUE(read_buffer.PtrIsNotNull());
 }
 
 TEST(ReadBufferTest, BaseAligned) {
   char* ptr = AlignedMalloc();
   ASSERT_NE(ptr, nullptr);
   ReadBuffer read_buffer(ptr, /*aligned=*/true);
+  ASSERT_TRUE(read_buffer.PtrIsNotNull());
 }
 
 TEST(ReadBufferTest, Multi) {
   char* ptr1 = (char*)malloc(sizeof(char) * 10);
   ReadBuffer read_buffer(ptr1, /*aligned=*/false);
+  ASSERT_TRUE(read_buffer.PtrIsNotNull());
 
   char* ptr2 = (char*)malloc(sizeof(char) * 10);
   read_buffer.SetPtr(ptr2, /*aligned=*/false);
+  ASSERT_TRUE(read_buffer.PtrIsNotNull());
 }
 
 TEST(ReadBufferTest, MultiAligned) {
   char* ptr1 = AlignedMalloc();
   ASSERT_NE(ptr1, nullptr);
   ReadBuffer read_buffer(ptr1, /*aligned=*/true);
+  ASSERT_TRUE(read_buffer.PtrIsNotNull());
 
   char* ptr2 = AlignedMalloc();
   ASSERT_NE(ptr2, nullptr);
   read_buffer.SetPtr(ptr2, /*aligned=*/true);
+  ASSERT_TRUE(read_buffer.PtrIsNotNull());
 }
 
 TEST(ReadBufferTest, GetBeforeAlignedValue){

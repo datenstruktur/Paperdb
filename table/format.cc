@@ -100,6 +100,7 @@ Status ReadBlock(RandomAccessFile* file, const ReadOptions& options,
     case kNoCompression:
       result->data = Slice(data, n);
       // mmap's ptr is null, no need for cache
+      // TODO add cache unit test?
       result->cachale = read_buffer.PtrIsNotNull();
       // use move semantics to move buffer
       result->read_buffer = new ReadBuffer(std::move(read_buffer));
