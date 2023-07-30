@@ -5,13 +5,16 @@
 #include "gtest/gtest.h"
 
 namespace leveldb {
+
+const int AlignedMallocAlignment = 1024;
+
 char* AlignedMalloc(){
 #ifdef _WIN32
   //TODO make 1024 become a variable
-  return reinterpret_cast<char *>(_aligned_malloc(1024, 1024));
+  return reinterpret_cast<char *>(_aligned_malloc(1024, AlignedMallocAlignment));
 #else
   char *buf = nullptr;
-  if(posix_memalign(reinterpret_cast<void **>(&buf), 1024,
+  if(posix_memalign(reinterpret_cast<void **>(&buf), AlignedMallocAlignment,
                      1024) != 0){
     return nullptr;
   }

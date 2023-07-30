@@ -10,8 +10,10 @@
 #include "leveldb/env.h"
 
 namespace leveldb {
+// A class for management ptr allocated by Read in RandomAccessFile across OS
 class ReadBuffer {
  public:
+  // for Read caller
   ReadBuffer();
 
   // for compression in ReadBlock
@@ -31,6 +33,8 @@ class ReadBuffer {
   // for Read in Env
   void SetPtr(char* ptr, bool aligned);
 
+  // mmap will not allocate buffer, so, ptr is null
+  // it should not be double cache in block cache
   bool PtrIsNotNull() const;
 
  private:
@@ -51,6 +55,7 @@ struct DirectIOAlignData{
   uint64_t offset;
   size_t size;
 
+  // the diff offset between allocated ptr and user ptr
   size_t user_offset;
   char* ptr;
 };

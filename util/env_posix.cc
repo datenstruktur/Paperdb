@@ -298,7 +298,8 @@ class PosixDirectIORandomAccessFile final : public RandomAccessFile {
       }
 
 #if __linux__
-#elif __APPLE__ // open direct io in macos
+#elif __APPLE__ // open direct io in macos, O_DIRECT noy be supported
+      // Just see RocksDB wiki https://github.com/facebook/rocksdb/wiki/Direct-IO
       fcntl(fd, F_NOCACHE, 1);
 #endif
     }
@@ -307,6 +308,8 @@ class PosixDirectIORandomAccessFile final : public RandomAccessFile {
 
     const DirectIOAlignData data = NewAlignedData(offset, n, GetPageSize());
 
+    // data.ptr is aligned, new by posix_memalign in posix os
+    // should be freed by free()
     scratch->SetPtr(data.ptr, /*aligned=*/true);
     Status status;
     ssize_t read_size = ::pread(fd, data.ptr, data.size, static_cast<off_t>(data.offset));

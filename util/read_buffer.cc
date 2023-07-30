@@ -12,8 +12,9 @@ ReadBuffer::ReadBuffer(char* ptr, bool aligned)
 
 ReadBuffer::ReadBuffer(ReadBuffer&& buffer) noexcept {
   if(this != &buffer) {
-    this->ptr_ = buffer.ptr_;
-    this->aligned_ = buffer.aligned_;
+    // move ptr from buffer and clear it
+    this->ptr_ = std::forward<char*>(buffer.ptr_);
+    this->aligned_ = std::forward<bool>(buffer.aligned_);
     buffer.ptr_ = nullptr;
   }
 }
@@ -21,15 +22,15 @@ ReadBuffer::ReadBuffer(ReadBuffer&& buffer) noexcept {
 ReadBuffer& ReadBuffer::operator=(ReadBuffer&& buffer) noexcept {
   // Todo: why?
   if(this != &buffer) {
-    this->ptr_ = buffer.ptr_;
-    this->aligned_ = buffer.aligned_;
+    this->ptr_ = std::forward<char*>(buffer.ptr_);
+    this->aligned_ = std::forward<bool>(buffer.aligned_);
     buffer.ptr_ = nullptr;
   }
   return *this;
 }
 
 void ReadBuffer::SetPtr(char* ptr, bool aligned){
-  FreePtr();
+  FreePtr(); // free before update
   ptr_ = ptr;
   aligned_ = aligned;
 }
@@ -45,7 +46,7 @@ void ReadBuffer::FreePtr(){
   }else {
 #ifdef _WIN32 //64-bit/32-bit Windows
     _aligned_free(ptr_);
-#else
+#else // for linux and macs
     free(ptr_);
 #endif
   }
@@ -58,15 +59,20 @@ ReadBuffer::~ReadBuffer(){
 }
 
 uint64_t GetBeforeAlignedValue(uint64_t val, size_t alignment){
+  // val & (alignment - 1) means val % alignment
   return val - (val & (alignment - 1));
 }
 
 uint64_t GetAfterAlignedValue(uint64_t val, size_t alignment){
   size_t mod = (val & (alignment - 1));
+  // move 0 if val is aligned at the beginning to save memory
   size_t slop = (mod == 0?0:(alignment - mod));
   return val + slop;
 }
 
+// Allocate aligned for DirectIO
+// support for posix os(Linux and macos), and Windows
+// Check memory head if is aligned in Debug mode
 char* NewAlignedBuffer(size_t size, size_t alignment){
 #ifdef _WIN32 //64-bit/32-bit Windows
   char *buf = reinterpret_cast<char *>(_aligned_malloc(size, alignment));
@@ -83,6 +89,9 @@ char* NewAlignedBuffer(size_t size, size_t alignment){
 #endif
 }
 
+// Make [offset, size] aligned according alignment
+// Use by Read in DirectIORandomAccessFile
+// Allocate aligned char buffer for save reading data
 DirectIOAlignData NewAlignedData(uint64_t offset, size_t n, size_t alignment){
   uint64_t aligned_offset = GetBeforeAlignedValue(offset, alignment);
 
@@ -93,17 +102,20 @@ DirectIOAlignData NewAlignedData(uint64_t offset, size_t n, size_t alignment){
   // align size at last
   aligned_size = GetAfterAlignedValue(aligned_size, alignment);
 
+  // check new offset and size if is aligned in Debug mod
   assert(IsAligned(aligned_offset, alignment));
   assert(IsAligned(aligned_size, alignment));
 
+  // save val in struct
   DirectIOAlignData data{};
   data.offset = aligned_offset;
   data.size   = aligned_size;
   data.user_offset  = user_data_offset;
 
+  // new aligned buffer according to aligned size
   data.ptr = NewAlignedBuffer(aligned_size, alignment);
   assert(IsAligned(data.ptr, alignment));
+
   return data;
 }
-
 };

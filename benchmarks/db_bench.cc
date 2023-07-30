@@ -297,7 +297,6 @@ class Stats {
   void AddMessage(Slice msg) { AppendWithSpace(&message_, msg); }
 
   void StartRecordingIO(){
-    //todo data race with compaction thread?
     SpecialEnv* env = static_cast<SpecialEnv*>(leveldb::g_env);
     env->count_random_reads_.store(true, std::memory_order_release);
     env->random_read_counter_.Reset();
