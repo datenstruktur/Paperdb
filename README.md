@@ -9,6 +9,7 @@
 * Fine-grained Bloom Filter Allocation
 * Hotness Identification
 * Bloom Filter Management in Memory
+* DirectIO implementation in LevelDB
 
 > More details see in [doc/elasticbf.md](./doc/elasticbf.md), Chinese version see in [feishu](https://o444bvn7jh.feishu.cn/docx/XlBldwKc2oOTGMxPpLlckKLunvd), If you are interested in gaining a deeper understanding of the paper, please do not hesitate to contact me. I have added **``extensive annotations``** to the original paper, and I have recorded **``8 hours``** of lecture videos to elaborate on my interpretation of the paper.
 
@@ -21,6 +22,7 @@
 * **table/table_builder.cc**: Construct filter block **(89% lines unit test coverage)**
 * **util/multi_queue.cc**: Manage filter units in memory to reduce adjust overhead **(98% lines unit test coverage)**
 * **util/condvar_signal.h** : A wrapper for signal all threads waiting for using filterblock reader by condvar using RAII, similar to unique_ptr
+* **util/read_buffer.h**: A RAII style class for manage allocated string in read function in RandomAccessFile
 
 # Performance
 
