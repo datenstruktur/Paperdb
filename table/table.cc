@@ -252,7 +252,7 @@ Iterator* Table::BlockReader(void* arg, const ReadOptions& options,
         s = ReadBlock(table->rep_->file, options, handle, &contents);
         if (s.ok()) {
           block = new Block(contents);
-          if(contents.cachale) {
+          if(contents.cachale && options.fill_cache) {
             cache_handle = block_cache->Insert(key, block, block->size(),
                                                &DeleteCachedBlock);
           }
