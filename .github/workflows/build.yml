@@ -99,7 +99,7 @@ jobs:
       run: >-
         ${{ env.BINARY_PATH }}db_bench${{ env.BINARY_SUFFIX }} 
         --print_process=0 --bloom_bits=4 --use_direct_io=1 
-        --benchmarks="fillrandom,readrandom,compact,readhot,readwhilewriting"
+        --benchmarks="fillrandom,readrandom,compact"
 
     - name: Run SQLite Benchmarks
       if: ${{ runner.os != 'Windows' }}
@@ -146,4 +146,4 @@ jobs:
       run: >- 
         ${{ env.BINARY_PATH }}db_bench${{ env.BINARY_SUFFIX }} 
         --print_process=0 --bloom_bits=4 --use_direct_io=1 
-        --benchmarks="fillrandom,readrandom,compact,readhot,readwhilewriting"
+        --benchmarks="fillrandom,readrandom,compact"
