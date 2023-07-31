@@ -96,7 +96,7 @@ jobs:
 
     - name: Run LevelDB Benchmarks using mmap and buffer IO
       if: ${{ runner.os == 'Linux' && matrix.optimized == false && matrix.compiler == 'clang' }}
-      run: ${{ env.BINARY_PATH }}db_bench${{ env.BINARY_SUFFIX }} --print_process=0 --bloom_bits=4 --using_direct_io=0
+      run: ${{ env.BINARY_PATH }}db_bench${{ env.BINARY_SUFFIX }} --print_process=0 --bloom_bits=4 --use_direct_io=0
 
     - name: Run SQLite Benchmarks
       if: ${{ runner.os != 'Windows' }}
@@ -140,4 +140,4 @@ jobs:
 
     - name: Run LevelDB Benchmarks using mmap and buffer IO in thread sanitizer
       if: ${{ runner.os == 'Linux' && matrix.optimized == false && matrix.compiler == 'clang' }}
-      run: ${{ env.BINARY_PATH }}db_bench${{ env.BINARY_SUFFIX }} --print_process=0 --bloom_bits=4 --using_direct_io=0
+      run: ${{ env.BINARY_PATH }}db_bench${{ env.BINARY_SUFFIX }} --print_process=0 --bloom_bits=4 --use_direct_io=0
