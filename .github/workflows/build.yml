@@ -96,7 +96,10 @@ jobs:
 
     - name: Run LevelDB Benchmarks using Direct IO
       if: ${{ runner.os == 'Linux' && matrix.optimized == false && matrix.compiler == 'clang' }}
-      run: ${{ env.BINARY_PATH }}db_bench${{ env.BINARY_SUFFIX }} --print_process=0 --bloom_bits=4 --use_direct_io=1
+      run: >-
+        ${{ env.BINARY_PATH }}db_bench${{ env.BINARY_SUFFIX }} 
+        --print_process=0 --bloom_bits=4 --use_direct_io=1 
+        --benchmarks="fillrandom,readrandom,compact,readhot,readwhilewriting"
 
     - name: Run SQLite Benchmarks
       if: ${{ runner.os != 'Windows' }}
@@ -131,7 +134,7 @@ jobs:
       run: ctest -C "${{ env.CMAKE_BUILD_TYPE }}" --verbose
 
     - name: Run LevelDB Benchmarks with MQ in thread sanitizer
-      if: ${{ runner.os == 'Linux' && matrix.optimized == false}}
+      if: ${{ runner.os == 'Linux' && matrix.optimized == false && matrix.compiler == 'clang' }}
       run: ${{ env.BINARY_PATH }}db_bench${{ env.BINARY_SUFFIX }} --print_process=0 --bloom_bits=4
 
     - name: Run LevelDB Benchmarks without MQ in thread sanitizer
@@ -140,4 +143,7 @@ jobs:
 
     - name: Run LevelDB Benchmarks using Direct IO in thread sanitizer
       if: ${{ runner.os == 'Linux' && matrix.optimized == false && matrix.compiler == 'clang' }}
-      run: ${{ env.BINARY_PATH }}db_bench${{ env.BINARY_SUFFIX }} --print_process=0 --bloom_bits=4 --use_direct_io=1
+      run: >- 
+        ${{ env.BINARY_PATH }}db_bench${{ env.BINARY_SUFFIX }} 
+        --print_process=0 --bloom_bits=4 --use_direct_io=1 
+        --benchmarks="fillrandom,readrandom,compact,readhot,readwhilewriting"

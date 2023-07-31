@@ -985,7 +985,7 @@ class Benchmark {
     char msg[100];
     if(FLAGS_save_ios) {
       int reads = thread->stats.FinishedRecordingIO();
-      std::snprintf(msg, sizeof(msg), "cause %d io\n", reads);
+      std::snprintf(msg, sizeof(msg), "cause %d io", reads);
     }
     thread->stats.AddMessage(msg);
   }
