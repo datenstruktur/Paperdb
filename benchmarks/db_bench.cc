@@ -144,7 +144,7 @@ static bool FLAGS_clean_bench_file = false;
 
 static bool FLAGS_save_ios = true;
 
-static bool FLAGS_use_direct_io = true;
+static bool FLAGS_use_direct_io = false;
 
 namespace leveldb {
 
