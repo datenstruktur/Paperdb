@@ -16,8 +16,8 @@ static const size_t kFilterBase = 1 << kFilterBaseLg;
 
 FilterBlockBuilder::FilterBlockBuilder(const FilterPolicy* policy)
     : policy_(policy) {
-  // when filters_number small than 1, FilterBlockBuilder will not be call
-  filter_units_.resize(filters_number);
+  // when kAllFilterUnitsNumber small than 1, FilterBlockBuilder will not be call
+  filter_units_.resize(kAllFilterUnitsNumber);
 }
 
 void FilterBlockBuilder::StartBlock(uint64_t block_offset) {
@@ -66,8 +66,8 @@ Slice FilterBlockBuilder::Finish(const BlockHandle& handle) {
   PutFixed64(&result_, handle.offset());
   // Todo: Change To int64
   PutFixed32(&result_, handle.size());
-  PutFixed32(&result_, loaded_filters_number);
-  PutFixed32(&result_, filters_number);
+  PutFixed32(&result_, kLoadFilterUnitsNumber);
+  PutFixed32(&result_, kAllFilterUnitsNumber);
 
   result_.push_back(kFilterBaseLg);  // Save encoding parameter in result
 
@@ -96,7 +96,7 @@ void FilterBlockBuilder::GenerateFilter() {
 
   // Generate filter for current set of keys and append to result_.
   filter_offsets_.push_back(filter_units_[0].size());
-  for (int i = 0; i < filters_number; i++) {
+  for (int i = 0; i < kAllFilterUnitsNumber; i++) {
     // generate different bitmap for different filter units
     policy_->CreateFilter(&tmp_keys_[0], static_cast<int>(num_keys),
                           &filter_units_[i], i);
@@ -149,9 +149,8 @@ FilterBlockReader::FilterBlockReader(const FilterPolicy* policy,
 }
 
 void FilterBlockReader::UpdateState(const SequenceNumber& sn) {
-  MutexLock l(&mutex_);
-  sequence_ = sn;
-  access_time_++;
+  sequence_.store(sn, std::memory_order_release);
+  access_time_.fetch_add(1, std::memory_order_relaxed);
 }
 
 bool FilterBlockReader::KeyMayMatch(uint64_t block_offset, const Slice& key) {
@@ -278,7 +277,7 @@ Status FilterBlockReader::GoBackToInitFilter(RandomAccessFile* file) {
     return Status::Corruption("init units number is less than 0");
   }
 
-  if (init_units_number_ > filters_number) {
+  if (init_units_number_ > kAllFilterUnitsNumber) {
     return Status::Corruption("init units number is too much");
   }
 

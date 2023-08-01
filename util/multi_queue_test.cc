@@ -28,7 +28,7 @@ class MultiQueueTest : public testing::Test {
   }
 
   FilterBlockReader* NewReader() {
-    if(filters_number <= 0) return nullptr;
+    if(kAllFilterUnitsNumber <= 0) return nullptr;
     FilterBlockBuilder builder(internal_policy_);
     builder.StartBlock(100);
     InternalKey key("foo", 10, kTypeValue);
@@ -100,7 +100,7 @@ class MultiQueueTest : public testing::Test {
 };
 
 TEST_F(MultiQueueTest, InsertAndLookup) {
-  if(filters_number <= 0) return ;
+  if(kAllFilterUnitsNumber <= 0) return ;
   // insert kv to cache
   MultiQueue::Handle* insert_handle = Insert("key1");
   ASSERT_NE(insert_handle, nullptr);
@@ -123,11 +123,11 @@ TEST_F(MultiQueueTest, InsertAndLookup) {
 }
 
 TEST_F(MultiQueueTest, InsertAndErase) {
-  if(filters_number <= 0) return ;
+  if(kAllFilterUnitsNumber <= 0) return ;
   MultiQueue::Handle* insert_handle = Insert("key1");
   ASSERT_NE(insert_handle, nullptr);
 
-  ASSERT_EQ(Value(insert_handle)->FilterUnitsNumber(), loaded_filters_number);
+  ASSERT_EQ(Value(insert_handle)->FilterUnitsNumber(), kLoadFilterUnitsNumber);
 
   // erase from cache
   Release(insert_handle);
@@ -144,7 +144,7 @@ TEST_F(MultiQueueTest, InsertAndErase) {
 }
 
 TEST_F(MultiQueueTest, TotalCharge) {
-  if(filters_number <= 0) return ;
+  if(kAllFilterUnitsNumber <= 0) return ;
   MultiQueue::Handle* insert_handle = Insert("key1");
   ASSERT_NE(insert_handle, nullptr);
 
@@ -162,11 +162,11 @@ TEST_F(MultiQueueTest, TotalCharge) {
 }
 
 TEST_F(MultiQueueTest, GoBackToInitFilter) {
-  if(filters_number <= 0) return ;
+  if(kAllFilterUnitsNumber <= 0) return ;
   // insert kv to cache
   MultiQueue::Handle* insert_handle = Insert("key1");
   ASSERT_NE(insert_handle, nullptr);
-  ASSERT_EQ(Value(insert_handle)->FilterUnitsNumber(), loaded_filters_number);
+  ASSERT_EQ(Value(insert_handle)->FilterUnitsNumber(), kLoadFilterUnitsNumber);
 
   Release(insert_handle);
   ASSERT_NE(insert_handle, nullptr);
@@ -174,12 +174,12 @@ TEST_F(MultiQueueTest, GoBackToInitFilter) {
 
   GoBackToInitFilter(insert_handle);
   ASSERT_NE(insert_handle, nullptr);
-  ASSERT_EQ(Value(insert_handle)->FilterUnitsNumber(), loaded_filters_number);
+  ASSERT_EQ(Value(insert_handle)->FilterUnitsNumber(), kLoadFilterUnitsNumber);
 }
 
 
 TEST_F(MultiQueueTest, Adjustment) {
-  if(filters_number <= 0) return ;
+  if(kAllFilterUnitsNumber <= 0) return ;
   MultiQueue::Handle* cold_handle = Insert("cold");
   MultiQueue::Handle* hot_handle  = Insert("hot");
   ASSERT_NE(cold_handle, nullptr);
@@ -203,13 +203,13 @@ TEST_F(MultiQueueTest, Adjustment) {
   }
 
   for(int i = 0; i < 1000000; i++){
-    KeyMayMatchSearchExisted(hot_handle, i + 10 + life_time);
+    KeyMayMatchSearchExisted(hot_handle, i + 10 + kLifeTime);
   }
 
   ASSERT_EQ(Value(hot_handle)->AccessTime(), 1000000);
   ASSERT_EQ(Value(cold_handle)->AccessTime(), 1000);
 
-  if(filters_number >= 3) {
+  if(kAllFilterUnitsNumber >= 3) {
     // cold handle evict one filter
     // hot handle load one filter
     ASSERT_EQ(Value(cold_handle)->FilterUnitsNumber(), 1);
