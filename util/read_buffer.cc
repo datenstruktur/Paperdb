@@ -13,8 +13,8 @@ ReadBuffer::ReadBuffer(char* ptr, bool aligned)
 ReadBuffer::ReadBuffer(ReadBuffer&& buffer) noexcept {
   if(this != &buffer) {
     // move ptr from buffer and clear it
-    this->ptr_ = std::forward<char*>(buffer.ptr_);
-    this->aligned_ = std::forward<bool>(buffer.aligned_);
+    this->ptr_ = buffer.ptr_ ;
+    this->aligned_ = buffer.aligned_;
     buffer.ptr_ = nullptr;
   }
 }
