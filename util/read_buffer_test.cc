@@ -77,7 +77,7 @@ TEST(ReadBufferTest, MoveBuffer) {
 TEST(ReadBufferTest, SelfMove){
   char* ptr = AlignedMalloc();
 
-  ReadBuffer self_assignment(ptr, /*aligned=*/false);
+  ReadBuffer self_assignment(ptr, /*aligned=*/true);
   self_assignment = std::move(self_assignment);
 }
 
