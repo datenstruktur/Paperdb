@@ -84,6 +84,7 @@ TEST_F(FilterBlockTest, EmptyBuilder) {
           "\\x0" +
           std::to_string(kAllFilterUnitsNumber) +
           "\\x00\\x00\\x00"  // number
+          "\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"  // offset
           "\\x0b",           // baselg
       EscapeString(block));
 
@@ -110,7 +111,7 @@ TEST_F(FilterBlockTest, SingleChunk) {
 
   std::string escapestring = EscapeString(block);
   // remove filter's bitmap
-  escapestring = escapestring.substr(escapestring.size() - 25 * 4, 25 * 4);
+  escapestring = escapestring.substr(escapestring.size() - 33 * 4, 33 * 4);
 
   ASSERT_EQ(
       "\\x14\\x00\\x00\\x00"  // bitmap len(20 = 4Byte * 5 key)
@@ -123,6 +124,7 @@ TEST_F(FilterBlockTest, SingleChunk) {
           "\\x0" +
           std::to_string(kAllFilterUnitsNumber) +
           "\\x00\\x00\\x00"
+          "\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"  // offset
           "\\x0b",
       escapestring);
 
@@ -242,6 +244,9 @@ TEST_F(FilterBlockTest, Hotness) {
   AppendInternalKey(&add_result, add_key);
   builder.AddKey(add_result);
 
+  uint64_t access_time = 1000;
+  builder.SetAccessTime(access_time);
+
   FilterBlockReader* reader = GetReader(builder, &policy);
 
   // check
@@ -252,7 +257,7 @@ TEST_F(FilterBlockTest, Hotness) {
     // sequence number is sn
     ASSERT_TRUE(reader->KeyMayMatch(0, check_result));
     reader->UpdateState(sn);
-    ASSERT_EQ(reader->AccessTime(), sn);
+    ASSERT_EQ(reader->AccessTime(), sn + access_time);
 
     // reader died in sn + 30000
     ASSERT_FALSE(reader->IsCold(kLifeTime + sn - 1));

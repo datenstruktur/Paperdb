@@ -25,6 +25,7 @@ struct TableBuilder::Rep {
         data_block(&options),
         index_block(&index_block_options),
         num_entries(0),
+        access_time(0),
         closed(false), // filter policy or filters number is invalid, do not use bf
         filter_block(opt.filter_policy == nullptr || kAllFilterUnitsNumber <= 0
                          ? nullptr
@@ -44,6 +45,7 @@ struct TableBuilder::Rep {
   int64_t num_entries;
   bool closed;  // Either Finish() or Abandon() has been called.
   FilterBlockBuilder* filter_block;
+  uint64_t access_time;
 
   // We do not emit the index entry for a block until we have seen the
   // first key for the next data block.  This allows us to use shorter
@@ -241,6 +243,11 @@ void TableBuilder::WriteRawFilters(const std::vector<std::string>& filters,
 
 Status TableBuilder::status() const { return rep_->status; }
 
+void TableBuilder::SetAccessTime(uint64_t value) {
+  assert(!rep_->closed); // call before Finish()
+  rep_->access_time = value;
+}
+
 Status TableBuilder::Finish() {
   Rep* r = rep_;
   Flush();
@@ -257,6 +264,7 @@ Status TableBuilder::Finish() {
     BlockHandle filters_handle;
     const std::vector<std::string>& filters = r->filter_block->ReturnFilters();
     WriteRawFilters(filters, kNoCompression, &filters_handle);
+    r->filter_block->SetAccessTime(rep_->access_time);
     filter_block_meta = r->filter_block->Finish(filters_handle);
   }
 

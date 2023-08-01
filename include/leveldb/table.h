@@ -60,6 +60,10 @@ class LEVELDB_EXPORT Table {
   // be close to the file length.
   uint64_t ApproximateOffsetOf(const Slice& key) const;
 
+  uint64_t GetAccessTime();
+
+  bool HasMultiQueue() const;
+
   static std::string ParseHandleKey(const Options& options, uint64_t file_id);
 
  private:

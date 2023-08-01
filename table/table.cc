@@ -286,6 +286,26 @@ Iterator* Table::NewIterator(const ReadOptions& options) const {
       &Table::BlockReader, const_cast<Table*>(this), options);
 }
 
+
+uint64_t Table::GetAccessTime() {
+  assert(HasMultiQueue());
+
+  if(HasMultiQueue()){
+    MultiQueue* multi_queue = rep_->options.multi_queue;
+    FilterBlockReader* reader = multi_queue->Value(rep_->handle);
+    return reader->AccessTime();
+  }
+
+  return 0;
+}
+
+bool Table::HasMultiQueue() const {
+  MultiQueue* multi_queue = rep_->options.multi_queue;
+  MultiQueue::Handle*handle = rep_->handle;
+  return multi_queue != nullptr && handle != nullptr;
+}
+
+
 bool Table::MultiQueueKeyMayMatch(uint64_t block_offset, const Slice& key) {
   MultiQueue* multi_queue = rep_->options.multi_queue;
   if(multi_queue && rep_->handle) {

@@ -207,6 +207,35 @@ class Version::LevelFileNumIterator : public Iterator {
   mutable char value_buf_[16];
 };
 
+static Iterator* GetFileIteratorAndAccessTime(void* arg, const ReadOptions& options,
+                                 const Slice& file_value) {
+  AccessTimeGeter* getter = reinterpret_cast<AccessTimeGeter*>(arg);
+  TableCache* cache = getter->cache;
+  std::vector<uint64_t> *access_time_vector = getter->access_time_vector;
+
+  bool* has_multi_queue_init_ = getter->has_multi_queue_init_;
+  bool* has_multi_queue_ = getter->has_multi_queue_;
+
+  if (file_value.size() != 16) {
+    return NewErrorIterator(
+        Status::Corruption("FileReader invoked with unexpected value"));
+  } else {
+    Table* table = nullptr;
+    Iterator* iterator = cache->NewIterator(options, DecodeFixed64(file_value.data()),
+                                            DecodeFixed64(file_value.data() + 8), &table);
+    if(!(*has_multi_queue_init_)){
+      *has_multi_queue_ = table->HasMultiQueue();
+      *has_multi_queue_init_ = true;
+    }
+    if(*has_multi_queue_){
+      size_t access_time = table->GetAccessTime();
+      access_time_vector->push_back(access_time);
+    }
+
+    return iterator;
+  }
+}
+
 static Iterator* GetFileIterator(void* arg, const ReadOptions& options,
                                  const Slice& file_value) {
   TableCache* cache = reinterpret_cast<TableCache*>(arg);
@@ -1216,6 +1245,7 @@ void VersionSet::GetRange2(const std::vector<FileMetaData*>& inputs1,
   GetRange(all, smallest, largest);
 }
 
+// get access time for every table
 Iterator* VersionSet::MakeInputIterator(Compaction* c) {
   ReadOptions options;
   options.verify_checksums = options_->paranoid_checks;
@@ -1232,14 +1262,30 @@ Iterator* VersionSet::MakeInputIterator(Compaction* c) {
       if (c->level() + which == 0) {
         const std::vector<FileMetaData*>& files = c->inputs_[which];
         for (size_t i = 0; i < files.size(); i++) {
+          Table* table = nullptr;
           list[num++] = table_cache_->NewIterator(options, files[i]->number,
-                                                  files[i]->file_size);
+                                                  files[i]->file_size, &table);
+          if(!c->has_multi_queue_init_){
+            c->has_multi_queue_ = table->HasMultiQueue();
+            c->has_multi_queue_init_ = true;
+          }
+
+          // if we open mq, collect access time, ready to inheritance
+          if(c->has_multi_queue_) {
+            c->access_times_[which].push_back(table->GetAccessTime());
+          }
         }
       } else {
+        // living during compaction
+        AccessTimeGeter* getter = &(c->getters[which]);
+        getter->cache = table_cache_;
+        getter->access_time_vector = &c->access_times_[which];
+        getter->has_multi_queue_init_ = &c->has_multi_queue_init_;
+        getter->has_multi_queue_ = &c->has_multi_queue_;
         // Create concatenating iterator for the files from this level
         list[num++] = NewTwoLevelIterator(
             new Version::LevelFileNumIterator(icmp_, &c->inputs_[which]),
-            &GetFileIterator, table_cache_, options);
+            &GetFileIteratorAndAccessTime, getter, options);
       }
     }
   }
@@ -1484,7 +1530,9 @@ Compaction::Compaction(const Options* options, int level)
       input_version_(nullptr),
       grandparent_index_(0),
       seen_key_(false),
-      overlapped_bytes_(0) {
+      overlapped_bytes_(0),
+      has_multi_queue_(false),
+      has_multi_queue_init_(false){
   for (int i = 0; i < config::kNumLevels; i++) {
     level_ptrs_[i] = 0;
   }
@@ -1564,6 +1612,44 @@ void Compaction::ReleaseInputs() {
     input_version_->Unref();
     input_version_ = nullptr;
   }
+}
+
+bool Compaction::HasMultiQueue() const{
+  return has_multi_queue_;
+}
+
+int Compare(const InternalKey& key1,
+            const InternalKey& key2,
+            const Comparator* comparator){
+  return comparator->Compare(key1.user_key(), key2.user_key());
+}
+
+bool IsOverlapping(const InternalKey& input_smallest, const InternalKey& input_largest,
+                   const InternalKey& output_smallest, const InternalKey& output_largest,
+                   const Comparator* comparator){
+  return !(Compare(output_largest, input_smallest, comparator) < 0
+           || Compare(input_largest, output_smallest, comparator) < 0);
+}
+
+size_t Compaction::GetNewTableAccessTime(const InternalKey& smallest,
+                                         const InternalKey& largest,
+                                         const Comparator* user_comparator){
+  size_t access_times = 0;
+  size_t sum = 0;
+  for(int which = 0; which < 2; which++){
+    assert(inputs_[which].size() == access_times_[which].size());
+    for(int i = 0; i < inputs_[which].size(); i++){
+      // TODO: use sort to speed up?
+      FileMetaData* meta = inputs_[which][i];
+      if(IsOverlapping(meta->smallest, meta->largest,
+                        smallest, largest, user_comparator)) {
+        access_times += access_times_[which][i];
+        sum++;
+      }
+    }
+  }
+
+  return sum == 0 ? 0:(access_times / sum);
 }
 
 }  // namespace leveldb

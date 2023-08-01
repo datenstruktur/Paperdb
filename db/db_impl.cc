@@ -848,6 +848,14 @@ Status DBImpl::FinishCompactionOutputFile(CompactionState* compact,
   Status s = input->status();
   const uint64_t current_entries = compact->builder->NumEntries();
   if (s.ok()) {
+    if(compact->compaction->HasMultiQueue()) {
+      InternalKey smallest = compact->current_output()->smallest;
+      InternalKey largest = compact->current_output()->largest;
+      size_t access_time = compact->compaction->  // TODO why user comparator?
+          GetNewTableAccessTime(smallest, largest,
+                                internal_comparator_.user_comparator());
+      compact->builder->SetAccessTime(access_time);
+    }// else: access time is 0
     s = compact->builder->Finish();
   } else {
     compact->builder->Abandon();

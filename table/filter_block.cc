@@ -15,7 +15,7 @@ static const size_t kFilterBaseLg = 11;
 static const size_t kFilterBase = 1 << kFilterBaseLg;
 
 FilterBlockBuilder::FilterBlockBuilder(const FilterPolicy* policy)
-    : policy_(policy) {
+    : policy_(policy), access_time_(0), closed_(false) {
   // when kAllFilterUnitsNumber small than 1, FilterBlockBuilder will not be call
   filter_units_.resize(kAllFilterUnitsNumber);
 }
@@ -43,6 +43,11 @@ const std::vector<std::string>& FilterBlockBuilder::ReturnFilters() {
   return filter_units_;
 }
 
+void FilterBlockBuilder::SetAccessTime(uint64_t value){
+  assert(!closed_);//call before Finish()
+  access_time_ = value;
+}
+
 /*
  * filter offset <--- unint32_t for every offset
  * offset        <--- unint64_t  first filter offset in disk
@@ -52,6 +57,8 @@ const std::vector<std::string>& FilterBlockBuilder::ReturnFilters() {
  * baselg        <--- char
  */
 Slice FilterBlockBuilder::Finish(const BlockHandle& handle) {
+  assert(!closed_);
+  closed_ = true;
   // Append array of per-filter offsets
   for (size_t i = 0; i < filter_offsets_.size(); i++) {
     PutFixed32(&result_, filter_offsets_[i]);
@@ -68,6 +75,7 @@ Slice FilterBlockBuilder::Finish(const BlockHandle& handle) {
   PutFixed32(&result_, handle.size());
   PutFixed32(&result_, kLoadFilterUnitsNumber);
   PutFixed32(&result_, kAllFilterUnitsNumber);
+  PutFixed64(&result_, access_time_);
 
   result_.push_back(kFilterBaseLg);  // Save encoding parameter in result
 
@@ -121,31 +129,33 @@ FilterBlockReader::FilterBlockReader(const FilterPolicy* policy,
       init_done(false),
       init_signal(&mutex_){ //last key's sequence's number pass in this reader, the beginning of this reader
   size_t n = contents.size();
-  if (n < 25) return;  // 1 byte for base_lg_ and 21 for start of others
+  if (n < 33) return;  // 1 byte for base_lg_ and 21 for start of others
 
   /*
    * meta data for filter units' bitmaps layout:
-   * filter offset  <--- data + 0
-   * filterunit len <--- data + n - 25
-   * offset         <--- data + n - 21  | 8Byte 4Byte can only index 4GB disk
-   * offset size           <--- data + n - 13  | 4Byte loaded         <--- data
-   * + n - 9   | 4Byte number         <--- data + n - 5   | 4Byte base lg <---
-   * data + n - 1   | 1Byte
+   * base lg            <--- [1 Bytes] data + n - 1
+   * access time        <--- [8 Bytes] data + n - 9
+   * all_units_number   <--- [4 Bytes] data + n - 13
+   * init units number  <--- [4 Bytes] data + n - 17
+   * disk size          <--- [4 Bytes] data + n - 21
+   * disk_offset        <--- [8 Bytes] data + n - 29
+   * last filter offset <--- [4 Bytes] data + n - 33
    */
   base_lg_ = contents[n - 1];
   data_ = contents.data();
-  all_units_number_ = DecodeFixed32(data_ + n - 5);
+  access_time_ = DecodeFixed64(data_ + n - 9); // save by mq during db running
+  all_units_number_ = DecodeFixed32(data_ + n - 13);
   if (all_units_number_ < 0) return;
 
-  init_units_number_ = DecodeFixed32(data_ + n - 9);
+  init_units_number_ = DecodeFixed32(data_ + n - 17);
 
   if (init_units_number_ < 0 && init_units_number_ > all_units_number_) return;
 
-  disk_size_ = DecodeFixed32(data_ + n - 13);
-  disk_offset_ = DecodeFixed64(data_ + n - 21);
+  disk_size_ = DecodeFixed32(data_ + n - 21);
+  disk_offset_ = DecodeFixed64(data_ + n - 29);
   offset_ = contents.data();
 
-  num_ = (n - 25) / 4;
+  num_ = (n - 33) / 4;
 }
 
 void FilterBlockReader::UpdateState(const SequenceNumber& sn) {

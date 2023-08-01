@@ -315,6 +315,14 @@ class VersionSet {
   std::string compact_pointer_[config::kNumLevels];
 };
 
+struct AccessTimeGeter{
+  TableCache* cache;
+  std::vector<uint64_t>* access_time_vector;
+
+  bool *has_multi_queue_init_;
+  bool *has_multi_queue_;
+};
+
 // A Compaction encapsulates information about a compaction.
 class Compaction {
  public:
@@ -357,6 +365,12 @@ class Compaction {
   // is successful.
   void ReleaseInputs();
 
+  size_t GetNewTableAccessTime(const InternalKey& smallest,
+                               const InternalKey& largest,
+                               const Comparator* comparator);
+
+  bool HasMultiQueue() const;
+
  private:
   friend class Version;
   friend class VersionSet;
@@ -370,6 +384,18 @@ class Compaction {
 
   // Each compaction reads inputs from "level_" and "level_+1"
   std::vector<FileMetaData*> inputs_[2];  // The two sets of inputs
+
+  // Access time of FilterBlock in inputs_
+  std::vector<uint64_t> access_times_[2];
+
+  // save tablecache and access time array during compaction
+  // in two levels iterator
+  AccessTimeGeter getters[2];
+
+  // open the mq or not, if false, do not use access_times_
+  bool has_multi_queue_;
+
+  bool has_multi_queue_init_;
 
   // State used to check for number of overlapping grandparent files
   // (parent == level_ + 1, grandparent == level_ + 2)
