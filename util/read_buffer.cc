@@ -25,8 +25,8 @@ char* NewAlignedBuffer(size_t size, size_t alignment){
 
 void FreeAlignedBuffer(char* ptr){
 #ifdef _WIN32 //64-bit/32-bit Windows
-  _aligned_free(ptr_);
-#else // for linux and macs
+  _aligned_free(ptr);
+#else // for linux and macos
   free(ptr);
 #endif
 }
