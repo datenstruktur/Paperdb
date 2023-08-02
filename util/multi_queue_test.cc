@@ -92,6 +92,10 @@ class MultiQueueTest : public testing::Test {
     multi_queue_->GoBackToInitFilter(handle, nullptr);
   }
 
+  void SetAccessTime(const std::string& key, uint64_t value){
+    multi_queue_->SetAccessTime(key, value);
+  }
+
  private:
   MultiQueue* multi_queue_;
   const FilterPolicy* internal_policy_;
@@ -215,5 +219,23 @@ TEST_F(MultiQueueTest, Adjustment) {
     ASSERT_EQ(Value(cold_handle)->FilterUnitsNumber(), 1);
     ASSERT_EQ(Value(hot_handle)->FilterUnitsNumber(), 3);
   }
+}
+
+TEST_F(MultiQueueTest, SetAccessTime){
+  if(kAllFilterUnitsNumber <= 0) return ;
+
+  // insert kv to cache
+  MultiQueue::Handle* insert_handle = Insert("key1");
+  ASSERT_NE(insert_handle, nullptr);
+  ASSERT_EQ(Value(insert_handle)->FilterUnitsNumber(), kLoadFilterUnitsNumber);
+
+  uint64_t access_time = 1000;
+  SetAccessTime("key1", access_time);
+  ASSERT_EQ(Value(insert_handle)->AccessTime(), access_time);
+
+  Release(insert_handle);
+  ASSERT_NE(insert_handle, nullptr);
+  ASSERT_EQ(Value(insert_handle)->FilterUnitsNumber(), 0);
+  ASSERT_EQ(Value(insert_handle)->AccessTime(), access_time);
 }
 }  // namespace leveldb
