@@ -12,7 +12,7 @@
   * Bloom Filter Management in Memory 
   * Background thread to load filter
 * [[Github pr](https://github.com/WangTingZheng/Paperdb/pull/61)] DirectIO implementation in LevelDB
-* [[Github pr](https://github.com/WangTingZheng/Paperdb/pull/62)] Hotness inheritance
+* [[Github pr](https://github.com/WangTingZheng/Paperdb/pull/63)] Hotness inheritance
 
 > More details see in [doc/elasticbf.md](./doc/elasticbf.md), Chinese version see in [feishu](https://o444bvn7jh.feishu.cn/docx/XlBldwKc2oOTGMxPpLlckKLunvd), If you are interested in gaining a deeper understanding of the paper, please do not hesitate to contact me. I have added **``extensive annotations``** to the original paper, and I have recorded **``8 hours``** of lecture videos to elaborate on my interpretation of the paper.
 
