@@ -62,8 +62,6 @@ class LEVELDB_EXPORT Table {
 
   uint64_t GetAccessTime();
 
-  bool HasMultiQueue() const;
-
   static std::string ParseHandleKey(const Options& options, uint64_t file_id);
 
  private:

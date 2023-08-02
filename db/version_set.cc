@@ -213,9 +213,6 @@ static Iterator* GetFileIteratorAndAccessTime(void* arg, const ReadOptions& opti
   TableCache* cache = getter->cache;
   std::vector<uint64_t> *access_time_vector = getter->access_time_vector;
 
-  bool* has_multi_queue_init_ = getter->has_multi_queue_init_;
-  bool* has_multi_queue_ = getter->has_multi_queue_;
-
   if (file_value.size() != 16) {
     return NewErrorIterator(
         Status::Corruption("FileReader invoked with unexpected value"));
@@ -223,14 +220,8 @@ static Iterator* GetFileIteratorAndAccessTime(void* arg, const ReadOptions& opti
     Table* table = nullptr;
     Iterator* iterator = cache->NewIterator(options, DecodeFixed64(file_value.data()),
                                             DecodeFixed64(file_value.data() + 8), &table);
-    if(!(*has_multi_queue_init_)){
-      *has_multi_queue_ = table->HasMultiQueue();
-      *has_multi_queue_init_ = true;
-    }
-    if(*has_multi_queue_){
-      size_t access_time = table->GetAccessTime();
-      access_time_vector->push_back(access_time);
-    }
+    size_t access_time = table->GetAccessTime();
+    access_time_vector->push_back(access_time);
 
     return iterator;
   }
@@ -1251,6 +1242,8 @@ Iterator* VersionSet::MakeInputIterator(Compaction* c) {
   options.verify_checksums = options_->paranoid_checks;
   options.fill_cache = false;
 
+  MultiQueue* multi_queue = options_->multi_queue;
+
   // Level-0 files have to be merged together.  For other levels,
   // we will make a concatenating iterator per level.
   // TODO(opt): use concatenating iterator for level-0 if there is no overlap
@@ -1265,27 +1258,28 @@ Iterator* VersionSet::MakeInputIterator(Compaction* c) {
           Table* table = nullptr;
           list[num++] = table_cache_->NewIterator(options, files[i]->number,
                                                   files[i]->file_size, &table);
-          if(!c->has_multi_queue_init_){
-            c->has_multi_queue_ = table->HasMultiQueue();
-            c->has_multi_queue_init_ = true;
-          }
 
           // if we open mq, collect access time, ready to inheritance
-          if(c->has_multi_queue_) {
+          if(multi_queue) {
             c->access_times_[which].push_back(table->GetAccessTime());
           }
         }
       } else {
-        // living during compaction
-        AccessTimeGeter* getter = &(c->getters[which]);
-        getter->cache = table_cache_;
-        getter->access_time_vector = &c->access_times_[which];
-        getter->has_multi_queue_init_ = &c->has_multi_queue_init_;
-        getter->has_multi_queue_ = &c->has_multi_queue_;
-        // Create concatenating iterator for the files from this level
-        list[num++] = NewTwoLevelIterator(
-            new Version::LevelFileNumIterator(icmp_, &c->inputs_[which]),
-            &GetFileIteratorAndAccessTime, getter, options);
+        if(multi_queue) {
+          // living during compaction
+          AccessTimeGeter* getter = &(c->getters[which]);
+          getter->cache = table_cache_;
+          // collect access time for every table
+          getter->access_time_vector = &c->access_times_[which];
+          // Create concatenating iterator for the files from this level
+          list[num++] = NewTwoLevelIterator(
+              new Version::LevelFileNumIterator(icmp_, &c->inputs_[which]),
+              &GetFileIteratorAndAccessTime, getter, options);
+        }else{
+          list[num++] = NewTwoLevelIterator(
+              new Version::LevelFileNumIterator(icmp_, &c->inputs_[which]),
+              &GetFileIterator, table_cache_, options);
+        }
       }
     }
   }
@@ -1530,9 +1524,7 @@ Compaction::Compaction(const Options* options, int level)
       input_version_(nullptr),
       grandparent_index_(0),
       seen_key_(false),
-      overlapped_bytes_(0),
-      has_multi_queue_(false),
-      has_multi_queue_init_(false){
+      overlapped_bytes_(0) {
   for (int i = 0; i < config::kNumLevels; i++) {
     level_ptrs_[i] = 0;
   }
@@ -1612,10 +1604,6 @@ void Compaction::ReleaseInputs() {
     input_version_->Unref();
     input_version_ = nullptr;
   }
-}
-
-bool Compaction::HasMultiQueue() const{
-  return has_multi_queue_;
 }
 
 int Compare(const InternalKey& key1,

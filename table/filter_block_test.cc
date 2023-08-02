@@ -84,7 +84,6 @@ TEST_F(FilterBlockTest, EmptyBuilder) {
           "\\x0" +
           std::to_string(kAllFilterUnitsNumber) +
           "\\x00\\x00\\x00"  // number
-          "\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"  // offset
           "\\x0b",           // baselg
       EscapeString(block));
 
@@ -111,7 +110,7 @@ TEST_F(FilterBlockTest, SingleChunk) {
 
   std::string escapestring = EscapeString(block);
   // remove filter's bitmap
-  escapestring = escapestring.substr(escapestring.size() - 33 * 4, 33 * 4);
+  escapestring = escapestring.substr(escapestring.size() - 25 * 4, 25 * 4);
 
   ASSERT_EQ(
       "\\x14\\x00\\x00\\x00"  // bitmap len(20 = 4Byte * 5 key)
@@ -124,7 +123,6 @@ TEST_F(FilterBlockTest, SingleChunk) {
           "\\x0" +
           std::to_string(kAllFilterUnitsNumber) +
           "\\x00\\x00\\x00"
-          "\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00"  // offset
           "\\x0b",
       escapestring);
 
@@ -245,9 +243,8 @@ TEST_F(FilterBlockTest, Hotness) {
   builder.AddKey(add_result);
 
   uint64_t access_time = 1000;
-  builder.SetAccessTime(access_time);
-
   FilterBlockReader* reader = GetReader(builder, &policy);
+  reader->SetAccessTime(access_time);
 
   // check
   for (uint64_t sn = 1; sn < kLifeTime; sn++) {

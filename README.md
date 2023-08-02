@@ -12,6 +12,7 @@
   * Bloom Filter Management in Memory 
   * Background thread to load filter
 * [[Github pr](https://github.com/WangTingZheng/Paperdb/pull/61)] DirectIO implementation in LevelDB
+* [[Github pr](https://github.com/WangTingZheng/Paperdb/pull/62)] Hotness inheritance
 
 > More details see in [doc/elasticbf.md](./doc/elasticbf.md), Chinese version see in [feishu](https://o444bvn7jh.feishu.cn/docx/XlBldwKc2oOTGMxPpLlckKLunvd), If you are interested in gaining a deeper understanding of the paper, please do not hesitate to contact me. I have added **``extensive annotations``** to the original paper, and I have recorded **``8 hours``** of lecture videos to elaborate on my interpretation of the paper.
 
@@ -34,7 +35,7 @@ Todo
 # ToDo in ElasticBF
 - ~~Using multi thread to speed up filter units loading in multi queue, see [about implementing multi threads](https://github.com/WangTingZheng/Paperdb/discussions/14).~~
 - Using shared hash in this [paper][3] to reduce multi bloom filter look up overhead.
-- Hotness inheritance after compaction in [ATC version of paper][4], see [about implementing hotness inheritance](https://github.com/WangTingZheng/Paperdb/discussions/13) in discussions.
+- ~~Hotness inheritance after compaction in [ATC version of paper][4], see [about implementing hotness inheritance](https://github.com/WangTingZheng/Paperdb/discussions/13) in discussions.~~
 - ~~Using [perf][8] tool to find code can be optimized.~~
 - Reimplement ElasticBF to get rid of the unit test, sanitizers and benchmark, see [about reimplementing](https://github.com/WangTingZheng/Paperdb/discussions/15)
 - ~~Support YCSB, should pay attention to [FalsePositiveRate function](https://github.com/WangTingZheng/Paperdb/blob/242b1b92cf97453d7750ea6f630cb490bb14feb7/db/c.cc#L140) in db/c.cc~~
