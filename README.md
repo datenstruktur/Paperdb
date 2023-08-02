@@ -1,7 +1,7 @@
 # ElasticBF
 [![ci](https://github.com/google/leveldb/actions/workflows/build.yml/badge.svg)](https://github.com/google/leveldb/actions/workflows/build.yml)
 
-**[ElasticBF][1]** moves cold SSTable's bloom filter to hot SSTable's bloom filter to reduce extra disk io overhead without increasing memory overhead. Short introduction by paper's author can be saw in this [video](https://www.youtube.com/watch?v=8UBx3GCep3A). In addition to that, we also ensure code quality by utilizing **unit test**, **google sanitizers**, and **GitHub Actions** with support for multiple operating systems and compilers. Comparing changes with LevelDB just see [``this place``](https://github.com/google/leveldb/compare/main...WangTingZheng:Paperdb:elasticbf-dev?expand=1).
+**[ElasticBF][1]** moves cold SSTable's bloom filter to hot SSTable's bloom filter to reduce extra disk io overhead without increasing memory overhead. Short introduction by paper's author can be saw in this [video](https://www.youtube.com/watch?v=8UBx3GCep3A). In addition to that, we also ensure code quality by utilizing **unit test**, **google sanitizers**, and **GitHub Actions** with support for multiple operating systems and compilers. Comparing changes with LevelDB just see [``this place``](https://github.com/google/leveldb/compare/main...WangTingZheng:Paperdb:elasticbf-dev?expand=1). A fork version of YCSB to support ElasticBF is [here](https://github.com/WangTingZheng/YCSB-cpp).
 
 # Features
 ![The architecture of ElasticBF](https://github.com/WangTingZheng/Paperdb/assets/32613835/cb3278c6-9782-48b1-bda4-2051713a6a97)
