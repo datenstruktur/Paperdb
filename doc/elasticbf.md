@@ -2,7 +2,7 @@
 
 ## Fine-grained Bloom Filter Allocation
 
-From the perspective of a Table, a point query needs to go through the following components in sequence: Table, Meta Index Block, FilterBlock, and Bloom Filter. Therefore, our reproduction revolves around this path.
+From the perspective of a Table, a point query needs to go through the following components in sequence: Table, Meta Index Block, FilterBlock, and Bloom Filter. Therefore, our implemention revolves around this path.
 
 ```C++
           /\
@@ -286,7 +286,7 @@ We use a background thread created by MQSchedule in ``until/mq_schedule.cc`` to 
 
 The purpose of hotness inheritance is to allow LevelDB to inherit the hotness (access frequency) information from the input tables when generating new tables through Compaction, so that it does not need to accumulate from scratch. This enables the hotness of the table to better reflect its access situation.
 
-The main algorithm for hotness inheritance is as follows: Firstly, we need to obtain the range and hotness information of all input tables. When we generate a new table, we obtain its range and then search for overlapping tables in the input tables. These tables can be regarded as the data sources for the new table. We can add up the hotness of these tables and take an average, which becomes the heat of the new table.
+The main algorithm for hotness inheritance is as follows: Firstly, we need to obtain the range and hotness information of all input tables. When we generate a new table, we obtain its range and then search for overlapping tables in the input tables. These tables can be regarded as the data sources for the new table. We can add up the hotness of these tables and take an average, which becomes the hotness of the new table.
 To implement hotness inheritance, it mainly involves the following steps:
 
 1. **Collecting the hotness information** of each participating SSTable  during compaction.
@@ -297,7 +297,7 @@ To implement hotness inheritance, it mainly involves the following steps:
 
 **Q: How to get hotness information of a Table？**
 
-In our design, we store the hotness in the FilterBlockReader of the Table. Therefore, to obtain the hotness of a Table, we only need to retrieve it from the FilterBlockReader stored in the Table. It is important to note that since both the main thread and Compaction need to access this hotnes value, we define it as an atomic type to ensure thread safety.
+In our design, we store the hotness in the FilterBlockReader of the Table. Therefore, to obtain the hotness of a Table, we only need to retrieve it from the FilterBlockReader stored in the Table. It is important to note that since both the main thread and Compaction need to access this hotness value, we define it as an atomic type to ensure thread safety.
 
 **Q: Hot to get a Table？**
 
@@ -309,7 +309,7 @@ In MakeInputIterator, LevelDB creates an iterator for each Table and then merges
 
 Due to the unordered nature of the first level, LevelDB uses two different approaches to create iterators. When a Table is in the first level, an iterator is created for each Table. In this case, we only need to retrieve and save the hotness information from each Table.
 
-For the non-first levels, which are all sorted, LevelDB creates a two-level iterator. The iterator is only created when Seek to a specific Table during Compaction. However, it passes a predefined GetFileIterator function to create the iterator when the Table is created. We can collect the heat information within this function.
+For the non-first levels, which are all sorted, LevelDB creates a two-level iterator. The iterator is only created when Seek to a specific Table during Compaction. ,so, we pass a predefined GetFileIterator function to create the iterator when the Table is created. We can collect the heat information within this function.
 
 ### Calculating the hotness information 
 
@@ -342,9 +342,9 @@ We obtain the file number of a Table from its metadata, and then query its corre
 
 ### Why DirectIO？
 
-The premise of ElasticBF is based on the assumption that reading the data block is the performance bottleneck for the entire Get request. However, LevelDB implements mmap and buffer IO, which means that small-sized read requests are often intercepted in memory and do not actually read from the disk. In cases where the workload is skewed, the buffer in buffer IO may handle most of the Get requests. Moreover, there is an overhead to adjusting itself. As a result, the advantages of ElasticBF may not be fully realized in situations where LevelDB's mmap and buffer IO mechanisms are already handling the majority of small-sized read requests efficiently.
+The premise of ElasticBF is based on the assumption that reading the data block is the performance bottleneck for the entire Get request. However, LevelDB implements mmap and buffer IO, which means that small-sized read requests are often intercepted in memory and do not actually read from the disk. In cases where the workload is skewed, the buffer in buffer IO may handle most of the Get requests. Moreover, there is an overhead to adjust. As a result, the advantages of ElasticBF may not be fully realized in situations where LevelDB's mmap and buffer IO mechanisms are already handling the majority of small-sized read requests efficiently.
 
-DirectIO bypasses the operating system's cache and directly accesses the disk. By using DirectIO, reading blocks can become a performance bottleneck, allowing ElasticBF to truly come into effect. However, it is worth mentioning that DirectIO only bypasses the operating system's cache, while there may still be caches within the SSD itself that cannot be circumvented. Unfortunately, LevelDB does not implement DirectIO, so it would be necessary to reproduce it on my own.
+DirectIO bypasses the operating system's cache and directly accesses the disk. By using DirectIO, reading blocks can become a performance bottleneck, allowing ElasticBF to truly come into effect. However, it is worth mentioning that DirectIO only bypasses the operating system's cache, while there may still be caches within the SSD itself that cannot be circumvented. Unfortunately, LevelDB does not implement DirectIO, so it would be necessary to implement it on my own.
 
 ### How DirectIO design？
 
@@ -361,7 +361,7 @@ However, if the Read function is responsible for memory allocation, it could pot
 A straightforward approach is to use a two-level pointer. Since aligned memory allocated on Windows cannot be freed using the `free` function and requires a special `_aligned_free` function, it is possible that Buffer IO, which does not require aligned memory, may be used on the Windows platform. To distinguish between these two cases, we can wrap a flag around the address pointer to indicate whether the address is aligned or not. Based on this flag and the current operating system, we can choose the appropriate release function to free the resources. This wrapping is done in the ReadBuffer structure. Here are the different scenarios for selecting the release function:
 
 |           |  Posix(Linux, Macos) |  Windows   |
-|-----------|--------|-------------|
-|aligend    |  free  | aligned_free|
-|not aligend|  free     |  free    |
+|-----------|----------------------|-------------|
+|aligend    |  free                | aligned_free|
+|not aligend|  free                |  free    |
 
