@@ -134,15 +134,15 @@ Meta Index Block -> FilterBlock Contents
 > - table/table.cc
 > - table/table_builder.cc
 
+Table adapts to two situations, one is that we use the default way of LevelDB to read filterblock, the other is to use multi_queue to manage filterblock, and the two switch to option.multi_queue is set.
+
+When the option of the multi_queue is nullptr, we will open the Table, directly from the disk to read data to create filterblockreader object, if not nullptr, indicating the need to filterblockreader by the multi_queue management, then we open the Table, from disk to create filterblockreader read data object is inserted into the multi_queue, while returning a handle containing the reader for query use.
+
 |  configuration        | if load filter  | where manage filter  | where manage filter |  
 |  ----                 | ----            |      ---             |  ---                |
 | not use bf            | ❌              |  ❌                  |  ❌                |  
 | use bf, no adjustment | 🆙              |  📃                  |  👁️‍🗨️                |  
 | use bf, has adjustment| 🆙              |  MQ                  |  👁️‍🗨️                |
-
-Table adapts to two situations, one is that we use the default way of LevelDB to read filterblock, the other is to use multi_queue to manage filterblock, and the two switch to option.multi_queue is set.
-
-When the option of the multi_queue is nullptr, we will open the Table, directly from the disk to read data to create filterblockreader object, if not nullptr, indicating the need to filterblockreader by the multi_queue management, then we open the Table, from disk to create filterblockreader read data object is inserted into the multi_queue, while returning a handle containing the reader for query use.
 
 When the table is released due to program exit or TableCache replacement policy, the reader saved in the table will be freed, but the handle saved multi_queue only will be release which mean all filter units will be evicted but meta data(hotness etc) will be saved in multi queue.
 
@@ -313,19 +313,19 @@ For the non-first levels, which are all sorted, LevelDB creates a two-level iter
 
 ### Calculating the hotness information 
 
-**Q: When? 
+**Q: When?**
 
 We need to calculate the hotness information after Compaction is completed. Due to the existence of two-level iterators, the process of obtaining the hotness information of the input Tables is done in real-time. This means that not all of the input Table's hotness are collected when constructing a new Table during Compaction. However, in order to implement heat inheritance, we must obtain the hotness information of all Tables.
 
 Therefore, we choose to calculate the hotness in the InstallCompactionResults function, which is executed after Compaction is finished. This function inserts the constructed Table's metadata into the Version.
 
-**Q: How?
+**Q: How?**
 
 As mentioned above, in InstallCompactionResults, when applying a Table, we will search for a portion of the input Tables that have overlapping ranges with the generated Table's key range. We then collect the hotness information of these overlapping Tables and calculate the average by adding them together.
 
 ### Updating the hotness information
 
-**Q: When？**
+**Q: When?**
 
 Once the hotness information of a Table is calculated, we immediately set and store it in the Multi Queue. According to our design, once a Table is read, its hotess information will be stored in the Multi Queue unless the DB is destroyed or the Table file is deleted. After constructing a Table, we will read it into the Table for testing if can be used, and at this point, the Multi Queue will have the hotness information stored.
 
