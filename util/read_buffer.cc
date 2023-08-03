@@ -31,8 +31,8 @@ void FreeAlignedBuffer(char* ptr){
 #endif
 }
 
-ReadBuffer::ReadBuffer()
-    :ptr_(nullptr),aligned_(false){}
+ReadBuffer::ReadBuffer(bool page_aligned)
+    :ptr_(nullptr),aligned_(false), page_aligned_(page_aligned){}
 
 ReadBuffer::ReadBuffer(char* ptr, bool aligned)
     :ptr_(ptr),aligned_(aligned){}
@@ -79,6 +79,10 @@ void ReadBuffer::FreePtr(){
 
 ReadBuffer::~ReadBuffer(){
   FreePtr();
+}
+
+bool ReadBuffer::PageAligned() const {
+  return page_aligned_;
 }
 
 uint64_t GetBeforeAlignedValue(uint64_t val, size_t alignment){

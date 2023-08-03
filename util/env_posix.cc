@@ -65,7 +65,6 @@ constexpr const int kDirectIOFlags = O_DIRECT;
 constexpr const int kDirectIOFlags = 0; // use fcntl, not open, macos has not O_DIRECT
 #endif //defined(OS_LINUX)
 
-
 constexpr const size_t kWritableFileBufferSize = 65536;
 
 size_t kAlignPageSize = 0;
@@ -306,7 +305,8 @@ class PosixDirectIORandomAccessFile final : public RandomAccessFile {
 
     assert(fd != -1);
 
-    const DirectIOAlignData data = NewAlignedData(offset, n, GetPageSize());
+    uint64_t alignment = scratch->PageAligned()? GetPageSize() : 512;
+    const DirectIOAlignData data = NewAlignedData(offset, n, alignment);
 
     // data.ptr is aligned, new by posix_memalign in posix os
     // should be freed by free()

@@ -988,8 +988,8 @@ class Benchmark {
     int reads = thread->stats.FinishedRecordingIO();
     if(reads >= 0) {
       std::snprintf(msg, sizeof(msg), "cause %d io", reads);
+      thread->stats.AddMessage(msg);
     }
-    thread->stats.AddMessage(msg);
   }
 
   void SeekRandom(ThreadState* thread) {
