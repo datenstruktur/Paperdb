@@ -96,7 +96,7 @@ Status PosixError(const std::string& context, int error_number) {
 }
 
 Status EnableDirectIO(int fd, const std::string& filename){
-#ifdef OS_MACOSX // open direct io in macos, O_DIRECT not be supported
+#ifdef __APPLE__ // open direct io in macos, O_DIRECT not be supported
   // Just see RocksDB wiki https://github.com/facebook/rocksdb/wiki/Direct-IO
   if(fcntl(fd, F_NOCACHE, 1) == -1){
     close(fd);

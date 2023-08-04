@@ -114,8 +114,9 @@ class EnvPosixDirectIOTest : public testing::Test {
 };
 
 TEST_F(EnvPosixDirectIOTest, TestBufferIOAndDirectIO){
-#ifdef OS_MACOSX
-  GTEST_SKIP() << "skipping compression test";
+#ifdef __APPLE__
+  fprintf(stderr, "skpped worked!\n");
+  //GTEST_SKIP() << "skipping direct io test";
 #endif
 
   uint64_t buffer_io_time = 0;
@@ -140,8 +141,8 @@ TEST_F(EnvPosixDirectIOTest, TestBufferIOAndDirectIO){
 }
 
 TEST_F(EnvPosixDirectIOTest, TestBufferIOAndDirectIOBigFile){
-#ifdef OS_MACOSX
-  GTEST_SKIP() << "skipping compression test";
+#ifdef __APPLE__
+  //GTEST_SKIP() << "skipping direct io test";
 #endif
   uint64_t buffer_io_time = 0;
   uint64_t direct_io_time = 0;
