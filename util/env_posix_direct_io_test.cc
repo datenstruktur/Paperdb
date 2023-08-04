@@ -125,6 +125,7 @@ TEST_F(EnvPosixDirectIOTest, TestBufferIOAndDirectIO){
                                          direct_io_time).ok());
 
   ASSERT_LE(buffer_io_time, direct_io_time);
+  ASSERT_LE(buffer_io_time * 10, direct_io_time);
 
   ASSERT_LEVELDB_OK(env_->RemoveFile(file_path));
 }
@@ -141,7 +142,8 @@ TEST_F(EnvPosixDirectIOTest, TestBufferIOAndDirectIOBigFile){
   ASSERT_TRUE(GetBufferAndDirectReadTime(file_path, buffer_io_time,
                                          direct_io_time).ok());
 
-  ASSERT_LE(buffer_io_time, direct_io_time);
+  ASSERT_LE(buffer_io_time     , direct_io_time);
+  ASSERT_LE(buffer_io_time * 10, direct_io_time);
 
   ASSERT_LEVELDB_OK(env_->RemoveFile(file_path));
 }
