@@ -124,6 +124,9 @@ TEST_F(EnvPosixDirectIOTest, TestBufferIOAndDirectIO){
   ASSERT_TRUE(GetBufferAndDirectReadTime(file_path, buffer_io_time,
                                          direct_io_time).ok());
 
+  fprintf(stderr, "buffer io %lu, direct io %lu\n",
+          buffer_io_time, direct_io_time);
+
   ASSERT_LE(buffer_io_time, direct_io_time);
   ASSERT_LE(buffer_io_time * 10, direct_io_time);
 
@@ -141,6 +144,9 @@ TEST_F(EnvPosixDirectIOTest, TestBufferIOAndDirectIOBigFile){
   ASSERT_TRUE(WriteData(file_path, kTableSize * 100).ok());
   ASSERT_TRUE(GetBufferAndDirectReadTime(file_path, buffer_io_time,
                                          direct_io_time).ok());
+
+  fprintf(stderr, "buffer io %lu, direct io %lu\n",
+          buffer_io_time, direct_io_time);
 
   ASSERT_LE(buffer_io_time     , direct_io_time);
   ASSERT_LE(buffer_io_time * 10, direct_io_time);
