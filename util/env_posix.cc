@@ -299,7 +299,9 @@ class PosixDirectIORandomAccessFile final : public RandomAccessFile {
 #if __linux__
 #elif __APPLE__ // open direct io in macos, O_DIRECT noy be supported
       // Just see RocksDB wiki https://github.com/facebook/rocksdb/wiki/Direct-IO
-      fcntl(fd, F_NOCACHE, 1);
+      if(fcntl(fd, F_NOCACHE, 1) == -1){
+        return PosixError(filename_, errno);
+      }
 #endif
     }
 
@@ -686,6 +688,14 @@ class PosixEnv : public Env {
     if(fd < 0){
       return PosixError(filename, errno);
     }
+
+#if __linux__
+#elif __APPLE__ // open direct io in macos, O_DIRECT noy be supported
+    // Just see RocksDB wiki https://github.com/facebook/rocksdb/wiki/Direct-IO
+    if(fcntl(fd, F_NOCACHE, 1) == -1){
+      return PosixError(filename_, errno);
+    }
+#endif
 
     *result = new PosixDirectIORandomAccessFile(filename, fd, &fd_limiter_);
     return Status::OK();
