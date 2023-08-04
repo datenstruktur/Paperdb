@@ -5,6 +5,7 @@
 
 #include "env_posix_test_helper.h"
 #include "read_buffer.h"
+#include <cinttypes>
 
 namespace leveldb {
 
@@ -124,7 +125,8 @@ TEST_F(EnvPosixDirectIOTest, TestBufferIOAndDirectIO){
   ASSERT_TRUE(GetBufferAndDirectReadTime(file_path, buffer_io_time,
                                          direct_io_time).ok());
 
-  fprintf(stderr, "buffer io %lu, direct io %lu\n",
+  // to fix macos
+  fprintf(stderr, "buffer io %" PRIu64 ", direct io %" PRIu64 "\n",
           buffer_io_time, direct_io_time);
 
   ASSERT_LE(buffer_io_time, direct_io_time);
@@ -145,7 +147,7 @@ TEST_F(EnvPosixDirectIOTest, TestBufferIOAndDirectIOBigFile){
   ASSERT_TRUE(GetBufferAndDirectReadTime(file_path, buffer_io_time,
                                          direct_io_time).ok());
 
-  fprintf(stderr, "buffer io %lu, direct io %lu\n",
+  fprintf(stderr, "buffer io %" PRIu64 ", direct io %" PRIu64 "\n",
           buffer_io_time, direct_io_time);
 
   ASSERT_LE(buffer_io_time     , direct_io_time);
