@@ -59,7 +59,7 @@ constexpr const int kOpenBaseFlags = O_CLOEXEC;
 constexpr const int kOpenBaseFlags = 0;
 #endif  // defined(HAVE_O_CLOEXEC)
 
-#if __linux__
+#ifdef __linux__
 constexpr const int kDirectIOFlags = O_DIRECT;
 #elif __APPLE__
 constexpr const int kDirectIOFlags = 0; // use fcntl, not open, macos has not O_DIRECT
@@ -96,7 +96,7 @@ Status PosixError(const std::string& context, int error_number) {
 }
 
 Status EnableDirectIO(int fd, const std::string& filename){
-#if __APPLE__ // open direct io in macos, O_DIRECT not be supported
+#ifdef __APPLE__ // open direct io in macos, O_DIRECT not be supported
   // Just see RocksDB wiki https://github.com/facebook/rocksdb/wiki/Direct-IO
   if(fcntl(fd, F_NOCACHE, 1) == -1){
     return PosixError(filename, errno);
