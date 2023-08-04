@@ -105,12 +105,10 @@ class SingleQueue {
       FilterBlockReader *reader = e->reader;
       if (reader->IsCold(sn)) {
         // skip if filter is loaded for NewIterator
-        if(reader->AccessTime() == 0) {
-          e = e->next;
-          continue ;
+        if(reader->AccessTime() != 0) {
+          memory -= reader->OneUnitSize();
+          filters.emplace_back(e);
         }
-        memory -= e->reader->OneUnitSize();
-        filters.emplace_back(e);
       } else {
         break ;
       }
