@@ -87,6 +87,16 @@ size_t GetPageSize() {
   return kAlignPageSize;
 }
 
+Status EnableDirectIO(int fd, const std::string& filename){
+#if __APPLE__ // open direct io in macos, O_DIRECT not be supported
+  // Just see RocksDB wiki https://github.com/facebook/rocksdb/wiki/Direct-IO
+  if(fcntl(fd, F_NOCACHE, 1) == -1){
+    return PosixError(filename, errno);
+  }
+#endif
+  return Status::OK();
+}
+
 Status PosixError(const std::string& context, int error_number) {
   if (error_number == ENOENT) {
     return Status::NotFound(context, std::strerror(error_number));
@@ -290,19 +300,17 @@ class PosixDirectIORandomAccessFile final : public RandomAccessFile {
   Status Read(uint64_t offset, size_t n, Slice* result,
               ReadBuffer* scratch) const override {
     int fd = fd_;
+    Status status;
     if (!has_permanent_fd_) {
       fd = ::open(filename_.c_str(), O_RDONLY | kDirectIOFlags | kOpenBaseFlags);
       if (fd < 0) {
         return PosixError(filename_, errno);
       }
 
-#if __linux__
-#elif __APPLE__ // open direct io in macos, O_DIRECT noy be supported
-      // Just see RocksDB wiki https://github.com/facebook/rocksdb/wiki/Direct-IO
-      if(fcntl(fd, F_NOCACHE, 1) == -1){
-        return PosixError(filename_, errno);
+      status = EnableDirectIO(fd, filename_);
+      if(!status.ok()){
+        return status;
       }
-#endif
     }
 
     assert(fd != -1);
@@ -313,7 +321,6 @@ class PosixDirectIORandomAccessFile final : public RandomAccessFile {
     // data.ptr is aligned, new by posix_memalign in posix os
     // should be freed by free()
     scratch->SetPtr(data.ptr, /*aligned=*/true);
-    Status status;
     ssize_t read_size = ::pread(fd, data.ptr, data.size, static_cast<off_t>(data.offset));
 
     // return back user data
@@ -689,13 +696,10 @@ class PosixEnv : public Env {
       return PosixError(filename, errno);
     }
 
-#if __linux__
-#elif __APPLE__ // open direct io in macos, O_DIRECT noy be supported
-    // Just see RocksDB wiki https://github.com/facebook/rocksdb/wiki/Direct-IO
-    if(fcntl(fd, F_NOCACHE, 1) == -1){
-      return PosixError(filename, errno);
+    Status status = EnableDirectIO(fd, filename);
+    if(!status.ok()){
+      return status;
     }
-#endif
 
     *result = new PosixDirectIORandomAccessFile(filename, fd, &fd_limiter_);
     return Status::OK();

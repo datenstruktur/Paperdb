@@ -135,7 +135,7 @@ TEST_F(EnvPosixDirectIOTest, TestBufferIOAndDirectIOBigFile){
 
   std::string test_dir;
   ASSERT_LEVELDB_OK(env_->GetTestDirectory(&test_dir));
-  std::string file_path = test_dir + "/buffer_io_and_direct_io.txt";
+  std::string file_path = test_dir + "/buffer_io_and_direct_io_big_file.txt";
 
   ASSERT_TRUE(WriteData(file_path, kTableSize * 100).ok());
   ASSERT_TRUE(GetBufferAndDirectReadTime(file_path, buffer_io_time,
