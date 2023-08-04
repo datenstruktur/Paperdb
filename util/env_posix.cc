@@ -87,6 +87,14 @@ size_t GetPageSize() {
   return kAlignPageSize;
 }
 
+Status PosixError(const std::string& context, int error_number) {
+  if (error_number == ENOENT) {
+    return Status::NotFound(context, std::strerror(error_number));
+  } else {
+    return Status::IOError(context, std::strerror(error_number));
+  }
+}
+
 Status EnableDirectIO(int fd, const std::string& filename){
 #if __APPLE__ // open direct io in macos, O_DIRECT not be supported
   // Just see RocksDB wiki https://github.com/facebook/rocksdb/wiki/Direct-IO
@@ -95,14 +103,6 @@ Status EnableDirectIO(int fd, const std::string& filename){
   }
 #endif
   return Status::OK();
-}
-
-Status PosixError(const std::string& context, int error_number) {
-  if (error_number == ENOENT) {
-    return Status::NotFound(context, std::strerror(error_number));
-  } else {
-    return Status::IOError(context, std::strerror(error_number));
-  }
 }
 
 // Helper class to limit resource usage to avoid exhaustion.
