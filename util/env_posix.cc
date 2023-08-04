@@ -693,7 +693,7 @@ class PosixEnv : public Env {
 #elif __APPLE__ // open direct io in macos, O_DIRECT noy be supported
     // Just see RocksDB wiki https://github.com/facebook/rocksdb/wiki/Direct-IO
     if(fcntl(fd, F_NOCACHE, 1) == -1){
-      return PosixError(filename_, errno);
+      return PosixError(filename, errno);
     }
 #endif
 
