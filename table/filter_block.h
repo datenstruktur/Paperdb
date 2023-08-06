@@ -162,6 +162,9 @@ class FilterBlockReader {
   size_t base_lg_;  // Encoding parameter (see kFilterBaseLg in .cc file)
   size_t num_;      // Number of entries in offset array
 
+  uint32_t reload_units_number_; // the number of filter units to load when
+                                 // filter block is evicted and open again
+
   mutable port::Mutex mutex_;
   std::atomic<uint64_t> access_time_;
   std::atomic<SequenceNumber> sequence_;

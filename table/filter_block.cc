@@ -141,6 +141,8 @@ FilterBlockReader::FilterBlockReader(const FilterPolicy* policy,
 
   if (init_units_number_ < 0 && init_units_number_ > all_units_number_) return;
 
+  reload_units_number_ = init_units_number_;
+
   disk_size_ = DecodeFixed32(data_ + n - 13);
   disk_offset_ = DecodeFixed64(data_ + n - 21);
   offset_ = contents.data();
@@ -273,23 +275,23 @@ Status FilterBlockReader::GoBackToInitFilter(RandomAccessFile* file) {
   // todo: use CondVarSignal
   MutexLock l(&mutex_);
   UpdateFile(file);
-  if (init_units_number_ < 0) {
+  if (reload_units_number_ < 0) {
     return Status::Corruption("init units number is less than 0");
   }
 
-  if (init_units_number_ > kAllFilterUnitsNumber) {
+  if (reload_units_number_ > kAllFilterUnitsNumber) {
     return Status::Corruption("init units number is too much");
   }
 
   Status s;
-  while (FilterUnitsNumberInternal() < init_units_number_) {
+  while (FilterUnitsNumberInternal() < reload_units_number_) {
     s = LoadFilterInternal();
     if (!s.ok()) {
       return s;
     }
   }
 
-  while (FilterUnitsNumberInternal() > init_units_number_) {
+  while (FilterUnitsNumberInternal() > reload_units_number_) {
     s = EvictFilterInternal();
     if (!s.ok()) {
       return s;
@@ -302,6 +304,7 @@ Status FilterBlockReader::GoBackToInitFilter(RandomAccessFile* file) {
 FilterBlockReader::~FilterBlockReader() {
   MutexLock l(&mutex_);
   WaitForLoading();
+  reload_units_number_ = reader_buffers_.size();
   for (ReadBuffer* filter_unit : reader_buffers_) {
     delete filter_unit;
   }
