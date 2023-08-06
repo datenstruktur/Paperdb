@@ -332,6 +332,19 @@ class InternalMultiQueue : public MultiQueue {
     }
   }
 
+  uint64_t GetAccessTime(const std::string& key) override{
+    MutexLock l(&mutex_);
+    auto iter = map_.find(key);
+    //we only set access time for new table generate after compaction
+    assert(iter != map_.end());
+    if (iter != map_.end()) {
+      QueueHandle* queue_handle = iter->second;
+      return queue_handle->reader->AccessTime();
+    }
+
+    return 0;
+  }
+
  private:
   size_t usage_ GUARDED_BY(mutex_);
   Logger* logger_ GUARDED_BY(mutex_);
