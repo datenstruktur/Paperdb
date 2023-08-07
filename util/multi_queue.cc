@@ -398,7 +398,7 @@ class InternalMultiQueue : public MultiQueue {
 
     if (adjusted_ios < original_ios) {
       adjustment_time_.fetch_add(1);
-#ifdef USE_ADJUSTMENT_LOGGING
+#if USE_ADJUSTMENT_LOGGING
       LoggingAdjustmentInformation(colds.size(), hot->reader->FilterUnitsNumber(),
                                    hot->reader->AccessTime(),
                                    adjusted_ios, original_ios);
@@ -448,7 +448,7 @@ class InternalMultiQueue : public MultiQueue {
     for (QueueHandle* cold : colds) {
       s = EvictHandle(cold);
       if(!s.ok()){
-#ifdef USE_ADJUSTMENT_LOGGING
+#if USE_ADJUSTMENT_LOGGING
         Log(logger_, "Adjustment: Evict colds handles failed, message is %s",
             s.ToString().c_str());
 #endif
@@ -459,7 +459,7 @@ class InternalMultiQueue : public MultiQueue {
 
     s = LoadHandle(hot);
     if(!s.ok()){
-#ifdef USE_ADJUSTMENT_LOGGING
+#if USE_ADJUSTMENT_LOGGING
       Log(logger_, "Adjustment: Load hot handle failed, message is %s",
           s.ToString().c_str());
 #endif
