@@ -287,12 +287,8 @@ class InternalMultiQueue : public MultiQueue {
     MutexLock l(&mutex_);
     if (handle != nullptr) {
       QueueHandle* queue_handle = reinterpret_cast<QueueHandle*>(handle);
-      Status s;
-      while(queue_handle->reader->CanBeEvict()) {
-        s = EvictHandle(queue_handle);
-        assert(s.ok());
-        usage_ -= queue_handle->reader->OneUnitSize();
-      }
+      usage_ -= queue_handle->reader->Size();
+      queue_handle->reader->CleanFilter();
     }
   }
 

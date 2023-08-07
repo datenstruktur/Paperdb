@@ -116,7 +116,7 @@ FilterBlockReader::FilterBlockReader(const FilterPolicy* policy,
       num_(0),
       base_lg_(0),
       file_(file),
-      access_time_(0), // the time this table be access. todo: Hotness inheritance
+      access_time_(0), // the time this table be access. 
       sequence_(0),
       init_done(false),
       init_signal(&mutex_){ //last key's sequence's number pass in this reader, the beginning of this reader
@@ -263,6 +263,26 @@ Status FilterBlockReader::InitLoadFilter() {
   return s;
 }
 
+Status FilterBlockReader::CleanFilterInternal() {
+  mutex_.AssertHeld();
+  Status s;
+  // can not use FilterUnitsNumberInternal()
+  reload_units_number_ = reader_buffers_.size();
+  while (!filter_units.empty()) {
+    s = EvictFilterInternal();
+    if (!s.ok()) {
+      // todo: error handle
+      return s;
+    }
+  }
+  return s;
+}
+
+Status FilterBlockReader::CleanFilter() {
+  MutexLock l(&mutex_);
+  return CleanFilterInternal();
+}
+
 void FilterBlockReader::UpdateFile(RandomAccessFile* file) {
   mutex_.AssertHeld();
   if(file != nullptr) {
@@ -304,10 +324,7 @@ Status FilterBlockReader::GoBackToInitFilter(RandomAccessFile* file) {
 FilterBlockReader::~FilterBlockReader() {
   MutexLock l(&mutex_);
   WaitForLoading();
-  reload_units_number_ = reader_buffers_.size();
-  for (ReadBuffer* filter_unit : reader_buffers_) {
-    delete filter_unit;
-  }
+  CleanFilterInternal();
 
   delete[] data_;
 }

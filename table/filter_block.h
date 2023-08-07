@@ -75,6 +75,7 @@ class FilterBlockReader {
   Status LoadFilter();
   Status EvictFilter();
   Status InitLoadFilter();
+  Status CleanFilter();
   Status GoBackToInitFilter(RandomAccessFile* file);
   ~FilterBlockReader();
 
@@ -176,6 +177,7 @@ class FilterBlockReader {
 
   Status LoadFilterInternal();
   Status EvictFilterInternal();
+  Status CleanFilterInternal();
 
   void UpdateFile(RandomAccessFile* file);
 
