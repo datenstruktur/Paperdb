@@ -1239,9 +1239,10 @@ Iterator* VersionSet::MakeInputIterator(Compaction* c) {
                                                   files[i]->file_size);
         }
       } else {
-          list[num++] = NewTwoLevelIterator(
-              new Version::LevelFileNumIterator(icmp_, &c->inputs_[which]),
-              &GetFileIterator, table_cache_, options);
+        // Create concatenating iterator for the files from this level
+        list[num++] = NewTwoLevelIterator(
+            new Version::LevelFileNumIterator(icmp_, &c->inputs_[which]),
+            &GetFileIterator, table_cache_, options);
       }
     }
   }
