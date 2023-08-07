@@ -34,7 +34,7 @@
 
 Adjustment apply 1040 times during Lookup, saved 8,279,190 IOs, improve throughput from 787.27op/sec to 968.716 op/sec, speed up 23% read performance:  
 
-<img src="../doc/performance.png" alt="buffer io vs direct io" width="500" height="300">
+<img src="/doc/performance.png" alt="performance" style="width: 35%; height: 35%;">
 
 ---
 # ToDo in ElasticBF
