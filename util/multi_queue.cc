@@ -349,7 +349,7 @@ class InternalMultiQueue : public MultiQueue {
   std::atomic<size_t> adjustment_time_;
 
   mutable port::Mutex mutex_;
-  mutable port::Mutex shutting_down_mutex_;
+  port::Mutex shutting_down_mutex_;
 
   std::vector<SingleQueue*> queues_ GUARDED_BY(mutex_);
   std::unordered_map<std::string, QueueHandle*> map_ GUARDED_BY(mutex_);
